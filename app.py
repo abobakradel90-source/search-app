@@ -5,31 +5,56 @@ from PIL import Image
 import torch
 import os
 import zipfile
-import gdown
+import requests
 import pandas as pd
 
-# دالة لتحميل وفك ضغط قاعدة البيانات من جوجل درايف
+# دالة مخصصة لتخطي حماية جوجل درايف وتحميل الملفات الكبيرة
+def download_file_from_google_drive(id, destination):
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params={'id': id}, stream=True)
+    
+    # البحث عن رسالة التحذير (Token) الخاصة بالملفات الكبيرة
+    token = None
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            token = value
+            break
+            
+    # لو لقينا رسالة التحذير، بنبعت طلب تاني نتخطاها بيه
+    if token:
+        params = {'id': id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+        
+    # حفظ الملف الفعلي
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(32768):
+            if chunk:
+                f.write(chunk)
+
 @st.cache_resource
 def download_and_extract_chroma():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    
-    # الـ ID الخاص بملفك على جوجل درايف
     file_id = "12tEZL-ErKOakDhXeQAAv8X2tO-h56LTd"
     
-    # لو الفولدر مش موجود، نزله وفكه
+    # تنظيف الذاكرة: لو فيه ملف وهمي نزل بالغلط المرة اللي فاتت، بنمسحه الأول
+    if os.path.exists(zip_path):
+        os.remove(zip_path)
+        
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة قاعدة البيانات لأول مرة من جوجل درايف (قد يستغرق بضعة دقائق)...'):
+        with st.spinner('جاري تحميل قاعدة البيانات (نتخطى حماية جوجل)... قد يستغرق دقيقتين...'):
             try:
-                # استخدام gdown للتحميل عشان يتخطى حماية جوجل درايف للملفات الكبيرة
-                gdown.download(id=file_id, output=zip_path, quiet=False)
+                # التحميل باستخدام الدالة المخصصة
+                download_file_from_google_drive(file_id, zip_path)
                 
                 # فك الضغط
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_ref.extractall(".")
                 
-                # مسح الملف المضغوط بعد الفك لتوفير المساحة
-                os.remove(zip_path)
+                # مسح الملف المضغوط لتوفير المساحة
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
@@ -72,23 +97,18 @@ if uploaded_file is not None:
     if st.button("ابحث عن المنتج"):
         with st.spinner('جاري البحث...'):
             try:
-                # استخراج خصائص الصورة المرفوعة
                 query_embedding = get_image_embedding(image)
                 
-                # البحث في قاعدة البيانات (البحث عن أقرب نتيجة واحدة)
                 results = collection.query(
                     query_embeddings=[query_embedding],
-                    n_results=5, # جلب أفضل 5 نتائج لفلترتها
+                    n_results=5,
                     include=['distances', 'metadatas']
                 )
                 
-                # التحقق من وجود نتائج
                 if not results['distances'][0]:
                     st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
                 else:
-                    # فلترة النتائج بناءً على نسبة التطابق (المسافة)
-                    strict_threshold = 50.0  # يمكنك تعديل هذا الرقم لزيادة أو تقليل الصرامة
-                    
+                    strict_threshold = 50.0  
                     found_match = False
                     
                     for i in range(len(results['distances'][0])):
@@ -99,7 +119,6 @@ if uploaded_file is not None:
                             found_match = True
                             st.success("تم العثور على منتج مطابق!")
                             
-                            # عرض بيانات المنتج
                             st.subheader("تفاصيل المنتج:")
                             st.write(f"**رقم المنتج (ID):** {metadata.get('id', 'غير متوفر')}")
                             st.write(f"**اسم المنتج:** {metadata.get('product_name', 'غير متوفر')}")

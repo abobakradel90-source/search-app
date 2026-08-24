@@ -8,4 +8,4 @@ pandas
 streamlit-cropper
 chromadb
 torchvision
-gdown
+requests
