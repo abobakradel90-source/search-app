@@ -1,111 +1,118 @@
 import streamlit as st
-import torch
-from transformers import AutoImageProcessor, AutoModel
-from PIL import Image, ImageGrab  # أضفنا أداة قراءة ذاكرة الويندوز
 import chromadb
-import pandas as pd
+from transformers import AutoImageProcessor, AutoModel
+from PIL import Image
+import torch
 import os
-import logging
-from streamlit_cropper import st_cropper
+import zipfile
+import urllib.request
+import pandas as pd
 
-logging.getLogger("transformers").setLevel(logging.ERROR)
-
-st.set_page_config(page_title="محرك البحث البصري الدقيق", layout="wide")
-st.markdown("<h1 style='text-align: center; color: #2e6c80;'>البحث الصارم عن المنتجات 🔍</h1>", unsafe_allow_html=True)
-st.markdown("---")
+# دالة لتحميل وفك ضغط قاعدة البيانات من جوجل درايف
+@st.cache_resource
+def download_and_extract_chroma():
+    zip_path = "chroma_db.zip"
+    extract_path = "./chroma_db"
+    
+    # رابط التحميل المباشر من جوجل درايف
+    file_id = "12tEZL-ErKOakDhXeQAAv8X2tO-h56LTd"
+    download_url = f"https://drive.google.com/uc?id={file_id}"
+    
+    # لو الفولدر مش موجود، نزله وفكه
+    if not os.path.exists(extract_path):
+        with st.spinner('جاري تهيئة قاعدة البيانات لأول مرة (قد يستغرق دقيقة)...'):
+            try:
+                # تحميل الملف المضغوط
+                urllib.request.urlretrieve(download_url, zip_path)
+                
+                # فك الضغط
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(".")
+                
+                # مسح الملف المضغوط بعد الفك لتوفير المساحة
+                os.remove(zip_path)
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
 @st.cache_resource
 def load_system():
+    # استدعاء دالة التحميل أولاً
+    download_and_extract_chroma()
+    
+    # تحميل الموديل
     processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
     model = AutoModel.from_pretrained('facebook/dinov2-base')
-    chroma_client = chromadb.PersistentClient(path="./chroma_db")
-    collection = chroma_client.get_collection(name="products_collection")
+    
+    # تشغيل قاعدة البيانات المجهزة
+    client = chromadb.PersistentClient(path="./chroma_db")
+    collection = client.get_collection(name="products_collection")
+    
     return model, processor, collection
 
+# تحميل النظام
 model, processor, collection = load_system()
 
-try:
-    df = pd.read_csv("products.csv")
-    has_data = True
-except FileNotFoundError:
-    has_data = False
+# استخراج الخصائص من الصورة
+def get_image_embedding(image):
+    inputs = processor(images=image, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**inputs)
+    return outputs.last_hidden_state.mean(dim=1).squeeze().numpy().tolist()
 
-# حفظ الصورة الحالية في الذاكرة المؤقتة للبرنامج
-if 'target_image' not in st.session_state:
-    st.session_state.target_image = None
+# إعداد واجهة المستخدم
+st.title("البحث الصارم عن المنتجات 🔍")
+st.write("قم برفع صورة للبحث عن المنتجات المطابقة أو المشابهة جداً")
 
-# واجهة سريعة مقسمة لنصفين
-col_a, col_b = st.columns(2)
+uploaded_file = st.file_uploader("اختر صورة...", type=["jpg", "jpeg", "png"])
 
-with col_a:
-    uploaded_file = st.file_uploader("📂 رفع ملف صورة", type=['png', 'jpg', 'jpeg'])
-    if uploaded_file is not None:
-        st.session_state.target_image = Image.open(uploaded_file).convert("RGB")
-
-with col_b:
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    if st.button("📋 سحب الصورة المنسوخة (سريع) ⚡", use_container_width=True):
-        try:
-            # أمر بايثون السري لقراءة الحافظة مباشرة من الويندوز
-            clipboard_content = ImageGrab.grabclipboard()
-            if isinstance(clipboard_content, Image.Image):
-                st.session_state.target_image = clipboard_content.convert("RGB")
-            elif isinstance(clipboard_content, list) and len(clipboard_content) > 0:
-                img_path = clipboard_content[0]
-                if img_path.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    st.session_state.target_image = Image.open(img_path).convert("RGB")
-                else:
-                    st.warning("⚠️ الملف المنسوخ ليس صورة.")
-            else:
-                st.warning("⚠️ الحافظة فارغة. قم بنسخ صورة (Copy) أولاً.")
-        except Exception as e:
-            st.error(f"حدث خطأ في قراءة الحافظة: {e}")
-
-# عرض أداة القص والبحث إذا كانت هناك صورة
-if st.session_state.target_image is not None:
-    st.info("✂️ **القص الذكي:** اسحب المربع الأزرق لتحديد المنتج فقط قبل البحث.")
+if uploaded_file is not None:
+    # عرض الصورة المرفوعة
+    image = Image.open(uploaded_file).convert('RGB')
+    st.image(image, caption='الصورة المرفوعة', use_column_width=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        cropped_image = st_cropper(st.session_state.target_image, realtime_update=True, box_color='#0000FF')
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    if st.button("ابحث عن المطابق تماماً 🚀", use_container_width=True):
-        with st.spinner("جاري المطابقة بالبصمة الدقيقة..."):
-            inputs = processor(images=cropped_image, return_tensors="pt")
-            with torch.no_grad():
-                outputs = model(**inputs)
-                query_embedding = outputs.last_hidden_state[0, 0].tolist()
-            
-            db_size = collection.count()
-            if db_size == 0:
-                st.error("قاعدة البيانات فارغة!")
-            else:
-                search_results_count = min(3, db_size)
+    if st.button("ابحث عن المنتج"):
+        with st.spinner('جاري البحث...'):
+            try:
+                # استخراج خصائص الصورة المرفوعة
+                query_embedding = get_image_embedding(image)
+                
+                # البحث في قاعدة البيانات (البحث عن أقرب نتيجة واحدة)
                 results = collection.query(
                     query_embeddings=[query_embedding],
-                    n_results=search_results_count
+                    n_results=5, # جلب أفضل 5 نتائج لفلترتها
+                    include=['distances', 'metadatas']
                 )
                 
-                st.success("✅ النتائج الأقرب هندسياً:")
-                st.markdown("---")
-                
-                result_cols = st.columns(search_results_count)
-                
-                for i, col in enumerate(result_cols):
-                    match_filename = results['ids'][0][i]
+                # التحقق من وجود نتائج
+                if not results['distances'][0]:
+                    st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
+                else:
+                    # فلترة النتائج بناءً على نسبة التطابق (المسافة)
+                    # كلما قلت المسافة (distance)، زاد التطابق
+                    strict_threshold = 50.0  # يمكنك تعديل هذا الرقم لزيادة أو تقليل الصرامة
                     
-                    product_code, product_name = "غير مسجل", "غير مسجل"
-                    if has_data:
-                        row = df[df['filename'] == match_filename]
-                        if not row.empty:
-                            product_code = row['code'].values[0]
-                            product_name = row['name'].values[0]
+                    found_match = False
                     
-                    with col:
-                        img_path = os.path.join("images", match_filename)
-                        if os.path.exists(img_path):
-                            st.image(Image.open(img_path), use_container_width=True)
+                    for i in range(len(results['distances'][0])):
+                        distance = results['distances'][0][i]
+                        metadata = results['metadatas'][0][i]
                         
-                        st.info(f"**الكود:** {product_code}\n\n**الاسم:** {product_name}")
+                        if distance < strict_threshold:
+                            found_match = True
+                            st.success("تم العثور على منتج مطابق!")
+                            
+                            # عرض بيانات المنتج
+                            st.subheader("تفاصيل المنتج:")
+                            st.write(f"**رقم المنتج (ID):** {metadata.get('id', 'غير متوفر')}")
+                            st.write(f"**اسم المنتج:** {metadata.get('product_name', 'غير متوفر')}")
+                            st.write(f"**السعر:** {metadata.get('price', 'غير متوفر')}")
+                            st.write(f"**نسبة الاختلاف (Distance):** {distance:.2f} (كلما قل الرقم كان التطابق أفضل)")
+                            
+                            # التوقف عند أول منتج مطابق تماماً
+                            break 
+                    
+                    if not found_match:
+                         st.warning("لم يتم العثور على منتج مطابق تماماً. المنتجات الموجودة مختلفة عن الصورة المرفوعة.")
+                         
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء البحث: {str(e)}")
