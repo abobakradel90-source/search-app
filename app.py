@@ -13,8 +13,8 @@ def download_and_extract_chroma():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
     
-    # حط الرابط اللي نسخته من GitHub Releases بين علامتين التنصيص دول ⬇️
-    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.rar"
+    # الرابط المباشر الصحيح 100% من حسابك على جيت هاب
+    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     # تنظيف الذاكرة من الملفات الوهمية القديمة
     if os.path.exists(zip_path):
