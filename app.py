@@ -5,48 +5,26 @@ from PIL import Image
 import torch
 import os
 import zipfile
-import requests
+import urllib.request
 import pandas as pd
-
-# دالة مخصصة لتخطي حماية جوجل درايف وتحميل الملفات الكبيرة
-def download_file_from_google_drive(id, destination):
-    URL = "https://docs.google.com/uc?export=download"
-    session = requests.Session()
-    response = session.get(URL, params={'id': id}, stream=True)
-    
-    # البحث عن رسالة التحذير (Token) الخاصة بالملفات الكبيرة
-    token = None
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            token = value
-            break
-            
-    # لو لقينا رسالة التحذير، بنبعت طلب تاني نتخطاها بيه
-    if token:
-        params = {'id': id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-        
-    # حفظ الملف الفعلي
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(32768):
-            if chunk:
-                f.write(chunk)
 
 @st.cache_resource
 def download_and_extract_chroma():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    file_id = "12tEZL-ErKOakDhXeQAAv8X2tO-h56LTd"
     
-    # تنظيف الذاكرة: لو فيه ملف وهمي نزل بالغلط المرة اللي فاتت، بنمسحه الأول
+    # حط الرابط اللي نسخته من GitHub Releases بين علامتين التنصيص دول ⬇️
+    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.rar"
+    
+    # تنظيف الذاكرة من الملفات الوهمية القديمة
     if os.path.exists(zip_path):
         os.remove(zip_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تحميل قاعدة البيانات (نتخطى حماية جوجل)... قد يستغرق دقيقتين...'):
+        with st.spinner('جاري تحميل قاعدة البيانات من السيرفر السريع... قد يستغرق دقيقتين...'):
             try:
-                # التحميل باستخدام الدالة المخصصة
-                download_file_from_google_drive(file_id, zip_path)
+                # تحميل الملف بالرابط المباشر
+                urllib.request.urlretrieve(download_url, zip_path)
                 
                 # فك الضغط
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -90,7 +68,6 @@ st.write("قم برفع صورة للبحث عن المنتجات المطابق
 uploaded_file = st.file_uploader("اختر صورة...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # عرض الصورة المرفوعة
     image = Image.open(uploaded_file).convert('RGB')
     st.image(image, caption='الصورة المرفوعة', use_column_width=True)
     
