@@ -5,7 +5,7 @@ from PIL import Image
 import torch
 import os
 import zipfile
-import urllib.request
+import gdown
 import pandas as pd
 
 # دالة لتحميل وفك ضغط قاعدة البيانات من جوجل درايف
@@ -14,16 +14,15 @@ def download_and_extract_chroma():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
     
-    # رابط التحميل المباشر من جوجل درايف
+    # الـ ID الخاص بملفك على جوجل درايف
     file_id = "12tEZL-ErKOakDhXeQAAv8X2tO-h56LTd"
-    download_url = f"https://drive.google.com/uc?id={file_id}"
     
     # لو الفولدر مش موجود، نزله وفكه
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة قاعدة البيانات لأول مرة (قد يستغرق دقيقة)...'):
+        with st.spinner('جاري تهيئة قاعدة البيانات لأول مرة من جوجل درايف (قد يستغرق بضعة دقائق)...'):
             try:
-                # تحميل الملف المضغوط
-                urllib.request.urlretrieve(download_url, zip_path)
+                # استخدام gdown للتحميل عشان يتخطى حماية جوجل درايف للملفات الكبيرة
+                gdown.download(id=file_id, output=zip_path, quiet=False)
                 
                 # فك الضغط
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -88,7 +87,6 @@ if uploaded_file is not None:
                     st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
                 else:
                     # فلترة النتائج بناءً على نسبة التطابق (المسافة)
-                    # كلما قلت المسافة (distance)، زاد التطابق
                     strict_threshold = 50.0  # يمكنك تعديل هذا الرقم لزيادة أو تقليل الصرامة
                     
                     found_match = False
@@ -108,7 +106,6 @@ if uploaded_file is not None:
                             st.write(f"**السعر:** {metadata.get('price', 'غير متوفر')}")
                             st.write(f"**نسبة الاختلاف (Distance):** {distance:.2f} (كلما قل الرقم كان التطابق أفضل)")
                             
-                            # التوقف عند أول منتج مطابق تماماً
                             break 
                     
                     if not found_match:
