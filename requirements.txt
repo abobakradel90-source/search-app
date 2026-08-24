@@ -1,0 +1,8 @@
+streamlit
+torch
+transformers
+Pillow
+upstash-vector
+requests
+pandas
+streamlit-cropper
