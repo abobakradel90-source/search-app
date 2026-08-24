@@ -6,3 +6,4 @@ upstash-vector
 requests
 pandas
 streamlit-cropper
+chromadb
