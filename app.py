@@ -14,7 +14,7 @@ def download_and_extract_chroma():
     extract_path = "./chroma_db"
     
     # الرابط المباشر الصحيح 100% من حسابك على جيت هاب
-    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
+    download_url = "https://github.com/abobakradel90-source/search-app/archive/refs/tags/v1.0.zip"
     
     # تنظيف الذاكرة من الملفات الوهمية القديمة
     if os.path.exists(zip_path):
