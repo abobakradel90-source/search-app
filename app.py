@@ -6,6 +6,7 @@ import torch
 import os
 import zipfile
 import urllib.request
+import pandas as pd
 
 # 1. دالة التحميل
 @st.cache_resource
@@ -41,6 +42,16 @@ def load_system():
 
 model, processor, collection = load_system()
 
+# --- قراءة بيانات الإكسيل ---
+@st.cache_data
+def load_excel_data():
+    try:
+        return pd.read_excel('products.xlsx') 
+    except Exception as e:
+        return None
+
+df_products = load_excel_data()
+
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
@@ -51,7 +62,6 @@ def get_image_embedding(image):
 st.title("البحث الصارم عن المنتجات 🔍")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
-
 images_to_process = []
 
 with tab1:
@@ -68,8 +78,7 @@ if images_to_process:
     if st.button("ابحث عن المنتجات الآن", use_container_width=True):
         for img_file in images_to_process:
             st.markdown("---")
-            
-            st.image(img_file, caption=f'الصورة: {img_file.name}', use_container_width=True)
+            st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
             
             with st.spinner('جاري البحث في قاعدة البيانات...'):
                 try:
@@ -78,38 +87,51 @@ if images_to_process:
                     
                     results = collection.query(
                         query_embeddings=[query_embedding],
-                        n_results=5,
+                        n_results=5, # جلب أفضل 5 نتائج
                         include=['distances', 'metadatas']
                     )
                     
                     if not results['distances'][0]:
                         st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
                     else:
-                        strict_threshold = 50.0  
-                        found_match = False
+                        st.success(f"✅ تم العثور على أفضل {len(results['distances'][0])} نتائج مشابهة:")
                         
+                        # حلقة تكرار لعرض كل النتائج
                         for i in range(len(results['distances'][0])):
                             distance = results['distances'][0][i]
                             metadata = results['metadatas'][0][i]
                             
-                            if distance < strict_threshold:
-                                found_match = True
-                                st.success("✅ تم العثور على منتج مطابق!")
-                                
-                                # استخراج البيانات المتاحة
-                                filename = metadata.get('filename', 'غير متوفر')
-                                
-                                # استخراج كود المنتج بذكاء (إزالة .jpg أو .png)
-                                product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
-                                
+                            filename = metadata.get('filename', 'غير متوفر')
+                            product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
+                            
+                            # استخراج البيانات من الإكسيل (تم إزالة السعر)
+                            product_name = "غير متوفر"
+                            
+                            if df_products is not None:
+                                try:
+                                    row = df_products[df_products['Code'].astype(str) == str(product_code)]
+                                    if not row.empty:
+                                        product_name = row.iloc[0]['Name']
+                                except Exception:
+                                    pass
+
+                            st.markdown(f"### النتيجة رقم {i+1}")
+                            col1, col2 = st.columns([1, 2])
+                            
+                            with col1:
+                                # مسار الصور الجديد
+                                img_path = os.path.join("compressed_images", filename)
+                                if os.path.exists(img_path):
+                                    st.image(img_path, use_container_width=True)
+                                else:
+                                    st.warning("صورة النتيجة غير موجودة بالمسار")
+                                    
+                            with col2:
                                 st.write(f"**كود المنتج:** {product_code}")
-                                st.write(f"**اسم ملف الصورة الأصلية:** {filename}")
-                                st.write(f"**نسبة الاختلاف:** {distance:.2f} (كلما قل الرقم كان التطابق أفضل)")
-                                
-                                break 
-                        
-                        if not found_match:
-                             st.warning("⚠️ لم يتم العثور على منتج مطابق تماماً. المنتجات الموجودة مختلفة عن الصورة المرفوعة.")
-                             
+                                st.write(f"**اسم المنتج:** {product_name}")
+                                st.write(f"**نسبة الاختلاف:** {distance:.2f}")
+                            
+                            st.markdown("---")
+                            
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء فحص الصورة: {str(e)}")
