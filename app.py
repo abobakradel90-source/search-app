@@ -8,7 +8,7 @@ import zipfile
 import urllib.request
 import pandas as pd
 
-# دالة التحميل
+# 1. دالة التحميل
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -30,7 +30,7 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# تحميل موديل CLIP
+# 2. تحميل موديل CLIP
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
@@ -45,17 +45,29 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# قراءة الإكسيل
+# 3. قراءة الـ CSV (مع جهاز الكشف)
 @st.cache_data
-def load_excel_data():
+def load_csv_data():
     try:
-        return pd.read_csv('products.csv')
+        df = pd.read_csv('products.csv') 
+        return df, None
     except Exception as e:
-        return None
+        return None, str(e)
 
-df_products = load_excel_data()
+df_products, error_msg = load_csv_data()
 
-# دالة استخراج الخصائص بـ CLIP
+# --- القائمة الجانبية للكشف عن المشكلة ---
+with st.sidebar:
+    st.header("🛠️ فحص ملف البيانات")
+    if df_products is not None:
+        st.success("✅ تم قراءة ملف products.csv بنجاح!")
+        st.write("📌 الأعمدة اللي الموقع شايفها بالظبط هي:")
+        # ده هيعرض أسماء الأعمدة الحقيقية اللي في الملف
+        st.code(df_products.columns.tolist())
+    else:
+        st.error(f"❌ لم يتم العثور على الملف أو حدث خطأ:\n{error_msg}")
+
+# 4. دالة استخراج الخصائص
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
@@ -65,10 +77,9 @@ def get_image_embedding(image):
                 features = features.pooler_output
             else:
                 features = features[0]
-                
     return features.squeeze().numpy().tolist()
 
-# الواجهة
+# 5. الواجهة الرئيسية
 st.title("البحث الذكي عن الأحذية (CLIP Engine) 🔍👟")
 st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
@@ -115,15 +126,17 @@ if images_to_process:
                             product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
                             product_name = "غير متوفر"
                             
-                            # البحث في الإكسيل مع تنظيف المسافات المخفية
+                            # البحث في الـ CSV
                             if df_products is not None:
                                 try:
-                                    clean_excel_codes = df_products['Code'].astype(str).str.strip()
-                                    clean_target_code = str(product_code).strip()
-                                    
-                                    row = df_products[clean_excel_codes == clean_target_code]
-                                    if not row.empty:
-                                        product_name = str(row.iloc[0]['Name']).strip()
+                                    # بنحاول نطابق الكود المرفوع مع عمود Code
+                                    if 'Code' in df_products.columns and 'Name' in df_products.columns:
+                                        clean_excel_codes = df_products['Code'].astype(str).str.strip()
+                                        clean_target_code = str(product_code).strip()
+                                        
+                                        row = df_products[clean_excel_codes == clean_target_code]
+                                        if not row.empty:
+                                            product_name = str(row.iloc[0]['Name']).strip()
                                 except Exception:
                                     pass
 
