@@ -45,26 +45,30 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# 3. قراءة الـ CSV
+# 3. قراءة الـ CSV وتنظيف الأعمدة
 @st.cache_data
 def load_csv_data():
     try:
-        df = pd.read_csv('products.csv') 
+        df = pd.read_csv('products.csv')
+        # توحيد أسماء الأعمدة لتكون بدون مسافات
+        df.columns = df.columns.astype(str).str.strip()
         return df, None
     except Exception as e:
         return None, str(e)
 
 df_products, error_msg = load_csv_data()
 
-# --- القائمة الجانبية لفحص الملف ---
+# --- القائمة الجانبية الفاحصة ---
 with st.sidebar:
     st.header("🛠️ فحص ملف البيانات")
     if df_products is not None:
         st.success("✅ تم قراءة ملف products.csv بنجاح!")
+        st.write("📌 الأعمدة المتاحة حالياً:")
+        st.code(df_products.columns.tolist())
     else:
-        st.error(f"❌ خطأ:\n{error_msg}")
+        st.error(f"❌ خطأ في الملف:\n{error_msg}")
 
-# 4. دالة استخراج الخصائص
+# 4. دالة استخراج الخصائص بذكاء CLIP
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
@@ -123,16 +127,23 @@ if images_to_process:
                             product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
                             product_name = "غير متوفر"
                             
+                            # محاولة استخراج اسم المنتج بمرونة فائقة
                             if df_products is not None:
                                 try:
-                                    if 'Code' in df_products.columns and 'Name' in df_products.columns:
-                                        clean_excel_codes = df_products['Code'].astype(str).str.strip()
-                                        clean_target_code = str(product_code).strip()
+                                    # تحديد أعمدة الكود والاسم بمرونة
+                                    cols = df_products.columns
+                                    code_col = 'Code' if 'Code' in cols else (cols[0] if len(cols) > 0 else None)
+                                    name_col = 'Name' if 'Name' in cols else (cols[1] if len(cols) > 1 else None)
+                                    
+                                    if code_col and name_col:
+                                        # تطابق مرن بغض النظر عن الحروف الكبيرة والصغيرة أو المسافات
+                                        df_products['cleaned_code'] = df_products[code_col].astype(str).str.strip().str.lower()
+                                        target_cleaned = str(product_code).strip().lower()
                                         
-                                        row = df_products[clean_excel_codes == clean_target_code]
+                                        row = df_products[df_products['cleaned_code'] == target_cleaned]
                                         if not row.empty:
-                                            product_name = str(row.iloc[0]['Name']).strip()
-                                except Exception:
+                                            product_name = str(row.iloc[0][name_col]).strip()
+                                except Exception as e:
                                     pass
 
                             st.markdown(f"### النتيجة رقم {i+1}")
