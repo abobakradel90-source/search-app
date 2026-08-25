@@ -8,13 +8,12 @@ import zipfile
 import urllib.request
 import pandas as pd
 
-# 1. دالة التحميل
+# دالة التحميل (تم تغيير اسمها لضمان مسح الذاكرة القديمة)
 @st.cache_resource
-def download_and_extract_chroma():
+def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
     
-    # تأكد إن الرابط ده هو نفس رابط الـ Release بتاعك
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     if os.path.exists(zip_path):
@@ -31,12 +30,12 @@ def download_and_extract_chroma():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل موديل CLIP وقاعدة البيانات
+# تحميل موديل CLIP وقاعدة البيانات
 @st.cache_resource
-def load_system():
-    download_and_extract_chroma()
+def load_clip_system():
+    download_new_chroma_db()
     
-    # استخدام موديل CLIP الجديد بدلاً من dinov2
+    # تحميل موديل CLIP
     model_id = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
@@ -45,7 +44,7 @@ def load_system():
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
 
-model, processor, collection = load_system()
+model, processor, collection = load_clip_system()
 
 # --- قراءة بيانات الإكسيل ---
 @st.cache_data
@@ -57,17 +56,16 @@ def load_excel_data():
 
 df_products = load_excel_data()
 
-# استخراج الخصائص بطريقة CLIP
+# استخراج الخصائص بـ CLIP
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         image_features = model.get_image_features(**inputs)
     return image_features.squeeze().numpy().tolist()
 
-# 3. واجهة المستخدم الاحترافية
+# واجهة المستخدم
 st.title("البحث الذكي عن الأحذية (CLIP Engine) 🔍👟")
 
-# كشف عدد المنتجات الفعلي للتأكد
 st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
