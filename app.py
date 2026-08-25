@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
-from PIL import Image
+from PIL import Image, ImageEnhance
 import torch
 import os
 import zipfile
@@ -30,7 +30,7 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل موديل CLIP الأساسي المتوافق تماماً مع الأبعاد (512 dimension)
+# 2. تحميل موديل CLIP
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
@@ -67,17 +67,27 @@ with st.sidebar:
     else:
         st.error(f"❌ خطأ في الملف:\n{error_msg}")
 
-# 4. دالة معالجة الصورة واقتصاصها بذكاء لمنع التشوه
-def prepare_image_for_clip(image):
+# 4. دالة متقدمة لتحسين صورة الكاميرا (تعديل التباين والسطوع لزيادة الدقة)
+def enhance_camera_image(image):
     image = image.convert("RGB")
+    
+    # تحسين التباين والسطوع عشان يتغلب على إضاءة الموبايل الضعيفة أو الظلال
+    enhancer_contrast = ImageEnhance.Contrast(image)
+    image = enhancer_contrast.enhance(1.2)  # زيادة طفيفة في التباين لإبراز تفاصيل الكوتشي
+    
+    enhancer_sharpness = ImageEnhance.Sharpness(image)
+    image = enhancer_sharpness.enhance(1.5) # زيادة الحِدة لتوضيح خيوط ونقشة الكوتشي
+    
+    # وضع الصورة داخل إطار مربع أبيض نقي لمنع التشوه
     max_size = max(image.size)
     new_img = Image.new("RGB", (max_size, max_size), (255, 255, 255))
     new_img.paste(image, ((max_size - image.size[0]) // 2, (max_size - image.size[1]) // 2))
+    
     return new_img
 
 # 5. دالة استخراج الخصائص
 def get_image_embedding(image):
-    processed_img = prepare_image_for_clip(image)
+    processed_img = enhance_camera_image(image)
     inputs = processor(images=processed_img, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
@@ -90,7 +100,7 @@ def get_image_embedding(image):
 
 # 6. الواجهة الرئيسية
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
+st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج | 📸 وضع تحسين صور الكاميرا مفعل")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
 images_to_process = []
@@ -106,26 +116,27 @@ with tab2:
         images_to_process.append(camera_photo)
 
 if images_to_process:
-    if st.button("ابحث عن المنتجات الآن", use_container_width=True):
+    if st.button("ابحث بدقة عالية الآن", use_container_width=True):
         for img_file in images_to_process:
             st.markdown("---")
             st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
             
-            with st.spinner('جاري فحص الصورة ومطابقتها بدقة...'):
+            with st.spinner('📸 جاري معالجة إضاءة وتفاصيل صورة الكاميرا للبحث بدقة...'):
                 try:
                     image = Image.open(img_file)
                     query_embedding = get_image_embedding(image)
                     
+                    # طلب أفضل 3 نتائج فقط عشان نركز على الأعلى مطابقة
                     results = collection.query(
                         query_embeddings=[query_embedding],
-                        n_results=5, 
+                        n_results=3, 
                         include=['distances', 'metadatas']
                     )
                     
                     if not results['distances'][0]:
                         st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
                     else:
-                        st.success(f"✅ تم العثور على أفضل النتائج المشابهة:")
+                        st.success(f"✅ أفضل النتائج المطابقة:")
                         
                         for i in range(len(results['distances'][0])):
                             distance = results['distances'][0][i]
@@ -135,7 +146,6 @@ if images_to_process:
                             product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
                             product_name = "غير متوفر"
                             
-                            # البحث بمرونة في الـ CSV
                             if df_products is not None:
                                 try:
                                     cols = df_products.columns
@@ -165,7 +175,13 @@ if images_to_process:
                             with col2:
                                 st.write(f"**كود المنتج:** {product_code}")
                                 st.write(f"**اسم المنتج:** {product_name}")
-                                st.write(f"**نسبة الاختلاف:** {distance:.4f}")
+                                st.write(f"**مؤشر المطابقة (Distance):** {distance:.4f}")
+                                
+                                # تنبيه ذكي لو النتيجة بعيدة
+                                if distance > 0.35:
+                                    st.caption("⚠️ تنبيه: نسبة الشبه منخفضة، يفضل التقاط الصورة بإضاءة أوضح.")
+                                else:
+                                    st.caption("✨ تطابق ممتاز عالي الثقة!")
                             
                             st.markdown("---")
                             
