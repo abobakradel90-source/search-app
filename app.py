@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
-from PIL import Image, ImageOps
+from PIL import Image
 import torch
 import os
 import zipfile
@@ -20,7 +20,7 @@ def download_new_chroma_db():
         os.remove(zip_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة النظام وقاعدة البيانات الخارقة (CLIP Large)...'):
+        with st.spinner('جاري تهيئة النظام وقاعدة البيانات (CLIP)...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -30,13 +30,12 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل موديل CLIP الفائق (Large Model) لرفع الدقة القصوى
+# 2. تحميل موديل CLIP الأساسي المتوافق تماماً مع الأبعاد (512 dimension)
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
     
-    # الترقية الكبرى لموديل Large لتحقيق أقصى دقة ممكنة
-    model_id = "openai/clip-vit-large-patch14"
+    model_id = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
     
@@ -68,19 +67,15 @@ with st.sidebar:
     else:
         st.error(f"❌ خطأ في الملف:\n{error_msg}")
 
-# 4. دالة معالجة الصورة واقتصاصها بذكاء لتحقيق أعلى دقة للموبايل
+# 4. دالة معالجة الصورة واقتصاصها بذكاء لمنع التشوه
 def prepare_image_for_clip(image):
-    # تحويل الصورة لـ RGB
     image = image.convert("RGB")
-    
-    # وضع الصورة داخل إطار مربع أبيض نقي لمنع التشوه والتشطيت
     max_size = max(image.size)
     new_img = Image.new("RGB", (max_size, max_size), (255, 255, 255))
     new_img.paste(image, ((max_size - image.size[0]) // 2, (max_size - image.size[1]) // 2))
-    
     return new_img
 
-# 5. دالة استخراج الخصائص بدقة فائقة
+# 5. دالة استخراج الخصائص
 def get_image_embedding(image):
     processed_img = prepare_image_for_clip(image)
     inputs = processor(images=processed_img, return_tensors="pt")
@@ -94,8 +89,8 @@ def get_image_embedding(image):
     return features.squeeze().numpy().tolist()
 
 # 6. الواجهة الرئيسية
-st.title("ED STORE ABOBAKR ADEl 👟🔥 (Ultra Precision)")
-st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج | 🦅 موديل عالي الدقة مفعل")
+st.title("ED STORE ABOBAKR ADEl 👟🔥")
+st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
 images_to_process = []
@@ -111,12 +106,12 @@ with tab2:
         images_to_process.append(camera_photo)
 
 if images_to_process:
-    if st.button("ابحث بدقة فائقة الآن", use_container_width=True):
+    if st.button("ابحث عن المنتجات الآن", use_container_width=True):
         for img_file in images_to_process:
             st.markdown("---")
             st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
             
-            with st.spinner('🦅 جاري تحليل الصورة بعين صقر (CLIP Large) للوصول للنتيجة المطابقة بدقة...'):
+            with st.spinner('جاري فحص الصورة ومطابقتها بدقة...'):
                 try:
                     image = Image.open(img_file)
                     query_embedding = get_image_embedding(image)
@@ -130,7 +125,7 @@ if images_to_process:
                     if not results['distances'][0]:
                         st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
                     else:
-                        st.success(f"✅ النتائج الأكثر مطابقة بدقة فائقة:")
+                        st.success(f"✅ تم العثور على أفضل النتائج المشابهة:")
                         
                         for i in range(len(results['distances'][0])):
                             distance = results['distances'][0][i]
@@ -170,7 +165,7 @@ if images_to_process:
                             with col2:
                                 st.write(f"**كود المنتج:** {product_code}")
                                 st.write(f"**اسم المنتج:** {product_name}")
-                                st.write(f"**مؤشر المطابقة (Distance):** {distance:.4f}")
+                                st.write(f"**نسبة الاختلاف:** {distance:.4f}")
                             
                             st.markdown("---")
                             
