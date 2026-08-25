@@ -8,7 +8,7 @@ import zipfile
 import urllib.request
 import pandas as pd
 
-# 1. دالة التحميل
+# دالة التحميل
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -30,7 +30,7 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل موديل CLIP
+# تحميل موديل CLIP
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
@@ -45,7 +45,7 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# 3. قراءة الإكسيل
+# قراءة الإكسيل
 @st.cache_data
 def load_excel_data():
     try:
@@ -55,12 +55,11 @@ def load_excel_data():
 
 df_products = load_excel_data()
 
-# 4. دالة استخراج الخصائص (معدلة للحماية من أخطاء السيرفر)
+# دالة استخراج الخصائص بـ CLIP
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-        # سطر حماية: لو السيرفر بيستخدم إصدار قديم من المكتبة
         if not isinstance(features, torch.Tensor):
             if hasattr(features, 'pooler_output'):
                 features = features.pooler_output
@@ -69,7 +68,7 @@ def get_image_embedding(image):
                 
     return features.squeeze().numpy().tolist()
 
-# 5. الواجهة
+# الواجهة
 st.title("البحث الذكي عن الأحذية (CLIP Engine) 🔍👟")
 st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
@@ -116,11 +115,15 @@ if images_to_process:
                             product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
                             product_name = "غير متوفر"
                             
+                            # البحث في الإكسيل مع تنظيف المسافات المخفية
                             if df_products is not None:
                                 try:
-                                    row = df_products[df_products['Code'].astype(str) == str(product_code)]
+                                    clean_excel_codes = df_products['Code'].astype(str).str.strip()
+                                    clean_target_code = str(product_code).strip()
+                                    
+                                    row = df_products[clean_excel_codes == clean_target_code]
                                     if not row.empty:
-                                        product_name = row.iloc[0]['Name']
+                                        product_name = str(row.iloc[0]['Name']).strip()
                                 except Exception:
                                     pass
 
