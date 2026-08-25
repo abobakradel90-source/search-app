@@ -41,7 +41,8 @@ def load_system():
     return model, processor, collection
 
 model, processor, collection = load_system()
-
+# كشف عدد المنتجات الفعلي في قاعدة البيانات
+st.info(f"📦 عدد المنتجات المسجلة داخل قاعدة البيانات حالياً: {collection.count()} منتج")
 # --- قراءة بيانات الإكسيل ---
 @st.cache_data
 def load_excel_data():
