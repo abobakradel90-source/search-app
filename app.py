@@ -49,7 +49,7 @@ model, processor, collection = load_clip_system()
 @st.cache_data
 def load_excel_data():
     try:
-        return pd.read_excel('products.xlsx') 
+        return pd.read_csv('products.csv')
     except Exception as e:
         return None
 
