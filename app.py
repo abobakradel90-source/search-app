@@ -79,7 +79,7 @@ def get_image_embedding(image):
     return features.squeeze().numpy().tolist()
 
 # 5. الواجهة الرئيسية
-st.title("البحث الذكي عن الأحذية (CLIP Engine) 🔍👟")
+st.title("ED STORE ABOBAKR ADEl 👟🔥")
 st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
