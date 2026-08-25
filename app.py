@@ -6,9 +6,8 @@ import torch
 import os
 import zipfile
 import urllib.request
-import pandas as pd
 
-# 1. دالة التحميل اللي نجحت واشتغلت
+# 1. دالة التحميل
 @st.cache_resource
 def download_and_extract_chroma():
     zip_path = "chroma_db.zip"
@@ -48,10 +47,9 @@ def get_image_embedding(image):
         outputs = model(**inputs)
     return outputs.last_hidden_state.mean(dim=1).squeeze().numpy().tolist()
 
-# 3. واجهة المستخدم الاحترافية (رفع متعدد + كاميرا)
+# 3. واجهة المستخدم الاحترافية
 st.title("البحث الصارم عن المنتجات 🔍")
 
-# عمل تبويبات (Tabs) لتنظيم الواجهة
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
 
 images_to_process = []
@@ -66,18 +64,15 @@ with tab2:
     if camera_photo:
         images_to_process.append(camera_photo)
 
-# معالجة الصور المرفوعة أو الملتقطة
 if images_to_process:
     if st.button("ابحث عن المنتجات الآن", use_container_width=True):
         for img_file in images_to_process:
             st.markdown("---")
             
-            # عرض الصورة بطريقة صحيحة لتجنب الـ TypeError
             st.image(img_file, caption=f'الصورة: {img_file.name}', use_container_width=True)
             
             with st.spinner('جاري البحث في قاعدة البيانات...'):
                 try:
-                    # قراءة الصورة للموديل
                     image = Image.open(img_file).convert('RGB')
                     query_embedding = get_image_embedding(image)
                     
@@ -101,11 +96,15 @@ if images_to_process:
                                 found_match = True
                                 st.success("✅ تم العثور على منتج مطابق!")
                                 
-                                st.write(f"**نسبة الاختلاف:** {distance:.2f} (كلما قل الرقم كان التطابق أفضل)")
+                                # استخراج البيانات المتاحة
+                                filename = metadata.get('filename', 'غير متوفر')
                                 
-                                # عرض البيانات الخام لمعرفة الأسماء الحقيقية للأعمدة
-                                st.write("**البيانات الخام المسجلة في قاعدة البيانات:**")
-                                st.json(metadata)
+                                # استخراج كود المنتج بذكاء (إزالة .jpg أو .png)
+                                product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
+                                
+                                st.write(f"**كود المنتج:** {product_code}")
+                                st.write(f"**اسم ملف الصورة الأصلية:** {filename}")
+                                st.write(f"**نسبة الاختلاف:** {distance:.2f} (كلما قل الرقم كان التطابق أفضل)")
                                 
                                 break 
                         
