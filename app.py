@@ -20,7 +20,7 @@ def download_new_chroma_db():
         os.remove(zip_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة النظام وقاعدة البيانات (CLIP)...'):
+        with st.spinner('جاري تهيئة النظام وقاعدة البيانات العميقة...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -30,12 +30,13 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل موديل CLIP
+# 2. تحميل موديل CLIP الأحدث والأقوى للمتاجر (OpenCLIP / ViT المتطور)
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
     
-    model_id = "openai/clip-vit-base-patch32"
+    # الترقية لعقل أقوى وأحدث في قراءة تفاصيل المنتجات
+    model_id = "laion/CLIP-ViT-B-32-laion2B-s34b-b79k"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
     
@@ -67,25 +68,25 @@ with st.sidebar:
     else:
         st.error(f"❌ خطأ في الملف:\n{error_msg}")
 
-# 4. دالة متقدمة لتحسين صورة الكاميرا (تعديل التباين والسطوع لزيادة الدقة)
+# 4. دالة معالجة وتحسين صورة الكاميرا بدقة فائقة
 def enhance_camera_image(image):
     image = image.convert("RGB")
     
-    # تحسين التباين والسطوع عشان يتغلب على إضاءة الموبايل الضعيفة أو الظلال
+    # ضبط التباين والحدة لرفع كفاءة رؤية الموديل الجديد للتفاصيل
     enhancer_contrast = ImageEnhance.Contrast(image)
-    image = enhancer_contrast.enhance(1.2)  # زيادة طفيفة في التباين لإبراز تفاصيل الكوتشي
+    image = enhancer_contrast.enhance(1.25)
     
     enhancer_sharpness = ImageEnhance.Sharpness(image)
-    image = enhancer_sharpness.enhance(1.5) # زيادة الحِدة لتوضيح خيوط ونقشة الكوتشي
+    image = enhancer_sharpness.enhance(1.6)
     
-    # وضع الصورة داخل إطار مربع أبيض نقي لمنع التشوه
+    # احتواء الصورة في إطار مربع نقي لمنع التشوه
     max_size = max(image.size)
     new_img = Image.new("RGB", (max_size, max_size), (255, 255, 255))
     new_img.paste(image, ((max_size - image.size[0]) // 2, (max_size - image.size[1]) // 2))
     
     return new_img
 
-# 5. دالة استخراج الخصائص
+# 5. دالة استخراج الخصائص بالعقل الجديد
 def get_image_embedding(image):
     processed_img = enhance_camera_image(image)
     inputs = processor(images=processed_img, return_tensors="pt")
@@ -99,8 +100,8 @@ def get_image_embedding(image):
     return features.squeeze().numpy().tolist()
 
 # 6. الواجهة الرئيسية
-st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج | 📸 وضع تحسين صور الكاميرا مفعل")
+st.title("ED STORE ABOBAKR ADEl 👟🔥 (Advanced AI)")
+st.info(f"📦 عدد المنتجات: {collection.count()} منتج | 🦅 عقل CLIP المتطور مفعل")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
 images_to_process = []
@@ -116,17 +117,16 @@ with tab2:
         images_to_process.append(camera_photo)
 
 if images_to_process:
-    if st.button("ابحث بدقة عالية الآن", use_container_width=True):
+    if st.button("ابحث بالعقل الجديد الآن", use_container_width=True):
         for img_file in images_to_process:
             st.markdown("---")
             st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
             
-            with st.spinner('📸 جاري معالجة إضاءة وتفاصيل صورة الكاميرا للبحث بدقة...'):
+            with st.spinner('🦅 جاري التحليل باستخدام عقل CLIP المتطور للبحث بدقة صقر...'):
                 try:
                     image = Image.open(img_file)
                     query_embedding = get_image_embedding(image)
                     
-                    # طلب أفضل 3 نتائج فقط عشان نركز على الأعلى مطابقة
                     results = collection.query(
                         query_embeddings=[query_embedding],
                         n_results=3, 
@@ -136,7 +136,7 @@ if images_to_process:
                     if not results['distances'][0]:
                         st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
                     else:
-                        st.success(f"✅ أفضل النتائج المطابقة:")
+                        st.success(f"✅ أفضل النتائج المطابقة بدقة متطورة:")
                         
                         for i in range(len(results['distances'][0])):
                             distance = results['distances'][0][i]
@@ -176,12 +176,6 @@ if images_to_process:
                                 st.write(f"**كود المنتج:** {product_code}")
                                 st.write(f"**اسم المنتج:** {product_name}")
                                 st.write(f"**مؤشر المطابقة (Distance):** {distance:.4f}")
-                                
-                                # تنبيه ذكي لو النتيجة بعيدة
-                                if distance > 0.35:
-                                    st.caption("⚠️ تنبيه: نسبة الشبه منخفضة، يفضل التقاط الصورة بإضاءة أوضح.")
-                                else:
-                                    st.caption("✨ تطابق ممتاز عالي الثقة!")
                             
                             st.markdown("---")
                             
