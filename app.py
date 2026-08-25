@@ -101,10 +101,11 @@ if images_to_process:
                                 found_match = True
                                 st.success("✅ تم العثور على منتج مطابق!")
                                 
-                                st.write(f"**رقم المنتج (ID):** {metadata.get('id', 'غير متوفر')}")
-                                st.write(f"**اسم المنتج:** {metadata.get('product_name', 'غير متوفر')}")
-                                st.write(f"**السعر:** {metadata.get('price', 'غير متوفر')}")
                                 st.write(f"**نسبة الاختلاف:** {distance:.2f} (كلما قل الرقم كان التطابق أفضل)")
+                                
+                                # عرض البيانات الخام لمعرفة الأسماء الحقيقية للأعمدة
+                                st.write("**البيانات الخام المسجلة في قاعدة البيانات:**")
+                                st.json(metadata)
                                 
                                 break 
                         
