@@ -7,6 +7,7 @@ import os
 import zipfile
 import urllib.request
 import pandas as pd
+from rembg import remove # مكتبة السحر لعزل الخلفيات
 
 # 1. دالة التحميل
 @st.cache_resource
@@ -99,12 +100,28 @@ if images_to_process:
     if st.button("ابحث عن المنتجات الآن", use_container_width=True):
         for img_file in images_to_process:
             st.markdown("---")
-            st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
             
-            with st.spinner('جاري البحث بذكاء CLIP...'):
+            with st.spinner('✨ جاري عزل الخلفية بالذكاء الاصطناعي للتركيز على الكوتشي...'):
                 try:
-                    image = Image.open(img_file).convert('RGB')
-                    query_embedding = get_image_embedding(image)
+                    # فتح الصورة المرفوعة
+                    original_image = Image.open(img_file)
+                    
+                    # خطوة العزل السحرية (بترجع صورة بخلفية شفافة)
+                    isolated_image_rgba = remove(original_image)
+                    
+                    # تحويل الخلفية الشفافة للون أبيض نقي عشان الذكاء الاصطناعي ميتشتتت
+                    isolated_image = Image.new("RGB", isolated_image_rgba.size, (255, 255, 255))
+                    isolated_image.paste(isolated_image_rgba, mask=isolated_image_rgba.split()[3])
+                    
+                    # عرض الصورة قبل وبعد العزل للمقارنة
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.image(original_image, caption='الصورة الأصلية', use_container_width=True)
+                    with col_b:
+                        st.image(isolated_image, caption='بعد عزل الخلفية (جاهزة للبحث)', use_container_width=True)
+                    
+                    # البحث بالصورة المعزولة النظيفة
+                    query_embedding = get_image_embedding(isolated_image)
                     
                     results = collection.query(
                         query_embeddings=[query_embedding],
@@ -128,7 +145,6 @@ if images_to_process:
                             # البحث في الـ CSV
                             if df_products is not None:
                                 try:
-                                    # بنحاول نطابق الكود المرفوع مع عمود Code
                                     if 'Code' in df_products.columns and 'Name' in df_products.columns:
                                         clean_excel_codes = df_products['Code'].astype(str).str.strip()
                                         clean_target_code = str(product_code).strip()

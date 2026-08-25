@@ -10,3 +10,4 @@ chromadb
 torchvision
 requests
 openpyxl
+rembg
