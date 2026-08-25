@@ -62,12 +62,11 @@ with st.sidebar:
     if df_products is not None:
         st.success("✅ تم قراءة ملف products.csv بنجاح!")
         st.write("📌 الأعمدة اللي الموقع شايفها بالظبط هي:")
-        # ده هيعرض أسماء الأعمدة الحقيقية اللي في الملف
         st.code(df_products.columns.tolist())
     else:
         st.error(f"❌ لم يتم العثور على الملف أو حدث خطأ:\n{error_msg}")
 
-# 4. دالة استخراج الخصائص
+# 4. دالة استخراج الخصائص بذكاء CLIP
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
