@@ -1,6 +1,6 @@
 import streamlit as st
 import chromadb
-from transformers import AutoImageProcessor, AutoModel
+from transformers import CLIPProcessor, CLIPModel
 from PIL import Image
 import torch
 import os
@@ -14,13 +14,14 @@ def download_and_extract_chroma():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
     
+    # تأكد إن الرابط ده هو نفس رابط الـ Release بتاعك
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     if os.path.exists(zip_path):
         os.remove(zip_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة النظام وقاعدة البيانات...'):
+        with st.spinner('جاري تهيئة النظام وقاعدة البيانات الجديدة (CLIP)...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -30,19 +31,22 @@ def download_and_extract_chroma():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل الموديل وقاعدة البيانات
+# 2. تحميل موديل CLIP وقاعدة البيانات
 @st.cache_resource
 def load_system():
     download_and_extract_chroma()
-    processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
-    model = AutoModel.from_pretrained('facebook/dinov2-base')
+    
+    # استخدام موديل CLIP الجديد بدلاً من dinov2
+    model_id = "openai/clip-vit-base-patch32"
+    processor = CLIPProcessor.from_pretrained(model_id)
+    model = CLIPModel.from_pretrained(model_id)
+    
     client = chromadb.PersistentClient(path="./chroma_db")
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
 
 model, processor, collection = load_system()
-# كشف عدد المنتجات الفعلي في قاعدة البيانات
-st.info(f"📦 عدد المنتجات المسجلة داخل قاعدة البيانات حالياً: {collection.count()} منتج")
+
 # --- قراءة بيانات الإكسيل ---
 @st.cache_data
 def load_excel_data():
@@ -53,14 +57,18 @@ def load_excel_data():
 
 df_products = load_excel_data()
 
+# استخراج الخصائص بطريقة CLIP
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
-        outputs = model(**inputs)
-    return outputs.last_hidden_state.mean(dim=1).squeeze().numpy().tolist()
+        image_features = model.get_image_features(**inputs)
+    return image_features.squeeze().numpy().tolist()
 
 # 3. واجهة المستخدم الاحترافية
-st.title("البحث الصارم عن المنتجات 🔍")
+st.title("البحث الذكي عن الأحذية (CLIP Engine) 🔍👟")
+
+# كشف عدد المنتجات الفعلي للتأكد
+st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
 images_to_process = []
@@ -81,14 +89,14 @@ if images_to_process:
             st.markdown("---")
             st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
             
-            with st.spinner('جاري البحث في قاعدة البيانات...'):
+            with st.spinner('جاري البحث بذكاء CLIP...'):
                 try:
                     image = Image.open(img_file).convert('RGB')
                     query_embedding = get_image_embedding(image)
                     
                     results = collection.query(
                         query_embeddings=[query_embedding],
-                        n_results=5, # جلب أفضل 5 نتائج
+                        n_results=5, 
                         include=['distances', 'metadatas']
                     )
                     
@@ -97,7 +105,6 @@ if images_to_process:
                     else:
                         st.success(f"✅ تم العثور على أفضل {len(results['distances'][0])} نتائج مشابهة:")
                         
-                        # حلقة تكرار لعرض كل النتائج
                         for i in range(len(results['distances'][0])):
                             distance = results['distances'][0][i]
                             metadata = results['metadatas'][0][i]
@@ -105,7 +112,6 @@ if images_to_process:
                             filename = metadata.get('filename', 'غير متوفر')
                             product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
                             
-                            # استخراج البيانات من الإكسيل (تم إزالة السعر)
                             product_name = "غير متوفر"
                             
                             if df_products is not None:
@@ -120,7 +126,6 @@ if images_to_process:
                             col1, col2 = st.columns([1, 2])
                             
                             with col1:
-                                # مسار الصور الجديد
                                 img_path = os.path.join("compressed_images", filename)
                                 if os.path.exists(img_path):
                                     st.image(img_path, use_container_width=True)
