@@ -8,7 +8,7 @@ import zipfile
 import urllib.request
 import pandas as pd
 
-# دالة التحميل (تم تغيير اسمها لضمان مسح الذاكرة القديمة)
+# 1. دالة التحميل
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -30,12 +30,11 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# تحميل موديل CLIP وقاعدة البيانات
+# 2. تحميل موديل CLIP
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
     
-    # تحميل موديل CLIP
     model_id = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
@@ -46,7 +45,7 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# --- قراءة بيانات الإكسيل ---
+# 3. قراءة الإكسيل
 @st.cache_data
 def load_excel_data():
     try:
@@ -56,16 +55,22 @@ def load_excel_data():
 
 df_products = load_excel_data()
 
-# استخراج الخصائص بـ CLIP
+# 4. دالة استخراج الخصائص (معدلة للحماية من أخطاء السيرفر)
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
-        image_features = model.get_image_features(**inputs)
-    return image_features.squeeze().numpy().tolist()
+        features = model.get_image_features(**inputs)
+        # سطر حماية: لو السيرفر بيستخدم إصدار قديم من المكتبة
+        if not isinstance(features, torch.Tensor):
+            if hasattr(features, 'pooler_output'):
+                features = features.pooler_output
+            else:
+                features = features[0]
+                
+    return features.squeeze().numpy().tolist()
 
-# واجهة المستخدم
+# 5. الواجهة
 st.title("البحث الذكي عن الأحذية (CLIP Engine) 🔍👟")
-
 st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
 
 tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
@@ -109,7 +114,6 @@ if images_to_process:
                             
                             filename = metadata.get('filename', 'غير متوفر')
                             product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
-                            
                             product_name = "غير متوفر"
                             
                             if df_products is not None:
