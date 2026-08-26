@@ -7,18 +7,16 @@ import os
 import zipfile
 import urllib.request
 import pandas as pd
-import shutil  # المكتبة المسؤولة عن مسح القاعدة القديمة بالعافية
+import shutil
 
 # 1. إجبار السيرفر على سحب قاعدة البيانات الجديدة
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    marker_file = "./chroma_db/large_model_installed.txt" # ملف علامة عشان نعرف إن دي القاعدة الجديدة
-    
+    marker_file = "./chroma_db/large_model_installed.txt"
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
-    # لو القاعدة القديمة موجودة (مفيهاش العلامة الجديدة)، امسحها فوراً من جذورها!
     if os.path.exists(extract_path) and not os.path.exists(marker_file):
         shutil.rmtree(extract_path)
         
@@ -30,8 +28,6 @@ def download_new_chroma_db():
                     zip_ref.extractall(".")
                 if os.path.exists(zip_path):
                     os.remove(zip_path)
-                
-                # إنشاء ملف العلامة عشان السيرفر مايمسحهاش تاني
                 with open(marker_file, 'w') as f:
                     f.write("done")
             except Exception as e:
@@ -41,26 +37,31 @@ def download_new_chroma_db():
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
-    
     model_id = "openai/clip-vit-large-patch14"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
-    
     client = chromadb.PersistentClient(path="./chroma_db")
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
 
 model, processor, collection = load_clip_system()
 
-# 3. قراءة ملف الـ CSV
+# 3. قراءة ملف الـ CSV (بمرونة تامة لتجاهل الحروف المخفية)
 @st.cache_data
 def load_csv_data():
     try:
-        df = pd.read_csv('products.csv')
+        # استخدام utf-8-sig بيمسح أي حروف مخفية من الإكسيل
+        df = pd.read_csv('products.csv', encoding='utf-8-sig')
         df.columns = df.columns.astype(str).str.strip()
         return df, None
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        try:
+            # محاولة قراءة بترميز بديل لو الأول فشل
+            df = pd.read_csv('products.csv', encoding='cp1256')
+            df.columns = df.columns.astype(str).str.strip()
+            return df, None
+        except Exception as e2:
+            return None, str(e2)
 
 df_products, error_msg = load_csv_data()
 
@@ -68,24 +69,20 @@ df_products, error_msg = load_csv_data()
 def process_mobile_photo(image):
     image = image.convert("RGB")
     image = ImageOps.autocontrast(image, cutoff=2)
-    
     width, height = image.size
     left = width * 0.15
     top = height * 0.15
     right = width * 0.85
     bottom = height * 0.85
     cropped_image = image.crop((left, top, right, bottom))
-    
     enhancer = ImageEnhance.Sharpness(cropped_image)
     return enhancer.enhance(1.5)
 
-# 5. استخراج الخصائص بدقة مطابقة للقاعدة
+# 5. استخراج الخصائص بدقة
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-        
-        # فك شفرة الموديل العملاق عشان ميطلعش إيرور الأبعاد
         if not isinstance(features, torch.Tensor):
             if hasattr(features, 'image_embeds'):
                 features = features.image_embeds
@@ -93,7 +90,6 @@ def get_image_embedding(image):
                 features = features.pooler_output
             else:
                 features = features[0]
-                
     return features.squeeze().numpy().tolist()
 
 # 6. الواجهة الرئيسية
@@ -108,8 +104,10 @@ with tab3:
         search_query = st.text_input("اكتب اسم أو كود المنتج:")
         if search_query:
             cols = df_products.columns
-            code_col = 'Code' if 'Code' in cols else cols[0]
-            name_col = 'Name' if 'Name' in cols else cols[1]
+            # مرونة في اختيار العمود
+            code_col = next((c for c in cols if 'code' in str(c).lower()), cols[0])
+            name_col = next((c for c in cols if 'name' in str(c).lower()), cols[1] if len(cols) > 1 else cols[0])
+            
             mask = df_products[code_col].astype(str).str.contains(search_query, case=False, na=False) | \
                    df_products[name_col].astype(str).str.contains(search_query, case=False, na=False)
             matched = df_products[mask]
@@ -152,12 +150,19 @@ if image_to_search and st.button("🔍 ابحث بالذكاء الاصطناع�
                     
                     if df_products is not None:
                         try:
+                            # السحر هنا: بحث مرن تماماً يتجاهل أي مسافات أو حروف غريبة
                             cols = df_products.columns
-                            df_products['clean_c'] = df_products[cols[0] if 'Code' not in cols else 'Code'].astype(str).str.strip().str.lower()
-                            row = df_products[df_products['clean_c'] == str(p_code).strip().lower()]
+                            code_col = next((c for c in cols if 'code' in str(c).lower()), cols[0])
+                            name_col = next((c for c in cols if 'name' in str(c).lower()), cols[1] if len(cols) > 1 else cols[0])
+                            
+                            df_products['clean_code'] = df_products[code_col].astype(str).str.strip().str.lower()
+                            target_code = str(p_code).strip().lower()
+                            
+                            row = df_products[df_products['clean_code'] == target_code]
                             if not row.empty:
-                                p_name = str(row.iloc[0][cols[1] if 'Name' not in cols else 'Name'])
-                        except: pass
+                                p_name = str(row.iloc[0][name_col]).strip()
+                        except Exception:
+                            pass
                     
                     col1, col2 = st.columns([1, 2])
                     with col1:
