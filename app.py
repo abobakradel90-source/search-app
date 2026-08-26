@@ -7,8 +7,17 @@ import os
 import zipfile
 import urllib.request
 import pandas as pd
+from rembg import remove, new_session
 
-# 1. دالة التحميل
+# 1. تهيئة موديل عزل الخلفية الخفيف جداً (عشان السيرفر ميقعش)
+@st.cache_resource
+def get_rembg_session():
+    # استخدام نسخة u2netp الخفيفة جداً (4 ميجابايت) بدلاً من النسخة الثقيلة
+    return new_session("u2netp")
+
+rembg_session = get_rembg_session()
+
+# 2. دالة تحميل قاعدة البيانات
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -20,7 +29,7 @@ def download_new_chroma_db():
         os.remove(zip_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة النظام وقاعدة البيانات...'):
+        with st.spinner('جاري تهيئة النظام وقاعدة البيانات الأساسية...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -30,7 +39,7 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"حدث خطأ أثناء تحميل قاعدة البيانات: {e}")
 
-# 2. تحميل موديل CLIP الأصلي المستقر السريع
+# 3. تحميل موديل CLIP (النسخة الأصلية المتوافقة 100% مع قاعدة بياناتك)
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
@@ -45,7 +54,7 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# 3. قراءة الـ CSV وتنظيف الأعمدة
+# 4. قراءة الـ CSV
 @st.cache_data
 def load_csv_data():
     try:
@@ -57,17 +66,19 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# --- القائمة الجانبية الفاحصة ---
-with st.sidebar:
-    st.header("🛠️ فحص ملف البيانات")
-    if df_products is not None:
-        st.success("✅ تم قراءة ملف products.csv بنجاح!")
-        st.write("📌 الأعمدة المتاحة:")
-        st.code(df_products.columns.tolist())
-    else:
-        st.error(f"❌ خطأ في الملف:\n{error_msg}")
+# 5. دالة معالجة الصورة (السحر الحقيقي لدقة 100%)
+def process_and_isolate_shoe(image):
+    image = image.convert("RGB")
+    
+    # 1. عزل الخلفية بالموديل الخفيف لتركيز الذكاء الاصطناعي على الكوتشي فقط
+    isolated_rgba = remove(image, session=rembg_session)
+    
+    # 2. وضع الكوتشي على خلفية بيضاء نقية (زي صور الاستوديو)
+    final_image = Image.new("RGB", isolated_rgba.size, (255, 255, 255))
+    final_image.paste(isolated_rgba, mask=isolated_rgba.split()[3])
+    
+    return final_image
 
-# 4. دالة استخراج الخصائص
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
@@ -79,127 +90,105 @@ def get_image_embedding(image):
                 features = features[0]
     return features.squeeze().numpy().tolist()
 
-# 5. الواجهة الرئيسية
-st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 عدد المنتجات الجاهزة للبحث: {collection.count()} منتج")
+# 6. الواجهة الرئيسية
+st.title("ED STORE ABOBAKR ADEl 👟🔥 (Ultimate Precision)")
+st.info(f"📦 المنتجات: {collection.count()} | 🎯 وضع الاستوديو وعزل الخلفية مفعل")
 
-# تقسيم الموقع لطريقتين: بحث بالصور أو بحث نصي دقيق 100%
-mode = st.radio("اختر طريقة البحث:", ["📷 البحث بالصورة (ذكاء اصطناعي)", "🔍 البحث السريع بالاسم أو الكود (دقة 100%)"])
+tab1, tab2, tab3 = st.tabs(["📷 تصوير بالكاميرا (مُحسن)", "📁 رفع صورة", "🔍 بحث بالكود (مضمون 100%)"])
 
-if mode == "🔍 البحث السريع بالاسم أو الكود (دقة 100%)":
-    st.subheader("البحث الفوري في المنتجات")
+# المتغير اللي هيشيل الصورة أياً كان مصدرها
+image_to_search = None
+
+with tab1:
+    camera_photo = st.camera_input("التقط صورة واضحة للكوتشي")
+    if camera_photo:
+        image_to_search = camera_photo
+
+with tab2:
+    uploaded_file = st.file_uploader("اختر صورة من جهازك", type=["jpg", "jpeg", "png"])
+    if uploaded_file:
+        image_to_search = uploaded_file
+
+with tab3:
+    st.subheader("البحث الفوري بالكود أو الاسم (لا يحتمل الخطأ)")
     if df_products is not None:
-        search_query = st.text_input("اكتب اسم المنتج أو جزء من الكود للبحث الفوري:")
+        search_query = st.text_input("اكتب الكود أو الاسم هنا:")
         if search_query:
             cols = df_products.columns
             code_col = 'Code' if 'Code' in cols else cols[0]
             name_col = 'Name' if 'Name' in cols else cols[1]
             
-            # فلترة المنتجات بناءً على البحث
             mask = df_products[code_col].astype(str).str.contains(search_query, case=False, na=False) | \
                    df_products[name_col].astype(str).str.contains(search_query, case=False, na=False)
             
             matched_df = df_products[mask]
-            
             if matched_df.empty:
-                st.warning("لم يتم العثور على منتج بهذا الاسم أو الكود.")
+                st.warning("لم يتم العثور على منتج.")
             else:
-                st.success(f"✅ تم العثور على {len(matched_df)} منتج:")
                 for idx, row in matched_df.iterrows():
-                    p_code = str(row[code_col]).strip()
-                    p_name = str(row[name_col]).strip()
-                    
-                    st.markdown(f"### 👟 {p_name}")
-                    st.write(f"**كود المنتج:** {p_code}")
-                    
-                    # محاولة عرض صورة المنتج لو موجودة في المسار
-                    img_path = os.path.join("compressed_images", f"{p_code}.jpg")
-                    if os.path.exists(img_path):
-                        st.image(img_path, width=200)
-                    else:
-                        # جرب صيغة png
-                        img_path_png = os.path.join("compressed_images", f"{p_code}.png")
-                        if os.path.exists(img_path_png):
-                            st.image(img_path_png, width=200)
-                    st.markdown("---")
-    else:
-        st.error("ملف البيانات غير محمل بشكل صحيح.")
+                    st.success(f"👟 {row[name_col]} | الكود: {row[code_col]}")
 
-else:
-    tab1, tab2 = st.tabs(["📁 رفع صور من الجهاز", "📷 التقاط بالكاميرا"])
-    images_to_process = []
-
-    with tab1:
-        uploaded_files = st.file_uploader("اختر صورة أو أكثر...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-        if uploaded_files:
-            images_to_process.extend(uploaded_files)
-            
-    with tab2:
-        camera_photo = st.camera_input("التقط صورة للمنتج")
-        if camera_photo:
-            images_to_process.append(camera_photo)
-
-    if images_to_process:
-        if st.button("ابحث عن المنتجات الآن", use_container_width=True):
-            for img_file in images_to_process:
-                st.markdown("---")
-                st.image(img_file, caption=f'الصورة المرفوعة: {img_file.name}', use_container_width=True)
+# معالجة البحث بالصورة
+if image_to_search:
+    if st.button("🔍 ابحث بالذكاء الاصطناعي الآن", use_container_width=True):
+        st.markdown("---")
+        
+        with st.spinner('✨ جاري عزل الخلفية وتحويل الصورة لوضع الاستوديو للبحث بدقة...'):
+            try:
+                original_img = Image.open(image_to_search)
                 
-                with st.spinner('جاري البحث...'):
-                    try:
-                        image = Image.open(img_file).convert('RGB')
-                        query_embedding = get_image_embedding(image)
+                # تطبيق العزل الذكي
+                clean_studio_img = process_and_isolate_shoe(original_img)
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.image(original_img, caption="الصورة الأصلية", use_container_width=True)
+                with col_b:
+                    st.image(clean_studio_img, caption="الكوتشي بعد العزل (جاهز للبحث)", use_container_width=True)
+                
+                # استخراج الخصائص من الصورة النظيفة
+                query_embedding = get_image_embedding(clean_studio_img)
+                
+                # البحث في قاعدة البيانات الأصلية
+                results = collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=3, 
+                    include=['distances', 'metadatas']
+                )
+                
+                if not results['distances'][0]:
+                    st.warning("لم يتم العثور على أي منتج مطابق.")
+                else:
+                    st.success(f"✅ أفضل النتائج المطابقة:")
+                    for i in range(len(results['distances'][0])):
+                        distance = results['distances'][0][i]
+                        metadata = results['metadatas'][0][i]
+                        filename = metadata.get('filename', 'غير متوفر')
+                        product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
+                        product_name = "غير متوفر"
                         
-                        results = collection.query(
-                            query_embeddings=[query_embedding],
-                            n_results=3, 
-                            include=['distances', 'metadatas']
-                        )
-                        
-                        if not results['distances'][0]:
-                            st.warning("لم يتم العثور على أي منتج مطابق في قاعدة البيانات.")
-                        else:
-                            st.success(f"✅ النتائج المشابهة:")
-                            
-                            for i in range(len(results['distances'][0])):
-                                distance = results['distances'][0][i]
-                                metadata = results['metadatas'][0][i]
-                                
-                                filename = metadata.get('filename', 'غير متوفر')
-                                product_code = filename.split('.')[0] if filename != 'غير متوفر' else 'غير متوفر'
-                                product_name = "غير متوفر"
-                                
-                                if df_products is not None:
-                                    try:
-                                        cols = df_products.columns
-                                        code_col = 'Code' if 'Code' in cols else cols[0]
-                                        name_col = 'Name' if 'Name' in cols else cols[1]
-                                        
-                                        df_products['cleaned_code'] = df_products[code_col].astype(str).str.strip().str.lower()
-                                        target_cleaned = str(product_code).strip().lower()
-                                        
-                                        row = df_products[df_products['cleaned_code'] == target_cleaned]
-                                        if not row.empty:
-                                            product_name = str(row.iloc[0][name_col]).strip()
-                                    except Exception:
-                                        pass
+                        if df_products is not None:
+                            try:
+                                cols = df_products.columns
+                                code_col = 'Code' if 'Code' in cols else cols[0]
+                                name_col = 'Name' if 'Name' in cols else cols[1]
+                                df_products['cleaned_code'] = df_products[code_col].astype(str).str.strip().str.lower()
+                                target_cleaned = str(product_code).strip().lower()
+                                row = df_products[df_products['cleaned_code'] == target_cleaned]
+                                if not row.empty:
+                                    product_name = str(row.iloc[0][name_col]).strip()
+                            except:
+                                pass
 
-                                st.markdown(f"### النتيجة رقم {i+1}")
-                                col1, col2 = st.columns([1, 2])
-                                
-                                with col1:
-                                    img_path = os.path.join("compressed_images", filename)
-                                    if os.path.exists(img_path):
-                                        st.image(img_path, use_container_width=True)
-                                    else:
-                                        st.warning("صورة النتيجة غير موجودة بالمسار")
-                                        
-                                with col2:
-                                    st.write(f"**كود المنتج:** {product_code}")
-                                    st.write(f"**اسم المنتج:** {product_name}")
-                                    st.write(f"**نسبة الاختلاف:** {distance:.4f}")
-                                
-                                st.markdown("---")
-                                
-                    except Exception as e:
-                        st.error(f"حدث خطأ أثناء فحص الصورة: {str(e)}")
+                        st.markdown(f"### النتيجة #{i+1}")
+                        col1, col2 = st.columns([1, 2])
+                        with col1:
+                            img_path = os.path.join("compressed_images", filename)
+                            if os.path.exists(img_path):
+                                st.image(img_path, use_container_width=True)
+                        with col2:
+                            st.write(f"**الكود:** {product_code}")
+                            st.write(f"**الاسم:** {product_name}")
+                        st.markdown("---")
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء فحص الصورة: {str(e)}")
