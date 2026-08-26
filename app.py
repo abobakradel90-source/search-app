@@ -7,29 +7,37 @@ import os
 import zipfile
 import urllib.request
 import pandas as pd
+import shutil  # المكتبة المسؤولة عن مسح القاعدة القديمة بالعافية
 
-# 1. تحميل قاعدة البيانات الجديدة (العملاقة)
+# 1. إجبار السيرفر على سحب قاعدة البيانات الجديدة
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    # رابط الـ Release بتاعك (تأكد إنك رفعت الملف الجديد عليه)
+    marker_file = "./chroma_db/large_model_installed.txt" # ملف علامة عشان نعرف إن دي القاعدة الجديدة
+    
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
-    if os.path.exists(zip_path):
-        os.remove(zip_path)
+    # لو القاعدة القديمة موجودة (مفيهاش العلامة الجديدة)، امسحها فوراً من جذورها!
+    if os.path.exists(extract_path) and not os.path.exists(marker_file):
+        shutil.rmtree(extract_path)
+        
     if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة قاعدة البيانات عالية الدقة...'):
+        with st.spinner('جاري سحب قاعدة البيانات العملاقة الجديدة...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_ref.extractall(".")
                 if os.path.exists(zip_path):
                     os.remove(zip_path)
+                
+                # إنشاء ملف العلامة عشان السيرفر مايمسحهاش تاني
+                with open(marker_file, 'w') as f:
+                    f.write("done")
             except Exception as e:
                 st.error(f"حدث خطأ أثناء التحميل: {e}")
 
-# 2. تحميل الموديل العملاق (Large)
+# 2. تحميل الموديل العملاق
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
@@ -44,7 +52,7 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# 3. قراءة ملف CSV
+# 3. قراءة ملف الـ CSV
 @st.cache_data
 def load_csv_data():
     try:
@@ -56,14 +64,11 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. القص الذكي لصور الموبايل (عشان نلغي الخلفية المشتتة)
+# 4. القص والتركيز الذكي لصور الموبايل
 def process_mobile_photo(image):
     image = image.convert("RGB")
-    
-    # تحسين التباين التلقائي عشان نعالج إضاءة الموبايل الضعيفة
     image = ImageOps.autocontrast(image, cutoff=2)
     
-    # قص أطراف الصورة بنسبة 15% من كل الجوانب (التركيز على الكوتشي في النص)
     width, height = image.size
     left = width * 0.15
     top = height * 0.15
@@ -71,20 +76,27 @@ def process_mobile_photo(image):
     bottom = height * 0.85
     cropped_image = image.crop((left, top, right, bottom))
     
-    # زيادة حدة التفاصيل
     enhancer = ImageEnhance.Sharpness(cropped_image)
-    final_image = enhancer.enhance(1.5)
-    
-    return final_image
+    return enhancer.enhance(1.5)
 
+# 5. استخراج الخصائص بدقة مطابقة للقاعدة
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-        features = features.pooler_output if hasattr(features, 'pooler_output') else features[0]
+        
+        # فك شفرة الموديل العملاق عشان ميطلعش إيرور الأبعاد
+        if not isinstance(features, torch.Tensor):
+            if hasattr(features, 'image_embeds'):
+                features = features.image_embeds
+            elif hasattr(features, 'pooler_output'):
+                features = features.pooler_output
+            else:
+                features = features[0]
+                
     return features.squeeze().numpy().tolist()
 
-# 5. الواجهة
+# 6. الواجهة الرئيسية
 st.title("ED STORE ABOBAKR ADEl 👟🔥 (High Precision)")
 st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك البحث العملاق مفعل")
 
