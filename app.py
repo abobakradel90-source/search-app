@@ -9,7 +9,7 @@ import urllib.request
 import pandas as pd
 import shutil
 
-# 1. إجبار السيرفر على سحب قاعدة البيانات الجديدة
+# 1. سحب قاعدة البيانات
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -21,7 +21,7 @@ def download_new_chroma_db():
         shutil.rmtree(extract_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري سحب قاعدة البيانات العملاقة الجديدة...'):
+        with st.spinner('جاري سحب قاعدة البيانات...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -31,9 +31,9 @@ def download_new_chroma_db():
                 with open(marker_file, 'w') as f:
                     f.write("done")
             except Exception as e:
-                st.error(f"حدث خطأ أثناء التحميل: {e}")
+                st.error(f"خطأ أثناء التحميل: {e}")
 
-# 2. تحميل الموديل العملاق
+# 2. تحميل الموديل
 @st.cache_resource
 def load_clip_system():
     download_new_chroma_db()
@@ -46,18 +46,17 @@ def load_clip_system():
 
 model, processor, collection = load_clip_system()
 
-# 3. قراءة ملف الـ CSV (بمرونة تامة لتجاهل الحروف المخفية)
+# 3. القراءة المرنة جداً لملف CSV (السر هنا)
 @st.cache_data
 def load_csv_data():
     try:
-        # استخدام utf-8-sig بيمسح أي حروف مخفية من الإكسيل
-        df = pd.read_csv('products.csv', encoding='utf-8-sig')
+        # engine='python' و sep=None بيخلوا بايثون يكتشف الفاصل أوتوماتيك
+        df = pd.read_csv('products.csv', sep=None, engine='python', encoding='utf-8-sig')
         df.columns = df.columns.astype(str).str.strip()
         return df, None
     except Exception:
         try:
-            # محاولة قراءة بترميز بديل لو الأول فشل
-            df = pd.read_csv('products.csv', encoding='cp1256')
+            df = pd.read_csv('products.csv', sep=None, engine='python', encoding='cp1256')
             df.columns = df.columns.astype(str).str.strip()
             return df, None
         except Exception as e2:
@@ -65,7 +64,17 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. القص والتركيز الذكي لصور الموبايل
+# --- القائمة الجانبية للكشف على الملف ---
+with st.sidebar:
+    st.header("🛠️ فحص ملف البيانات")
+    if df_products is not None:
+        st.success("✅ تم قراءة ملف products.csv!")
+        st.write("📌 نظرة على أول 3 صفوف (عشان نتأكد بايثون شايفهم إزاي):")
+        st.dataframe(df_products.head(3))
+    else:
+        st.error(f"❌ خطأ:\n{error_msg}")
+
+# 4. معالجة الصور
 def process_mobile_photo(image):
     image = image.convert("RGB")
     image = ImageOps.autocontrast(image, cutoff=2)
@@ -78,7 +87,7 @@ def process_mobile_photo(image):
     enhancer = ImageEnhance.Sharpness(cropped_image)
     return enhancer.enhance(1.5)
 
-# 5. استخراج الخصائص بدقة
+# 5. استخراج الخصائص
 def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
@@ -103,17 +112,15 @@ with tab3:
     if df_products is not None:
         search_query = st.text_input("اكتب اسم أو كود المنتج:")
         if search_query:
-            cols = df_products.columns
-            # مرونة في اختيار العمود
-            code_col = next((c for c in cols if 'code' in str(c).lower()), cols[0])
-            name_col = next((c for c in cols if 'name' in str(c).lower()), cols[1] if len(cols) > 1 else cols[0])
+            # بحث في كل الأعمدة بدون تحديد اسم عمود معين
+            mask = pd.Series([False]*len(df_products))
+            for col in df_products.columns:
+                mask = mask | df_products[col].astype(str).str.contains(search_query, case=False, na=False)
             
-            mask = df_products[code_col].astype(str).str.contains(search_query, case=False, na=False) | \
-                   df_products[name_col].astype(str).str.contains(search_query, case=False, na=False)
             matched = df_products[mask]
             if not matched.empty:
-                for _, row in matched.iterrows():
-                    st.success(f"👟 {row[name_col]} | الكود: {row[code_col]}")
+                for idx, row in matched.iterrows():
+                    st.success(f"👟 النتيجة: {row.to_dict()}")
             else:
                 st.warning("لا يوجد منتج مطابق.")
 
@@ -150,17 +157,22 @@ if image_to_search and st.button("🔍 ابحث بالذكاء الاصطناع�
                     
                     if df_products is not None:
                         try:
-                            # السحر هنا: بحث مرن تماماً يتجاهل أي مسافات أو حروف غريبة
-                            cols = df_products.columns
-                            code_col = next((c for c in cols if 'code' in str(c).lower()), cols[0])
-                            name_col = next((c for c in cols if 'name' in str(c).lower()), cols[1] if len(cols) > 1 else cols[0])
-                            
-                            df_products['clean_code'] = df_products[code_col].astype(str).str.strip().str.lower()
                             target_code = str(p_code).strip().lower()
-                            
-                            row = df_products[df_products['clean_code'] == target_code]
-                            if not row.empty:
-                                p_name = str(row.iloc[0][name_col]).strip()
+                            # بحث شامل في كل خلايا الملف
+                            for col in df_products.columns:
+                                cleaned_col = df_products[col].astype(str).str.strip().str.lower()
+                                if (cleaned_col == target_code).any():
+                                    row_idx = cleaned_col[cleaned_col == target_code].index[0]
+                                    
+                                    # تحديد عمود الاسم (لو الكود في العمود 0 يبقى الاسم في 1 والعكس)
+                                    col_index = df_products.columns.get_loc(col)
+                                    name_col_index = 1 if col_index == 0 else 0
+                                    
+                                    if len(df_products.columns) > 1:
+                                        p_name = str(df_products.iloc[row_idx, name_col_index]).strip()
+                                    else:
+                                        p_name = "مشكلة في الإكسيل: الأعمدة ملزوقة في بعض"
+                                    break
                         except Exception:
                             pass
                     
