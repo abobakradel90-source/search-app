@@ -1,2 +1,13 @@
-rembg
-onnxruntime-headless
+streamlit
+torch
+transformers
+Pillow
+upstash-vector
+requests
+pandas
+streamlit-cropper
+chromadb
+torchvision
+requests
+openpyxl
+
