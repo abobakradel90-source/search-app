@@ -11,13 +11,24 @@ import shutil
 import base64
 from streamlit_cropper import st_cropper
 import io
+import datetime
 
 # --- 1. إعدادات الصفحة وتهيئة الذاكرة المؤقتة (Session State) ---
 st.set_page_config(page_title="ED STORE | المتجر الرسمي", page_icon="👟", layout="wide")
 
-# تهيئة ذاكرة الجرد الفعلي
+# تهيئة ذاكرة الجرد
 if 'inventory_session' not in st.session_state:
     st.session_state.inventory_session = {} # {code: count}
+if 'inv_active' not in st.session_state:
+    st.session_state.inv_active = False
+if 'inv_name' not in st.session_state:
+    st.session_state.inv_name = ""
+if 'inv_reason' not in st.session_state:
+    st.session_state.inv_reason = ""
+if 'inv_date' not in st.session_state:
+    st.session_state.inv_date = ""
+if 'inv_custom_df' not in st.session_state:
+    st.session_state.inv_custom_df = None
 
 def get_image_base64(img_path):
     try:
@@ -58,9 +69,7 @@ st.markdown(f"""
         .stTabs [data-baseweb="tab"] {{ font-size: 20px !important; font-weight: 900 !important; color: #5C7C99 !important; padding: 10px 20px; border-radius: 10px; }}
         .stTabs [aria-selected="true"] {{ background-color: #1C65A6 !important; color: white !important; }}
         
-        .product-card {{
-            background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; transition: transform 0.3s ease;
-        }}
+        .product-card {{ background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; transition: transform 0.3s ease; }}
         .product-img {{ width: 130px; height: 130px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }}
         .code-badge {{ background-color: #E8F0F8; color: #1C65A6; padding: 6px 15px; border-radius: 20px; font-size: 14px; font-weight: 800; display: inline-block; margin-bottom: 10px; }}
         .product-title {{ font-size: 20px; color: #0F172A; font-weight: 800; margin: 0 0 8px 0; line-height: 1.3; }}
@@ -72,6 +81,8 @@ st.markdown(f"""
         .metric-card {{ background: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #1C65A6; }}
         .metric-title {{ color: #64748B; font-size: 18px; font-weight: 700; margin-bottom: 10px; }}
         .metric-value {{ color: #0F172A; font-size: 36px; font-weight: 900; }}
+        
+        .inv-active-bar {{ background: linear-gradient(90deg, #10B981, #059669); color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }}
         
         .footer {{ position: fixed; bottom: 0; left: 0; width: 100%; background-color: #144A7A; color: white; text-align: center; padding: 12px; font-weight: 500; z-index: 999; }}
         .footer span {{ color: #93C5FD; font-weight: 800; }}
@@ -171,7 +182,7 @@ def render_product_card(p_code, p_name, p_stock, custom_message=""):
 main_tab1, main_tab2 = st.tabs(["🔍 محرك البحث الذكي", "📦 نظام إدارة الجرد والمخازن"])
 
 # ==========================================
-# التبويب الأول: محرك البحث 
+# التبويب الأول: محرك البحث الأساسي
 # ==========================================
 with main_tab1:
     st.markdown("### 🔍 بحث سريع بكود المنتج أو الاسم")
@@ -235,106 +246,154 @@ with main_tab1:
                 except: st.error("حدث خطأ في البحث.")
 
 # ==========================================
-# التبويب الثاني: مديول الجرد المتكامل
+# التبويب الثاني: مديول الجرد المتكامل (نظام الجلسات)
 # ==========================================
 with main_tab2:
-    if df_products is None:
-        st.error("⚠️ ملف الأرصدة غير متوفر.")
-    else:
-        inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 لوحة التحكم", "🔫 الجرد الفعلي بالباركود", "⚖️ تقرير الفروقات والمطابقة"])
+    if not st.session_state.inv_active:
+        st.markdown("### 🆕 إعداد جلسة جرد جديدة")
+        st.info("قم بإنشاء جلسة جرد ورفع ملف الأرصدة الخاص بها (لو لم ترفع ملف، سيتم الجرد على الأرصدة الحالية في الموقع).")
         
-        # تجهيز البيانات الأساسية
-        total_items = len(df_products)
-        out_of_stock, total_qty = 0, 0
-        system_inventory = {} 
-        
-        for idx, row in df_products.iterrows():
-            code, name, stock = parse_row_info(row, df_products.columns)
-            try: s_val = float(stock)
-            except: s_val = 0
-            
-            total_qty += s_val
-            if s_val <= 0: out_of_stock += 1
-            system_inventory[code] = {'name': name, 'sys_stock': s_val}
-
-        # 1. لوحة التحكم
-        with inv_tab1:
-            st.markdown("### 📊 ملخص أرصدة السيستم")
+        with st.form("inv_setup_form"):
             col1, col2, col3 = st.columns(3)
-            with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي الأصناف المسجلة</div><div class="metric-value" style="color:#1C65A6;">{total_items}</div></div>', unsafe_allow_html=True)
-            with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">إجمالي القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
-            with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف نفذت (صفر)</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
+            with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
+            with col2: inv_reason = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "جرد نهاية العام", "أخرى"])
+            with col3: inv_date = st.date_input("تاريخ الجرد", datetime.date.today())
             
-            st.markdown("<br>### 🛒 إجمالي ما تم جرده فعلياً حتى الآن: **{}** قطعة".format(sum(st.session_state.inventory_session.values())), unsafe_allow_html=True)
-
-        # 2. صفحة الجرد الفعلي (بالباركود)
-        with inv_tab2:
-            st.markdown("### 🔫 مسح الباركود للجرد")
-            st.info("قم بتوجيه مسدس الباركود واضرب الكود، أو اكتبه يدوياً واضغط Enter.")
+            uploaded_inv_file = st.file_uploader("📎 رفع ملف الأرصدة الدفترية اللحظية (Excel أو CSV) - اختياري", type=['csv', 'xlsx'])
             
-            with st.form("barcode_scanner_form", clear_on_submit=True):
-                col_b, col_q = st.columns([3, 1])
-                # تم إزالة autofocus لمنع تعارض Streamlit
-                with col_b: scan_code = st.text_input("كود الصنف (الباركود):")
-                with col_q: add_qty = st.number_input("الكمية المضافة:", min_value=1, value=1)
-                submitted = st.form_submit_button("إضافة للرصيد الفعلي 📥")
-                
-                if submitted and scan_code:
-                    clean_code = str(scan_code).strip().upper()
+            submitted_setup = st.form_submit_button("🚀 فتح جلسة الجرد وبدء العمل")
+            if submitted_setup:
+                if not inv_name:
+                    st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
+                else:
+                    st.session_state.inv_name = inv_name
+                    st.session_state.inv_reason = inv_reason
+                    st.session_state.inv_date = str(inv_date)
+                    st.session_state.inventory_session = {}
+                    st.session_state.inv_active = True
                     
-                    found = False
-                    for sys_c in system_inventory.keys():
-                        if sys_c.upper() == clean_code:
-                            clean_code = sys_c 
-                            found = True
-                            break
-                            
-                    if found:
-                        if clean_code in st.session_state.inventory_session:
-                            st.session_state.inventory_session[clean_code] += add_qty
-                        else:
-                            st.session_state.inventory_session[clean_code] = add_qty
-                            
-                        st.success(f"✅ تم بنجاح إضافة ({add_qty}) للصنف: {clean_code} | إجمالي المجرد الفعلي: {st.session_state.inventory_session[clean_code]}")
-                        render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"تم جرد: {st.session_state.inventory_session[clean_code]} قطعة فعلياً")
+                    if uploaded_inv_file is not None:
+                        try:
+                            if uploaded_inv_file.name.endswith('.csv'):
+                                st.session_state.inv_custom_df = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig')
+                            else:
+                                st.session_state.inv_custom_df = pd.read_excel(uploaded_inv_file)
+                        except:
+                            st.error("حدث خطأ في قراءة الملف المرفق، سيتم الاعتماد على الأرصدة الأساسية.")
+                            st.session_state.inv_custom_df = None
                     else:
-                        st.error(f"❌ الباركود ({scan_code}) غير مسجل في السيستم (الإكسيل)!")
+                        st.session_state.inv_custom_df = None
+                        
+                    st.rerun()
+    else:
+        # واجهة الجرد النشط
+        st.markdown(f"""
+        <div class="inv-active-bar">
+            <div>📌 <b>جرد نشط:</b> {st.session_state.inv_name} &nbsp;|&nbsp; <b>السبب:</b> {st.session_state.inv_reason} &nbsp;|&nbsp; <b>التاريخ:</b> {st.session_state.inv_date}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # تحديد قاعدة البيانات اللي هنقارن عليها
+        active_df = st.session_state.inv_custom_df if st.session_state.inv_custom_df is not None else df_products
+        
+        if active_df is None:
+            st.error("⚠️ لا توجد داتا أرصدة لإجراء الجرد!")
+        else:
+            inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود الفعلي", "⚖️ تقرير الفروقات (تصدير)"])
+            
+            total_items = len(active_df)
+            out_of_stock, total_qty = 0, 0
+            system_inventory = {} 
+            
+            for idx, row in active_df.iterrows():
+                code, name, stock = parse_row_info(row, active_df.columns)
+                try: s_val = float(stock)
+                except: s_val = 0
+                
+                total_qty += s_val
+                if s_val <= 0: out_of_stock += 1
+                system_inventory[code] = {'name': name, 'sys_stock': s_val}
 
-        # 3. تقرير المقارنة والفروقات
-        with inv_tab3:
-            st.markdown("### ⚖️ تقرير الفروقات (السيستم مقابل الفعلي)")
-            
-            report_data = []
-            for code, info in system_inventory.items():
-                sys_qty = info['sys_stock']
-                actual_qty = st.session_state.inventory_session.get(code, 0)
-                variance = actual_qty - sys_qty
+            with inv_tab1:
+                st.markdown("### 📊 ملخص الأرصدة الدفترية لهذه الجلسة")
+                col1, col2, col3 = st.columns(3)
+                with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{total_items}</div></div>', unsafe_allow_html=True)
+                with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع الدفترية المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
+                with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية دفترية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
+                st.markdown("<br>### 🛒 إجمالي ما تم مسحه فعلياً: **{}** قطعة".format(sum(st.session_state.inventory_session.values())), unsafe_allow_html=True)
+
+            with inv_tab2:
+                st.markdown("### 🔫 مسح الباركود للجرد")
+                with st.form("barcode_scanner_form", clear_on_submit=True):
+                    col_b, col_q = st.columns([3, 1])
+                    with col_b: scan_code = st.text_input("كود الصنف (الباركود):")
+                    with col_q: add_qty = st.number_input("الكمية المضافة:", min_value=1, value=1)
+                    submitted = st.form_submit_button("إضافة للرصيد الفعلي 📥")
+                    
+                    if submitted and scan_code:
+                        clean_code = str(scan_code).strip().upper()
+                        found = False
+                        for sys_c in system_inventory.keys():
+                            if sys_c.upper() == clean_code:
+                                clean_code = sys_c 
+                                found = True
+                                break
+                                
+                        if found:
+                            st.session_state.inventory_session[clean_code] = st.session_state.inventory_session.get(clean_code, 0) + add_qty
+                            st.success(f"✅ تمت إضافة ({add_qty}) للصنف: {clean_code} | المجرد الفعلي: {st.session_state.inventory_session[clean_code]}")
+                            render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"إجمالي الجرد الفعلي: {st.session_state.inventory_session[clean_code]} قطعة")
+                        else:
+                            st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
+
+            with inv_tab3:
+                st.markdown("### ⚖️ تقرير الفروقات (الرصيد الدفتري vs الفعلي)")
                 
-                status = "🟢 مطابق"
-                if variance > 0: status = "🔵 زيادة"
-                elif variance < 0: status = "🔴 عجز"
+                report_data = []
+                for code, info in system_inventory.items():
+                    sys_qty = info['sys_stock']
+                    actual_qty = st.session_state.inventory_session.get(code, 0)
+                    variance = actual_qty - sys_qty
+                    
+                    status = "🟢 مطابق"
+                    if variance > 0: status = "🔵 زيادة"
+                    elif variance < 0: status = "🔴 عجز"
+                    
+                    report_data.append({
+                        "كود الصنف": code,
+                        "اسم الصنف": info['name'],
+                        "الرصيد الدفتري (سيستم)": sys_qty,
+                        "الرصيد الفعلي (مجرد)": actual_qty,
+                        "الفروقات (عجز/زيادة)": variance,
+                        "الحالة": status
+                    })
+                    
+                df_report = pd.DataFrame(report_data)
                 
-                report_data.append({
-                    "كود الصنف": code,
-                    "اسم الصنف": info['name'],
-                    "الرصيد الدفتري (سيستم)": sys_qty,
-                    "الرصيد الفعلي (مجرد)": actual_qty,
-                    "الفروقات (عجز/زيادة)": variance,
-                    "الحالة": status
-                })
+                def color_variance(val):
+                    if val < 0: return 'color: red; font-weight: bold;'
+                    elif val > 0: return 'color: blue; font-weight: bold;'
+                    return 'color: green;'
+                    
+                styled_report = df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)'])
+                st.dataframe(styled_report, use_container_width=True, hide_index=True)
                 
-            df_report = pd.DataFrame(report_data)
-            
-            def color_variance(val):
-                if val < 0: return 'color: red; font-weight: bold;'
-                elif val > 0: return 'color: blue; font-weight: bold;'
-                return 'color: green;'
+                st.markdown("<br>", unsafe_allow_html=True)
                 
-            styled_report = df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)'])
-            st.dataframe(styled_report, use_container_width=True, hide_index=True)
-            
-            if st.button("🗑️ تصفير ذاكرة الجرد وبدء جرد جديد"):
-                st.session_state.inventory_session = {}
-                st.rerun()
+                # زرار التصدير (Export)
+                csv = df_report.to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="📥 تحميل التقرير النهائي (Excel/CSV)",
+                    data=csv,
+                    file_name=f"Inventory_Report_{st.session_state.inv_name}_{st.session_state.inv_date}.csv",
+                    mime="text/csv",
+                )
+                
+                st.markdown("---")
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد (مسح الذاكرة)"):
+                    st.session_state.inv_active = False
+                    st.session_state.inv_custom_df = None
+                    st.session_state.inventory_session = {}
+                    st.rerun()
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
