@@ -8,8 +8,9 @@ import zipfile
 import urllib.request
 import pandas as pd
 import shutil
+from streamlit_cropper import st_cropper
 
-# 1. سحب قاعدة البيانات الجديدة (DINOv2)
+# 1. سحب قاعدة البيانات
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -45,7 +46,7 @@ def load_vision_system():
 
 model, processor, collection = load_vision_system()
 
-# 3. قراءة الإكسيل بشكل يقاوم أي أخطاء وعلامات تنصيص
+# 3. قراءة الإكسيل بمرونة
 @st.cache_data
 def load_csv_data():
     try:
@@ -62,19 +63,13 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. معالجة الصورة (بدون قص عنيف لتجنب قطع الكوتشي)
-def process_mobile_photo(image):
-    image = image.convert("RGB")
-    
-    # توضيح الألوان والتباين فقط بدون أي قص يضر بتفاصيل الكوتشي
-    image = ImageOps.autocontrast(image, cutoff=1)
-    
-    # زيادة الحدة لإبراز التفاصيل
-    enhancer = ImageEnhance.Sharpness(image)
-    return enhancer.enhance(1.5)
-
-# 5. استخراج البصمة البصرية الدقيقة
+# 4. استخراج البصمة البصرية الدقيقة
 def get_image_embedding(image):
+    # توضيح الألوان قبل البحث
+    image = ImageOps.autocontrast(image, cutoff=1)
+    enhancer = ImageEnhance.Sharpness(image)
+    image = enhancer.enhance(1.5)
+    
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)
@@ -83,7 +78,7 @@ def get_image_embedding(image):
 
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 (دقة بصرية فائقة) مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 (دقة فائقة) مفعل")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -101,60 +96,70 @@ with tab3:
             else:
                 st.warning("لا يوجد تطابق.")
 
+# متغير لحفظ الصورة بعد القص
 image_to_search = None
+raw_image = None
+
 with tab1:
-    cam_photo = st.camera_input("التقط صورة بحيث يكون الكوتشي واضح بالكامل")
+    cam_photo = st.camera_input("التقط صورة للكوتشي")
     if cam_photo:
-        image_to_search = process_mobile_photo(Image.open(cam_photo))
-        st.image(image_to_search, caption="الصورة بعد توضيح التفاصيل", width=300)
+        raw_image = Image.open(cam_photo).convert("RGB")
 
 with tab2:
     up_file = st.file_uploader("اختر صورة", type=["jpg", "jpeg", "png"])
     if up_file:
-        image_to_search = process_mobile_photo(Image.open(up_file))
-        st.image(image_to_search, caption="الصورة بعد توضيح التفاصيل", width=300)
+        raw_image = Image.open(up_file).convert("RGB")
 
-if image_to_search and st.button("🔍 ابحث بالذكاء الاصطناعي", use_container_width=True):
-    st.markdown("---")
-    with st.spinner('🦅 جاري فحص الأنسجة والتطابق البصري...'):
-        try:
-            results = collection.query(
-                query_embeddings=[get_image_embedding(image_to_search)],
-                n_results=3, 
-                include=['distances', 'metadatas']
-            )
-            
-            if results['distances'][0]:
-                st.success("✅ أفضل التطابقات:")
-                for i in range(len(results['distances'][0])):
-                    meta = results['metadatas'][0][i]
-                    distance = results['distances'][0][i]
-                    p_code = meta.get('filename', '').split('.')[0]
-                    p_name = "غير متوفر"
-                    
-                    if df_products is not None:
-                        try:
-                            target_code = str(p_code).strip().lower()
-                            for col in df_products.columns:
-                                cleaned_col = df_products[col].astype(str).str.strip().str.lower()
-                                if (cleaned_col == target_code).any():
-                                    row_idx = cleaned_col[cleaned_col == target_code].index[0]
-                                    col_index = df_products.columns.get_loc(col)
-                                    name_col_index = 1 if col_index == 0 else 0
-                                    if len(df_products.columns) > 1:
-                                        p_name = str(df_products.iloc[row_idx, name_col_index]).strip()
-                                    break
-                        except: pass
-                    
-                    col1, col2 = st.columns([1, 2])
-                    with col1:
-                        img_path = os.path.join("compressed_images", meta.get('filename', ''))
-                        if os.path.exists(img_path):
-                            st.image(img_path, use_container_width=True)
-                    with col2:
-                        st.write(f"**الكود:** {p_code}")
-                        st.write(f"**الاسم:** {p_name}")
-                        st.caption(f"دقة المطابقة (أقل = أفضل): {distance:.3f}")
-                    st.markdown("---")
-        except Exception as e:
-            st.error(f"خطأ: {e}")
+# أداة القص الذكية (بتظهر بس لو في صورة اترفع أو اتصورت)
+if raw_image:
+    st.markdown("### ✂️ حدد الكوتشي فقط (عشان نشيل الخلفية):")
+    st.caption("اسحب المربع الأزرق عشان يغطي الكوتشي بالظبط، ده بيضاعف دقة البحث 10 مرات!")
+    
+    # مربع التحديد التفاعلي
+    cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#0000FF', aspect_ratio=None)
+    
+    if st.button("🔍 ابحث عن الكوتشي المحدد الآن", use_container_width=True):
+        st.markdown("---")
+        with st.spinner('🦅 جاري فحص الأنسجة والتطابق البصري...'):
+            try:
+                # البحث بيتم بالصورة المقصوصة بس
+                results = collection.query(
+                    query_embeddings=[get_image_embedding(cropped_img)],
+                    n_results=3, 
+                    include=['distances', 'metadatas']
+                )
+                
+                if results['distances'][0]:
+                    st.success("✅ أفضل التطابقات:")
+                    for i in range(len(results['distances'][0])):
+                        meta = results['metadatas'][0][i]
+                        distance = results['distances'][0][i]
+                        p_code = meta.get('filename', '').split('.')[0]
+                        p_name = "غير متوفر"
+                        
+                        if df_products is not None:
+                            try:
+                                target_code = str(p_code).strip().lower()
+                                for col in df_products.columns:
+                                    cleaned_col = df_products[col].astype(str).str.strip().str.lower()
+                                    if (cleaned_col == target_code).any():
+                                        row_idx = cleaned_col[cleaned_col == target_code].index[0]
+                                        col_index = df_products.columns.get_loc(col)
+                                        name_col_index = 1 if col_index == 0 else 0
+                                        if len(df_products.columns) > 1:
+                                            p_name = str(df_products.iloc[row_idx, name_col_index]).strip()
+                                        break
+                            except: pass
+                        
+                        col1, col2 = st.columns([1, 2])
+                        with col1:
+                            img_path = os.path.join("compressed_images", meta.get('filename', ''))
+                            if os.path.exists(img_path):
+                                st.image(img_path, use_container_width=True)
+                        with col2:
+                            st.write(f"**الكود:** {p_code}")
+                            st.write(f"**الاسم:** {p_name}")
+                            st.caption(f"دقة المطابقة (أقل = أفضل): {distance:.3f}")
+                        st.markdown("---")
+            except Exception as e:
+                st.error(f"خطأ: {e}")
