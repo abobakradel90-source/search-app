@@ -99,7 +99,6 @@ st.markdown(f"""
         }}
         .product-title {{ font-size: 20px; color: #0F172A; font-weight: 800; margin: 0 0 8px 0; line-height: 1.3; }}
         
-        /* تصميم الرصيد (مهم) */
         .stock-badge {{
             display: inline-block; margin-top: 5px; padding: 5px 12px;
             border-radius: 8px; font-weight: 700; font-size: 15px;
@@ -195,18 +194,19 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2):
     return sum(abs(a - b) for a, b in zip(h1, h2))
 
-# --- 4. القارئ الذكي للإكسيل (استخراج الاسم والرصيد) ---
+# --- 4. القارئ الذكي (تم تعديله لمسح .jpg من الكود) ---
 def parse_row_info(row, df_cols):
-    p_code = str(row.iloc[0]).strip()
+    # مسح المسافات ومسح أي امتداد للصورة من الإكسيل
+    raw_code = str(row.iloc[0]).strip()
+    p_code = raw_code.split('.')[0] 
+    
     p_name = "الاسم غير مسجل"
     p_stock = "غير محدد"
     
-    # البحث عن عمود الاسم بذكاء
     name_cols = [c for c in df_cols if any(k in c.lower() for k in ['اسم', 'صنف', 'name', 'title'])]
     if name_cols: p_name = str(row[name_cols[0]]).strip()
     elif len(df_cols) > 1: p_name = str(row.iloc[1]).strip()
         
-    # البحث عن عمود الرصيد بذكاء
     stock_cols = [c for c in df_cols if any(k in c.lower() for k in ['رصيد', 'كمية', 'عدد', 'stock', 'qty'])]
     if stock_cols: p_stock = str(row[stock_cols[0]]).strip()
     elif len(df_cols) > 2: p_stock = str(row.iloc[2]).strip()
@@ -215,14 +215,15 @@ def parse_row_info(row, df_cols):
 
 def render_product_card(p_code, p_name, p_stock):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
-    for ext in ['.jpg', '.jpeg', '.png']:
+    
+    # البحث عن الصورة باستخدام الكود النظيف
+    for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
         img_path = os.path.join("compressed_images", f"{p_code}{ext}")
         if os.path.exists(img_path):
             img_base64 = get_image_base64(img_path)
             img_html = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">'
             break
             
-    # تحديد حالة الرصيد (أخضر أم أحمر)
     try:
         stock_val = float(p_stock)
         is_out = stock_val <= 0
@@ -251,7 +252,9 @@ search_query = st.text_input("", placeholder="اكتب الكود أو اسم ا
 if df_products is None:
     st.error("⚠️ ملف الإكسيل (products.csv) غير موجود أو به مشكلة.")
 elif search_query:
-    query = str(search_query).strip().lower()
+    # تنظيف كلمة البحث كمان عشان لو اليوزر نسخ الكود بالـ .jpg
+    query = str(search_query).strip().lower().split('.')[0]
+    
     mask = pd.Series([False]*len(df_products))
     for col in df_products.columns:
         mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
@@ -307,13 +310,14 @@ if raw_image:
                     st.markdown("### ✨ المنتجات المطابقة:")
                     
                     for result in refined_results[:3]:
+                        # تنظيف الكود هنا كمان من قاعدة البيانات
                         p_code = result['filename'].split('.')[0]
                         p_name, p_stock = "الصنف غير مسجل بالإكسيل", "غير محدد"
                         
                         if df_products is not None:
                             target_code = str(p_code).strip().lower()
                             for col in df_products.columns:
-                                cleaned_col = df_products[col].astype(str).str.strip().str.lower()
+                                cleaned_col = df_products[col].astype(str).str.strip().str.lower().str.replace('.jpg','', regex=False).str.replace('.png','', regex=False)
                                 if (cleaned_col == target_code).any():
                                     row_idx = cleaned_col[cleaned_col == target_code].index[0]
                                     row_data = df_products.iloc[row_idx]
