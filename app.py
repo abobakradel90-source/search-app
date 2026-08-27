@@ -94,7 +94,7 @@ if logo_base64:
 else:
     st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
-# --- 3. محرك الذكاء الاصطناعي (تم استرجاع دالة التحميل المفقودة) ---
+# --- 3. محرك الذكاء الاصطناعي ---
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -114,8 +114,7 @@ def download_new_chroma_db():
                     os.remove(zip_path)
                 with open(marker_file, 'w') as f:
                     f.write("done")
-            except Exception as e:
-                pass
+            except Exception as e: pass
 
 @st.cache_resource
 def load_vision_system():
@@ -147,9 +146,19 @@ def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
+        
+        # الكود الأصلي المحكم اللي كان شغال وتم إرجاعه + إضافة flatten لضمان عدم حدوث الإيرور 3D
         if not isinstance(features, torch.Tensor):
-            features = features.image_embeds if hasattr(features, 'image_embeds') else features[0]
-        return features.squeeze().numpy().tolist()
+            if hasattr(features, 'image_embeds'):
+                features = features.image_embeds
+            elif hasattr(features, 'pooler_output'):
+                features = features.pooler_output
+            else:
+                features = features[0]
+                
+        # flatten بتجبر البيانات إنها تكون في بُعد واحد (1D Array) مهما كان شكلها
+        embedding = features.flatten().numpy().tolist()
+    return embedding
 
 def get_color_histogram(image):
     img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
