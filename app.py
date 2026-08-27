@@ -10,19 +10,19 @@ import pandas as pd
 import shutil
 from streamlit_cropper import st_cropper
 
-# 1. سحب قاعدة البيانات
+# 1. سحب قاعدة البيانات (نفس قاعدة الفاشون اللي عندك)
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    marker_file = "./chroma_db/fashion_clip_installed.txt"
+    marker_file = "./chroma_db/fashion_clip_v2.txt"
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     if os.path.exists(extract_path) and not os.path.exists(marker_file):
         shutil.rmtree(extract_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري سحب قاعدة بيانات Fashion-CLIP المتخصصة...'):
+        with st.spinner('جاري التأكد من قاعدة بيانات Fashion-CLIP...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -42,7 +42,7 @@ def load_vision_system():
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
     client = chromadb.PersistentClient(path="./chroma_db")
-    collection = client.get_collection(name="products_collection")
+    collection = client.get_collection(name="fashion_collection")
     return model, processor, collection
 
 model, processor, collection = load_vision_system()
@@ -64,14 +64,12 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. استخراج البصمة المتخصصة للأحذية
+# 4. دوال الذكاء الاصطناعي (الهيكل + فلتر الألوان الدقيق)
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-        
-        # فك شفرة الموديل هنا كمان
         if not isinstance(features, torch.Tensor):
             if hasattr(features, 'image_embeds'):
                 features = features.image_embeds
@@ -79,13 +77,26 @@ def get_image_embedding(image):
                 features = features.pooler_output
             else:
                 features = features[0]
-                
         embedding = features.squeeze().numpy().tolist()
     return embedding
 
+def get_color_histogram(image):
+    # السحر هنا: تحليل دقيق للألوان بنسبة 100%
+    img = image.convert("RGB")
+    w, h = img.size
+    # قص الأطراف لضمان التركيز على لون الكوتشي مش الخلفية
+    img = img.crop((w*0.15, h*0.15, w*0.85, h*0.85))
+    hist = img.histogram() # بيطلع 768 درجة لون
+    total = sum(hist) / 3
+    if total == 0: total = 1
+    return [x / total for x in hist]
+
+def compare_histograms(h1, h2):
+    return sum(abs(a - b) for a, b in zip(h1, h2))
+
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 👔 محرك Fashion-CLIP المتخصص مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 👔 محرك Fashion-CLIP الهجين (هيكل + ألوان) مفعل")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -120,20 +131,48 @@ if raw_image:
     
     if st.button("🔍 ابحث عن الكوتشي المحدد الآن", use_container_width=True):
         st.markdown("---")
-        with st.spinner('👔 جاري تحليل ماركة ولون الكوتشي...'):
+        with st.spinner('👔 جاري تحليل التصميم وتطابق الألوان بدقة...'):
             try:
+                # 1. بنطلب من Fashion-CLIP يجيب أفضل 8 كوتشيات
                 results = collection.query(
                     query_embeddings=[get_image_embedding(cropped_img)],
-                    n_results=4,
+                    n_results=8,
                     include=['distances', 'metadatas']
                 )
                 
                 if results['distances'][0]:
-                    st.success("✅ أفضل التطابقات:")
+                    # 2. تحليل ألوان الصورة بتاعتك
+                    user_color_hist = get_color_histogram(cropped_img)
+                    refined_results = []
+                    
                     for i in range(len(results['distances'][0])):
                         meta = results['metadatas'][0][i]
-                        distance = results['distances'][0][i]
-                        p_code = meta.get('filename', '').split('.')[0]
+                        fashion_dist = results['distances'][0][i]
+                        filename = meta.get('filename', '')
+                        img_path = os.path.join("compressed_images", filename)
+                        
+                        color_dist = 0
+                        if os.path.exists(img_path):
+                            # 3. تحليل ألوان الداتا بيز والمقارنة
+                            db_img = Image.open(img_path)
+                            db_color_hist = get_color_histogram(db_img)
+                            color_dist = compare_histograms(user_color_hist, db_color_hist)
+                        
+                        # 4. دمج دقة الماركة مع دقة اللون (إعطاء وزن ذكي للون)
+                        final_score = fashion_dist + (color_dist * 0.5)
+                        
+                        refined_results.append({
+                            'filename': filename,
+                            'final_score': final_score,
+                            'metadata': meta
+                        })
+                    
+                    # 5. الترتيب النهائي عشان نظهر الأصح لوناً وتصميماً
+                    refined_results.sort(key=lambda x: x['final_score'])
+                    
+                    st.success("✅ أفضل التطابقات (مدعومة بنظارة الألوان):")
+                    for result in refined_results[:3]:
+                        p_code = result['filename'].split('.')[0]
                         p_name = "غير متوفر"
                         
                         if df_products is not None:
@@ -152,13 +191,12 @@ if raw_image:
                         
                         col1, col2 = st.columns([1, 2])
                         with col1:
-                            img_path = os.path.join("compressed_images", meta.get('filename', ''))
+                            img_path = os.path.join("compressed_images", result['filename'])
                             if os.path.exists(img_path):
                                 st.image(img_path, use_container_width=True)
                         with col2:
                             st.write(f"**الكود:** {p_code}")
                             st.write(f"**الاسم:** {p_name}")
-                            st.caption(f"مؤشر المطابقة: {distance:.3f}")
                         st.markdown("---")
             except Exception as e:
                 st.error(f"خطأ: {e}")
