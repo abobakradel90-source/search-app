@@ -18,7 +18,7 @@ st.set_page_config(page_title="ED STORE | المتجر الرسمي", page_icon=
 
 # تهيئة ذاكرة الجرد
 if 'inventory_session' not in st.session_state:
-    st.session_state.inventory_session = {} # {code: count}
+    st.session_state.inventory_session = {} 
 if 'inv_active' not in st.session_state:
     st.session_state.inv_active = False
 if 'inv_name' not in st.session_state:
@@ -94,9 +94,32 @@ if logo_base64:
 else:
     st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
-# --- 3. محرك الذكاء الاصطناعي ---
+# --- 3. محرك الذكاء الاصطناعي (تم استرجاع دالة التحميل المفقودة) ---
+@st.cache_resource
+def download_new_chroma_db():
+    zip_path = "chroma_db.zip"
+    extract_path = "./chroma_db"
+    marker_file = "./chroma_db/fashion_clip_v3.txt"
+    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
+    
+    if os.path.exists(extract_path) and not os.path.exists(marker_file):
+        shutil.rmtree(extract_path)
+    if not os.path.exists(extract_path):
+        with st.spinner('📦 جاري تهيئة مستودع البيانات الذكي...'):
+            try:
+                urllib.request.urlretrieve(download_url, zip_path)
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(".")
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+                with open(marker_file, 'w') as f:
+                    f.write("done")
+            except Exception as e:
+                pass
+
 @st.cache_resource
 def load_vision_system():
+    download_new_chroma_db()
     model_id = "patrickjohncyh/fashion-clip"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
@@ -104,8 +127,10 @@ def load_vision_system():
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
 
-try: model, processor, collection = load_vision_system()
-except: pass 
+try: 
+    model, processor, collection = load_vision_system()
+except Exception as e: 
+    st.error(f"⚠️ حدث خطأ أثناء تحميل محرك الذكاء الاصطناعي: {e}")
 
 @st.cache_data
 def load_csv_data():
@@ -239,11 +264,13 @@ with main_tab1:
                                 for col in df_products.columns:
                                     cleaned = df_products[col].astype(str).str.strip().str.lower().str.replace('.jpg','',regex=False).str.replace('.png','',regex=False)
                                     if (cleaned == tc).any():
-                                        row_data = df_products.iloc[cleaned[cleaned == tc].index[0]]
+                                        row_idx = cleaned[cleaned == tc].index[0]
+                                        row_data = df_products.loc[row_idx]
                                         _, p_name, p_stock = parse_row_info(row_data, df_products.columns)
                                         break
                             render_product_card(p_code, p_name, p_stock)
-                except: st.error("حدث خطأ في البحث.")
+                except Exception as e: 
+                    st.error(f"⚠️ حدث خطأ في البحث البصري: {e}")
 
 # ==========================================
 # التبويب الثاني: مديول الجرد المتكامل (نظام الجلسات)
@@ -286,14 +313,12 @@ with main_tab2:
                         
                     st.rerun()
     else:
-        # واجهة الجرد النشط
         st.markdown(f"""
         <div class="inv-active-bar">
             <div>📌 <b>جرد نشط:</b> {st.session_state.inv_name} &nbsp;|&nbsp; <b>السبب:</b> {st.session_state.inv_reason} &nbsp;|&nbsp; <b>التاريخ:</b> {st.session_state.inv_date}</div>
         </div>
         """, unsafe_allow_html=True)
         
-        # تحديد قاعدة البيانات اللي هنقارن عليها
         active_df = st.session_state.inv_custom_df if st.session_state.inv_custom_df is not None else df_products
         
         if active_df is None:
@@ -380,7 +405,6 @@ with main_tab2:
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # زرار التصدير (Export)
                 csv = df_report.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
                     label="📥 تحميل التقرير النهائي (Excel/CSV)",
