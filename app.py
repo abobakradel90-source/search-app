@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
 from transformers import AutoImageProcessor, AutoModel
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image
 import torch
 import os
 import zipfile
@@ -34,7 +34,7 @@ def download_new_chroma_db():
             except Exception as e:
                 st.error(f"خطأ أثناء التحميل: {e}")
 
-# 2. تحميل موديل DINOv2 الأذكى
+# 2. تحميل موديل DINOv2
 @st.cache_resource
 def load_vision_system():
     download_new_chroma_db()
@@ -46,7 +46,7 @@ def load_vision_system():
 
 model, processor, collection = load_vision_system()
 
-# 3. قراءة الإكسيل بمرونة
+# 3. قراءة الإكسيل
 @st.cache_data
 def load_csv_data():
     try:
@@ -63,13 +63,9 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. استخراج البصمة البصرية الدقيقة
+# 4. استخراج البصمة البصرية (تم إزالة الفلاتر لترك الموديل يرى الألوان الحقيقية)
 def get_image_embedding(image):
-    # توضيح الألوان قبل البحث
-    image = ImageOps.autocontrast(image, cutoff=1)
-    enhancer = ImageEnhance.Sharpness(image)
-    image = enhancer.enhance(1.5)
-    
+    # تمرير الصورة الخام للموديل بدون أي تعديل في التباين عشان الأبيض ميبظش
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)
@@ -78,7 +74,7 @@ def get_image_embedding(image):
 
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 (دقة فائقة) مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 الخام مفعل")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -96,7 +92,6 @@ with tab3:
             else:
                 st.warning("لا يوجد تطابق.")
 
-# متغير لحفظ الصورة بعد القص
 image_to_search = None
 raw_image = None
 
@@ -110,19 +105,16 @@ with tab2:
     if up_file:
         raw_image = Image.open(up_file).convert("RGB")
 
-# أداة القص الذكية (بتظهر بس لو في صورة اترفع أو اتصورت)
 if raw_image:
-    st.markdown("### ✂️ حدد الكوتشي فقط (عشان نشيل الخلفية):")
-    st.caption("اسحب المربع الأزرق عشان يغطي الكوتشي بالظبط، ده بيضاعف دقة البحث 10 مرات!")
+    st.markdown("### ✂️ حدد الكوتشي فقط:")
+    st.caption("نصيحة ذهبية: سيب مسافة 'مللي' صغيرة جداً حوالين الكوتشي في المربع، وماتقطعش بوز أو كعب الكوتشي بالمربع عشان الموديل يشوف شكله كامل!")
     
-    # مربع التحديد التفاعلي
     cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#0000FF', aspect_ratio=None)
     
     if st.button("🔍 ابحث عن الكوتشي المحدد الآن", use_container_width=True):
         st.markdown("---")
-        with st.spinner('🦅 جاري فحص الأنسجة والتطابق البصري...'):
+        with st.spinner('🦅 جاري فحص التطابق البصري الخام...'):
             try:
-                # البحث بيتم بالصورة المقصوصة بس
                 results = collection.query(
                     query_embeddings=[get_image_embedding(cropped_img)],
                     n_results=3, 
