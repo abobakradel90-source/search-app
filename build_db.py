@@ -1,55 +1,51 @@
 import os
 import chromadb
-import torch
+from transformers import AutoImageProcessor, AutoModel
 from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
-from tqdm import tqdm
+import torch
+import shutil
 
-print("جاري تحميل موديل CLIP الاحترافي (قد يستغرق بعض الوقت للتحميل لأول مرة)...")
-# استخدام موديل CLIP الخاص بـ OpenAI
-model_id = "openai/clip-vit-base-patch32"
-processor = CLIPProcessor.from_pretrained(model_id)
-model = CLIPModel.from_pretrained(model_id)
+print("🚀 جاري تحميل موديل DINOv2 (الأقوى في العالم للمطابقة البصرية الدقيقة)...")
+# استخدام موديل DINOv2 المخصص للبحث البصري الدقيق
+processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
+model = AutoModel.from_pretrained('facebook/dinov2-base')
 
-print("جاري تهيئة قاعدة البيانات الجديدة...")
+# مسح القاعدة القديمة
+if os.path.exists("./chroma_db"):
+    shutil.rmtree("./chroma_db")
+    
 client = chromadb.PersistentClient(path="./chroma_db")
-# إنشاء الكوليكشن الجديد
-collection = client.get_or_create_collection(name="products_collection")
+# استخدام Cosine Similarity عشان بيجيب أدق نتيجة في الشبه البصري
+collection = client.create_collection(
+    name="products_collection",
+    metadata={"hnsw:space": "cosine"}
+)
 
-# مسار فولدر الصور بتاعك
-image_folder = "compressed_images"
-image_files = [f for f in os.listdir(image_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
+image_folder = "compressed_images" # تأكد من مسار مجلد الصور
+count = 0
 
-print(f"تم العثور على {len(image_files)} صورة. جاري بدء المعالجة...")
-
-# حلقة التكرار مع عداد للوقت
-for img_name in tqdm(image_files):
-    img_path = os.path.join(image_folder, img_name)
-    try:
-        image = Image.open(img_path).convert('RGB')
-        
-        # استخراج الخصائص بذكاء CLIP
-        inputs = processor(images=image, return_tensors="pt")
-        with torch.no_grad():
-            features = model.get_image_features(**inputs)
+print("🔍 جاري فحص الصور بدقة بصرية عميقة...")
+for filename in os.listdir(image_folder):
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+        img_path = os.path.join(image_folder, filename)
+        try:
+            image = Image.open(img_path).convert('RGB')
+            inputs = processor(images=image, return_tensors="pt")
             
-            # سطر الحماية عشان الإيرور ميظهرش على جهازك
-            if not isinstance(features, torch.Tensor):
-                if hasattr(features, 'pooler_output'):
-                    features = features.pooler_output
-                else:
-                    features = features[0]
-                    
-        embedding = features.squeeze().numpy().tolist()
-        
-        # الحفظ في قاعدة البيانات
-        collection.add(
-            embeddings=[embedding],
-            metadatas=[{"filename": img_name}],
-            ids=[img_name] 
-        )
-    except Exception as e:
-        # لو حصل إيرور في صورة معينة هيكتبها باللون الأحمر ويكمل عادي
-        print(f"\n❌ خطأ في {img_name}: {e}")
+            with torch.no_grad():
+                outputs = model(**inputs)
+                # استخراج البصمة البصرية الدقيقة جداً من الموديل
+                embedding = outputs.last_hidden_state[:, 0, :].squeeze().numpy().tolist()
+            
+            collection.add(
+                embeddings=[embedding],
+                metadatas=[{"filename": filename}],
+                ids=[filename]
+            )
+            count += 1
+            print(f"✅ تمت إضافة: {filename}")
+        except Exception as e:
+            print(f"❌ خطأ في صورة {filename}: {e}")
 
-print("\n✅ تمت العملية بنجاح! قاعدة البيانات الجديدة جاهزة في فولدر chroma_db")
+print(f"🎉 تم الانتهاء! إجمالي الصور: {count}")
+print("📦 اضغط مجلد chroma_db لـ zip وارفعه في قسم Releases على جيت هاب.")
