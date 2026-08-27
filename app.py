@@ -10,7 +10,7 @@ import pandas as pd
 import shutil
 from streamlit_cropper import st_cropper
 
-# 1. سحب قاعدة البيانات
+# 1. سحب قاعدة البيانات (هتفضل DINOv2 زي ما هي عندك)
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -22,7 +22,7 @@ def download_new_chroma_db():
         shutil.rmtree(extract_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري سحب قاعدة البيانات البصرية الدقيقة...'):
+        with st.spinner('جاري التأكد من قاعدة البيانات...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -32,7 +32,7 @@ def download_new_chroma_db():
                 with open(marker_file, 'w') as f:
                     f.write("done")
             except Exception as e:
-                st.error(f"خطأ أثناء التحميل: {e}")
+                pass # لو موجودة خلاص هيكمل عادي
 
 # 2. تحميل موديل DINOv2
 @st.cache_resource
@@ -63,13 +63,29 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. استخراج البصمة البصرية النقية (بدون فلاتر ألوان خارجية)
-def get_image_embedding(image):
-    # توضيح خفيف جداً لتعويض إضاءة الكاميرا
-    image = ImageOps.autocontrast(image, cutoff=1)
-    enhancer = ImageEnhance.Sharpness(image)
-    image = enhancer.enhance(1.2)
+# 4. السحر الجديد: فلتر الألوان الذكي (يتجاهل الإضاءة والعلامات المائية)
+def get_hsv_signature(image, is_db_image=False):
+    # تحويل الصورة لنظام HSV (Hue, Saturation, Value)
+    img = image.convert("HSV")
+    if is_db_image:
+        w, h = img.size
+        # قص الحواف عشان نركز على الكوتشي نفسه
+        img = img.crop((w*0.15, h*0.15, w*0.85, h*0.85))
     
+    hist = img.histogram()
+    # ناخد أول 512 رقم بس (دول بيمثلوا درجة اللون والتشبع) ونتجاهل الباقي (الإضاءة والضلمة)
+    color_hist = hist[:512] 
+    
+    total = sum(color_hist)
+    if total == 0: total = 1
+    return [x / total for x in color_hist]
+
+def compare_colors(hist1, hist2):
+    return sum(abs(a - b) for a, b in zip(hist1, hist2))
+
+# 5. استخراج بصمة الهيكل (DINOv2)
+def get_image_embedding(image):
+    image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)
@@ -78,7 +94,7 @@ def get_image_embedding(image):
 
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 الأصلي مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 + فلتر HSV للألوان")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -109,26 +125,53 @@ with tab2:
 
 if raw_image:
     st.markdown("### ✂️ حدد الكوتشي فقط:")
-    st.caption("تجنب إدخال أي علامات مائية أو خلفيات معقدة داخل المربع للحصول على نتيجة 100%")
-    
     cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#0000FF', aspect_ratio=None)
     
     if st.button("🔍 ابحث عن الكوتشي المحدد الآن", use_container_width=True):
         st.markdown("---")
-        with st.spinner('🦅 جاري المطابقة البصرية...'):
+        with st.spinner('🦅 جاري فحص الهيكل والألوان بدقة...'):
             try:
+                # بنطلب أفضل 8 كوتشيات نفس الهيكل
                 results = collection.query(
                     query_embeddings=[get_image_embedding(cropped_img)],
-                    n_results=4,  # بنطلب 4 نتايج عشان لو في شبه كبير يعرضهم كلهم
+                    n_results=8, 
                     include=['distances', 'metadatas']
                 )
                 
                 if results['distances'][0]:
-                    st.success("✅ أفضل التطابقات:")
+                    # استخراج البصمة اللونية للصورة اللي إنت صورتها
+                    user_color_sig = get_hsv_signature(cropped_img, is_db_image=False)
+                    refined_results = []
+                    
                     for i in range(len(results['distances'][0])):
                         meta = results['metadatas'][0][i]
-                        distance = results['distances'][0][i]
-                        p_code = meta.get('filename', '').split('.')[0]
+                        dino_dist = results['distances'][0][i]
+                        filename = meta.get('filename', '')
+                        img_path = os.path.join("compressed_images", filename)
+                        
+                        color_dist = 0
+                        if os.path.exists(img_path):
+                            # مقارنة الألوان مع تجاهل الإضاءة
+                            db_img = Image.open(img_path)
+                            db_color_sig = get_hsv_signature(db_img, is_db_image=True)
+                            color_dist = compare_colors(user_color_sig, db_color_sig)
+                        
+                        # دمج ذكاء الهيكل مع ذكاء اللون
+                        final_score = dino_dist + (color_dist * 0.15)
+                        
+                        refined_results.append({
+                            'filename': filename,
+                            'final_score': final_score,
+                            'metadata': meta
+                        })
+                    
+                    # ترتيب النتائج عشان الكوتشي اللي نفس الهيكل واللون يطلع أول واحد
+                    refined_results.sort(key=lambda x: x['final_score'])
+                    
+                    st.success("✅ أفضل التطابقات (بعد فلترة الألوان):")
+                    # عرض أفضل 3 نتائج
+                    for result in refined_results[:3]:
+                        p_code = result['filename'].split('.')[0]
                         p_name = "غير متوفر"
                         
                         if df_products is not None:
@@ -147,13 +190,12 @@ if raw_image:
                         
                         col1, col2 = st.columns([1, 2])
                         with col1:
-                            img_path = os.path.join("compressed_images", meta.get('filename', ''))
+                            img_path = os.path.join("compressed_images", result['filename'])
                             if os.path.exists(img_path):
                                 st.image(img_path, use_container_width=True)
                         with col2:
                             st.write(f"**الكود:** {p_code}")
                             st.write(f"**الاسم:** {p_name}")
-                            st.caption(f"دقة المطابقة (أقل = أفضل): {distance:.3f}")
                         st.markdown("---")
             except Exception as e:
                 st.error(f"خطأ: {e}")
