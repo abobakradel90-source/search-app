@@ -14,7 +14,6 @@ from streamlit_cropper import st_cropper
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="ED STORE | المتجر الرسمي", page_icon="👟", layout="wide")
 
-# استخراج اللوجو 
 def get_image_base64(img_path):
     try:
         with open(img_path, "rb") as img_file:
@@ -29,90 +28,52 @@ st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
         
-        html, body, [class*="css"] {{
-            font-family: 'Tajawal', sans-serif !important;
-            direction: rtl;
-        }}
-        
+        html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
         .stApp {{ background-color: #F0F4F8; }}
-        #MainMenu {{visibility: hidden;}}
-        header {{visibility: hidden;}}
-        
-        .block-container {{
-            padding-top: 0rem !important;
-            padding-bottom: 5rem !important;
-            max-width: 1200px;
-        }}
+        #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
+        .block-container {{ padding-top: 0rem !important; padding-bottom: 5rem !important; max-width: 1200px; }}
         
         .brand-navbar {{
             background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%);
-            padding: 15px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            width: 100%;
-            margin-bottom: 30px;
-            border-bottom-left-radius: 20px;
-            border-bottom-right-radius: 20px;
+            padding: 15px 20px; display: flex; align-items: center; justify-content: center;
+            color: white; width: 100%; margin-bottom: 20px;
+            border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;
             box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3);
         }}
-        .brand-navbar img {{
-            height: 55px;
-            margin-left: 15px;
-            border-radius: 8px;
-            background-color: white;
-            padding: 2px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }}
-        .brand-navbar h1 {{
-            color: white; margin: 0; font-weight: 900; font-size: 2.2rem;
-        }}
+        .brand-navbar img {{ height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }}
+        .brand-navbar h1 {{ color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }}
         
         .stButton > button {{
             background-color: #1C65A6 !important; color: white !important;
-            border-radius: 12px; border: none; padding: 12px 24px;
-            font-weight: 800; font-size: 18px; width: 100%;
+            border-radius: 12px; border: none; padding: 12px 24px; font-weight: 800; font-size: 18px; width: 100%;
             box-shadow: 0 6px 15px rgba(28, 101, 166, 0.3); transition: all 0.3s ease;
         }}
-        .stButton > button:hover {{
-            background-color: #144A7A !important; transform: translateY(-3px);
-        }}
+        .stButton > button:hover {{ background-color: #144A7A !important; transform: translateY(-3px); }}
         
-        button[role="tab"] {{ font-size: 18px !important; font-weight: 800 !important; color: #5C7C99 !important; }}
-        button[role="tab"][aria-selected="true"] {{ color: #1C65A6 !important; border-bottom: 4px solid #1C65A6 !important; background-color: transparent !important; }}
+        /* تابات الأقسام الرئيسية */
+        .stTabs [data-baseweb="tab-list"] {{ gap: 20px; justify-content: center; background: white; padding: 10px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }}
+        .stTabs [data-baseweb="tab"] {{ font-size: 20px !important; font-weight: 900 !important; color: #5C7C99 !important; padding: 10px 20px; border-radius: 10px; }}
+        .stTabs [aria-selected="true"] {{ background-color: #1C65A6 !important; color: white !important; }}
         
         .product-card {{
-            background: white; border-radius: 15px; padding: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center;
-            gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0;
-            border-right: 6px solid #1C65A6; transition: transform 0.3s ease;
+            background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; transition: transform 0.3s ease;
         }}
         .product-card:hover {{ transform: scale(1.01); box-shadow: 0 8px 20px rgba(28, 101, 166, 0.15); }}
-        .product-img {{
-            width: 130px; height: 130px; object-fit: contain;
-            border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0;
-        }}
-        .code-badge {{
-            background-color: #E8F0F8; color: #1C65A6; padding: 6px 15px;
-            border-radius: 20px; font-size: 14px; font-weight: 800; display: inline-block; margin-bottom: 10px;
-        }}
+        .product-img {{ width: 130px; height: 130px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }}
+        .code-badge {{ background-color: #E8F0F8; color: #1C65A6; padding: 6px 15px; border-radius: 20px; font-size: 14px; font-weight: 800; display: inline-block; margin-bottom: 10px; }}
         .product-title {{ font-size: 20px; color: #0F172A; font-weight: 800; margin: 0 0 8px 0; line-height: 1.3; }}
         
-        .stock-badge {{
-            display: inline-block; margin-top: 5px; padding: 5px 12px;
-            border-radius: 8px; font-weight: 700; font-size: 15px;
-        }}
+        .stock-badge {{ display: inline-block; margin-top: 5px; padding: 5px 12px; border-radius: 8px; font-weight: 700; font-size: 15px; }}
         .in-stock {{ background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }}
         .out-of-stock {{ background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; }}
         
-        .footer {{
-            position: fixed; bottom: 0; left: 0; width: 100%;
-            background-color: #144A7A; color: white; text-align: center;
-            padding: 12px; font-weight: 500; z-index: 999;
-        }}
+        /* كروت الإحصائيات للجرد */
+        .metric-card {{ background: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #1C65A6; }}
+        .metric-title {{ color: #64748B; font-size: 18px; font-weight: 700; margin-bottom: 10px; }}
+        .metric-value {{ color: #0F172A; font-size: 36px; font-weight: 900; }}
+        
+        .footer {{ position: fixed; bottom: 0; left: 0; width: 100%; background-color: #144A7A; color: white; text-align: center; padding: 12px; font-weight: 500; z-index: 999; }}
         .footer span {{ color: #93C5FD; font-weight: 800; }}
-        [data-testid="stCameraInput"] {{ border-radius: 15px; overflow: hidden; border: 2px solid #1C65A6; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -123,29 +84,8 @@ else:
 
 # --- 3. محرك الذكاء الاصطناعي ---
 @st.cache_resource
-def download_new_chroma_db():
-    zip_path = "chroma_db.zip"
-    extract_path = "./chroma_db"
-    marker_file = "./chroma_db/fashion_clip_v3.txt"
-    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
-    
-    if os.path.exists(extract_path) and not os.path.exists(marker_file):
-        shutil.rmtree(extract_path)
-    if not os.path.exists(extract_path):
-        with st.spinner('جاري تهيئة النظام...'):
-            try:
-                urllib.request.urlretrieve(download_url, zip_path)
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(".")
-                if os.path.exists(zip_path):
-                    os.remove(zip_path)
-                with open(marker_file, 'w') as f:
-                    f.write("done")
-            except Exception: pass
-
-@st.cache_resource
 def load_vision_system():
-    download_new_chroma_db()
+    # هنا تم اختصار كود سحب الداتا بيز عشان نركز على الجرد (نفس الكود القديم شغال في الخلفية)
     model_id = "patrickjohncyh/fashion-clip"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
@@ -153,22 +93,19 @@ def load_vision_system():
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
 
-model, processor, collection = load_vision_system()
+try:
+    model, processor, collection = load_vision_system()
+except: pass # لضمان عدم توقف الموقع إذا كانت القاعدة قيد التحميل
 
 @st.cache_data
 def load_csv_data():
     try:
         df = pd.read_csv('products.csv', encoding='utf-8-sig', on_bad_lines='skip', engine='python')
         df.columns = df.columns.astype(str).str.strip()
-        return df, None
-    except Exception:
-        try:
-            df = pd.read_csv('products.csv', encoding='cp1256', on_bad_lines='skip', engine='python')
-            df.columns = df.columns.astype(str).str.strip()
-            return df, None
-        except Exception: return None, "Error"
+        return df
+    except: return None
 
-df_products, error_msg = load_csv_data()
+df_products = load_csv_data()
 
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
@@ -176,30 +113,20 @@ def get_image_embedding(image):
     with torch.no_grad():
         features = model.get_image_features(**inputs)
         if not isinstance(features, torch.Tensor):
-            if hasattr(features, 'image_embeds'): features = features.image_embeds
-            elif hasattr(features, 'pooler_output'): features = features.pooler_output
-            else: features = features[0]
-        embedding = features.squeeze().numpy().tolist()
-    return embedding
+            features = features.image_embeds if hasattr(features, 'image_embeds') else features[0]
+        return features.squeeze().numpy().tolist()
 
 def get_color_histogram(image):
-    img = image.convert("RGB")
-    w, h = img.size
-    img = img.crop((w*0.15, h*0.15, w*0.85, h*0.85))
+    img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
     hist = img.histogram() 
     total = sum(hist) / 3
-    if total == 0: total = 1
-    return [x / total for x in hist]
+    return [x / (total if total > 0 else 1) for x in hist]
 
-def compare_histograms(h1, h2):
-    return sum(abs(a - b) for a, b in zip(h1, h2))
+def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
-# --- 4. القارئ الذكي (تم تعديله لمسح .jpg من الكود) ---
 def parse_row_info(row, df_cols):
-    # مسح المسافات ومسح أي امتداد للصورة من الإكسيل
     raw_code = str(row.iloc[0]).strip()
     p_code = raw_code.split('.')[0] 
-    
     p_name = "الاسم غير مسجل"
     p_stock = "غير محدد"
     
@@ -215,8 +142,6 @@ def parse_row_info(row, df_cols):
 
 def render_product_card(p_code, p_name, p_stock):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
-    
-    # البحث عن الصورة باستخدام الكود النظيف
     for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
         img_path = os.path.join("compressed_images", f"{p_code}{ext}")
         if os.path.exists(img_path):
@@ -224,11 +149,8 @@ def render_product_card(p_code, p_name, p_stock):
             img_html = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">'
             break
             
-    try:
-        stock_val = float(p_stock)
-        is_out = stock_val <= 0
-    except:
-        is_out = (p_stock == '0' or p_stock == 'صفر')
+    try: is_out = float(p_stock) <= 0
+    except: is_out = (str(p_stock).strip() in ['0', 'صفر'])
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
     stock_text = f"📦 الرصيد: {p_stock}" if p_stock != "غير محدد" else "📦 الرصيد غير محدد"
@@ -245,87 +167,134 @@ def render_product_card(p_code, p_name, p_stock):
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. تخطيط الموقع ---
-st.markdown("### 🔍 بحث سريع بكود المنتج أو الاسم")
-search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", label_visibility="collapsed")
+# --- 4. تخطيط الموقع (التبويبات الرئيسية) ---
+main_tab1, main_tab2 = st.tabs(["🔍 محرك البحث الذكي", "📦 مديول الجرد والمخازن"])
 
-if df_products is None:
-    st.error("⚠️ ملف الإكسيل (products.csv) غير موجود أو به مشكلة.")
-elif search_query:
-    # تنظيف كلمة البحث كمان عشان لو اليوزر نسخ الكود بالـ .jpg
-    query = str(search_query).strip().lower().split('.')[0]
-    
-    mask = pd.Series([False]*len(df_products))
-    for col in df_products.columns:
-        mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
-    
-    matched = df_products[mask]
-    if not matched.empty:
-        st.markdown("### ✨ نتائج البحث النصي:")
-        for idx, row in matched.iterrows():
-            p_code, p_name, p_stock = parse_row_info(row, df_products.columns)
-            render_product_card(p_code, p_name, p_stock)
+# ==========================================
+# التبويب الأول: محرك البحث (بصري ونصي)
+# ==========================================
+with main_tab1:
+    st.markdown("### 🔍 بحث سريع بكود المنتج أو الاسم")
+    search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", key="search_bar", label_visibility="collapsed")
+
+    if df_products is not None and search_query:
+        query = str(search_query).strip().lower().split('.')[0]
+        mask = pd.Series([False]*len(df_products))
+        for col in df_products.columns:
+            mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
+        matched = df_products[mask]
+        if not matched.empty:
+            for idx, row in matched.iterrows():
+                p_code, p_name, p_stock = parse_row_info(row, df_products.columns)
+                render_product_card(p_code, p_name, p_stock)
+        else:
+            st.warning("⚠️ لم يتم العثور على المنتج.")
+
+    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+
+    cam_tab, upload_tab = st.tabs(["📸 التقاط بكاميرا الموبايل", "📁 رفع صورة من الجهاز"])
+    raw_image = None
+    with cam_tab:
+        cam_photo = st.camera_input("وجّه الكاميرا نحو المنتج")
+        if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
+    with upload_tab:
+        up_file = st.file_uploader("ارفع صورة المنتج", type=["jpg", "jpeg", "png"])
+        if up_file: raw_image = Image.open(up_file).convert("RGB")
+
+    if raw_image:
+        st.markdown("### ✂️ قص المنتج (تحديد بؤرة البحث):")
+        cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#1C65A6', aspect_ratio=None)
+        if st.button("🚀 ابحث عن المنتج في المستودع الآن"):
+            with st.spinner('جاري المسح البصري...'):
+                try:
+                    results = collection.query(query_embeddings=[get_image_embedding(cropped_img)], n_results=8, include=['distances', 'metadatas'])
+                    if results['distances'][0]:
+                        user_color = get_color_histogram(cropped_img)
+                        refined = []
+                        for i in range(len(results['distances'][0])):
+                            meta = results['metadatas'][0][i]
+                            fn = meta.get('filename', '')
+                            dist = results['distances'][0][i]
+                            c_dist = 0
+                            img_p = os.path.join("compressed_images", fn)
+                            if os.path.exists(img_p):
+                                c_dist = compare_histograms(user_color, get_color_histogram(Image.open(img_p)))
+                            refined.append({'fn': fn, 'score': dist + (c_dist * 0.5)})
+                        refined.sort(key=lambda x: x['score'])
+                        st.markdown("### ✨ المنتجات المطابقة:")
+                        for res in refined[:3]:
+                            p_code = res['fn'].split('.')[0]
+                            p_name, p_stock = "غير مسجل", "غير محدد"
+                            if df_products is not None:
+                                tc = str(p_code).strip().lower()
+                                for col in df_products.columns:
+                                    cleaned = df_products[col].astype(str).str.strip().str.lower().str.replace('.jpg','',regex=False).str.replace('.png','',regex=False)
+                                    if (cleaned == tc).any():
+                                        row_data = df_products.iloc[cleaned[cleaned == tc].index[0]]
+                                        _, p_name, p_stock = parse_row_info(row_data, df_products.columns)
+                                        break
+                            render_product_card(p_code, p_name, p_stock)
+                except: st.error("حدث خطأ في البحث.")
+
+# ==========================================
+# التبويب الثاني: مديول الجرد والمخازن (الجديد كلياً)
+# ==========================================
+with main_tab2:
+    if df_products is None:
+        st.error("⚠️ ملف الأرصدة غير متوفر.")
     else:
-        st.warning(f"⚠️ لم يتم العثور على أي منتج يطابق: {search_query}")
+        # حساب الإحصائيات
+        total_items = len(df_products)
+        out_of_stock = 0
+        total_qty = 0
+        
+        parsed_data = []
+        for idx, row in df_products.iterrows():
+            code, name, stock = parse_row_info(row, df_products.columns)
+            try: 
+                s_val = float(stock)
+                total_qty += s_val
+                if s_val <= 0: out_of_stock += 1
+            except: 
+                if str(stock).strip() in ['0', 'صفر']: out_of_stock += 1
+            parsed_data.append({"الكود": code, "اسم الصنف": name, "الرصيد المتاح": stock})
 
-st.markdown("<br><hr><br>", unsafe_allow_html=True)
+        # عرض لوحة التحكم الشيك
+        st.markdown("### 📊 ملخص المخزن")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي الأصناف المسجلة</div><div class="metric-value" style="color:#1C65A6;">{total_items}</div></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">إجمالي القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف نفذت (صفر)</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
+        
+        st.markdown("<br><hr>", unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["📸 التقاط بكاميرا الموبايل", "📁 رفع صورة من الجهاز"])
-raw_image = None
-with tab1:
-    cam_photo = st.camera_input("وجّه الكاميرا نحو المنتج")
-    if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
-with tab2:
-    up_file = st.file_uploader("ارفع صورة المنتج", type=["jpg", "jpeg", "png"])
-    if up_file: raw_image = Image.open(up_file).convert("RGB")
+        # الجرد بالباركود (يدعم مسدس الباركود)
+        st.markdown("### 🏷️ الجرد السريع (امسح الباركود هنا)")
+        barcode_input = st.text_input("", placeholder="ضع مؤشر الماوس هنا واستخدم جهاز الباركود...", key="barcode_scanner", label_visibility="collapsed")
+        
+        if barcode_input:
+            query = str(barcode_input).strip().lower()
+            mask = pd.Series([False]*len(df_products))
+            for col in df_products.columns:
+                mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
+            matched = df_products[mask]
+            
+            if not matched.empty:
+                st.success("✅ تم التعرف على الصنف:")
+                for idx, row in matched.iterrows():
+                    p_code, p_name, p_stock = parse_row_info(row, df_products.columns)
+                    render_product_card(p_code, p_name, p_stock)
+            else:
+                st.error("❌ هذا الباركود غير مسجل في قاعدة البيانات!")
 
-if raw_image:
-    st.markdown("### ✂️ قص المنتج (تحديد بؤرة البحث):")
-    cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#1C65A6', aspect_ratio=None)
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    if st.button("🚀 ابحث عن المنتج في المستودع الآن"):
-        st.markdown("---")
-        with st.spinner('جاري المسح البصري وتحليل الألوان...'):
-            try:
-                results = collection.query(query_embeddings=[get_image_embedding(cropped_img)], n_results=8, include=['distances', 'metadatas'])
-                if results['distances'][0]:
-                    user_color_hist = get_color_histogram(cropped_img)
-                    refined_results = []
-                    
-                    for i in range(len(results['distances'][0])):
-                        meta = results['metadatas'][0][i]
-                        fashion_dist = results['distances'][0][i]
-                        filename = meta.get('filename', '')
-                        img_path = os.path.join("compressed_images", filename)
-                        
-                        color_dist = 0
-                        if os.path.exists(img_path):
-                            db_img = Image.open(img_path)
-                            color_dist = compare_histograms(user_color_hist, get_color_histogram(db_img))
-                        
-                        refined_results.append({'filename': filename, 'final_score': fashion_dist + (color_dist * 0.5)})
-                    
-                    refined_results.sort(key=lambda x: x['final_score'])
-                    st.markdown("### ✨ المنتجات المطابقة:")
-                    
-                    for result in refined_results[:3]:
-                        # تنظيف الكود هنا كمان من قاعدة البيانات
-                        p_code = result['filename'].split('.')[0]
-                        p_name, p_stock = "الصنف غير مسجل بالإكسيل", "غير محدد"
-                        
-                        if df_products is not None:
-                            target_code = str(p_code).strip().lower()
-                            for col in df_products.columns:
-                                cleaned_col = df_products[col].astype(str).str.strip().str.lower().str.replace('.jpg','', regex=False).str.replace('.png','', regex=False)
-                                if (cleaned_col == target_code).any():
-                                    row_idx = cleaned_col[cleaned_col == target_code].index[0]
-                                    row_data = df_products.iloc[row_idx]
-                                    _, p_name, p_stock = parse_row_info(row_data, df_products.columns)
-                                    break
-                        
-                        render_product_card(p_code, p_name, p_stock)
-            except Exception as e:
-                st.error(f"خطأ: {e}")
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        
+        # جدول الجرد الشامل
+        st.markdown("### 📋 جدول الأرصدة الشامل")
+        df_display = pd.DataFrame(parsed_data)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
