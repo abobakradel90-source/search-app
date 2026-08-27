@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
-from transformers import AutoImageProcessor, AutoModel
-from PIL import Image, ImageOps, ImageEnhance
+from transformers import CLIPProcessor, CLIPModel
+from PIL import Image, ImageOps
 import torch
 import os
 import zipfile
@@ -15,14 +15,14 @@ from streamlit_cropper import st_cropper
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    marker_file = "./chroma_db/resnet50_installed.txt"
+    marker_file = "./chroma_db/fashion_clip_installed.txt"
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     if os.path.exists(extract_path) and not os.path.exists(marker_file):
         shutil.rmtree(extract_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري سحب قاعدة البيانات (الحل الجذري ResNet-50)...'):
+        with st.spinner('جاري سحب قاعدة بيانات Fashion-CLIP المتخصصة...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -34,12 +34,13 @@ def download_new_chroma_db():
             except Exception as e:
                 pass
 
-# 2. تحميل موديل ResNet-50 (للمطابقة الحرفية للصور)
+# 2. تحميل موديل Fashion-CLIP
 @st.cache_resource
 def load_vision_system():
     download_new_chroma_db()
-    processor = AutoImageProcessor.from_pretrained('microsoft/resnet-50')
-    model = AutoModel.from_pretrained('microsoft/resnet-50')
+    model_id = "patrickjohncyh/fashion-clip"
+    processor = CLIPProcessor.from_pretrained(model_id)
+    model = CLIPModel.from_pretrained(model_id)
     client = chromadb.PersistentClient(path="./chroma_db")
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
@@ -63,21 +64,28 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. استخراج البصمة البصرية الدقيقة جداً
+# 4. استخراج البصمة المتخصصة للأحذية
 def get_image_embedding(image):
-    # توضيح بسيط جداً دون تغيير الألوان
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
-    
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
-        outputs = model(**inputs)
-        # تجميع الـ 2048 ميزة بصرية لاستخراج بصمة دقيقة للألوان والتفاصيل
-        embedding = outputs.last_hidden_state.mean(dim=[2, 3]).squeeze().numpy().tolist()
+        features = model.get_image_features(**inputs)
+        
+        # فك شفرة الموديل هنا كمان
+        if not isinstance(features, torch.Tensor):
+            if hasattr(features, 'image_embeds'):
+                features = features.image_embeds
+            elif hasattr(features, 'pooler_output'):
+                features = features.pooler_output
+            else:
+                features = features[0]
+                
+        embedding = features.squeeze().numpy().tolist()
     return embedding
 
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك المطابقة الحرفية (ResNet-50) مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 👔 محرك Fashion-CLIP المتخصص مفعل")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -112,7 +120,7 @@ if raw_image:
     
     if st.button("🔍 ابحث عن الكوتشي المحدد الآن", use_container_width=True):
         st.markdown("---")
-        with st.spinner('🦅 جاري فحص البيكسلات والألوان والتطابق الحرفي...'):
+        with st.spinner('👔 جاري تحليل ماركة ولون الكوتشي...'):
             try:
                 results = collection.query(
                     query_embeddings=[get_image_embedding(cropped_img)],
@@ -150,7 +158,7 @@ if raw_image:
                         with col2:
                             st.write(f"**الكود:** {p_code}")
                             st.write(f"**الاسم:** {p_name}")
-                            st.caption(f"مؤشر المطابقة الحرفية: {distance:.3f}")
+                            st.caption(f"مؤشر المطابقة: {distance:.3f}")
                         st.markdown("---")
             except Exception as e:
                 st.error(f"خطأ: {e}")
