@@ -8,108 +8,167 @@ import zipfile
 import urllib.request
 import pandas as pd
 import shutil
+import base64
 from streamlit_cropper import st_cropper
 
-# --- 🎨 إعدادات الصفحة والتصميم العالمي (يجب أن تكون أول سطر) ---
-st.set_page_config(page_title="ED STORE | البحث الذكي", page_icon="👟", layout="centered")
+# --- 1. إعدادات الصفحة (أول سطر لازم) ---
+st.set_page_config(page_title="ED STORE | المتجر الذكي", page_icon="👟", layout="centered")
 
-# --- 🎨 كود CSS لتحويل شكل الموقع بالكامل ---
+# --- 2. كود CSS الخارق (تصميم المواقع العالمية) ---
 st.markdown("""
     <style>
-        /* استيراد خط Cairo من جوجل */
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap');
+        /* خط احترافي من جوجل */
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
         
-        /* تطبيق الخط على كل الموقع وضبط الاتجاه */
         html, body, [class*="css"] {
-            font-family: 'Cairo', sans-serif !important;
+            font-family: 'Tajawal', sans-serif !important;
+            direction: rtl;
         }
         
-        /* إخفاء علامات Streamlit المزعجة */
+        /* خلفية الموقع بالكامل */
+        .stApp {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        /* إخفاء قوائم Streamlit */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
         footer {visibility: hidden;}
         
-        /* تصميم عنوان الموقع */
-        .main-header {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
+        /* يافطة الموقع (Hero Section) */
+        .hero-section {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            padding: 40px 20px;
+            border-radius: 20px;
             text-align: center;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
-            margin-bottom: 25px;
-        }
-        .main-header h1 {
-            margin: 0;
-            font-weight: 800;
-            font-size: 2.2rem;
+            box-shadow: 0px 20px 40px rgba(0,0,0,0.2);
             color: white;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        .main-header p {
-            margin: 5px 0 0 0;
-            color: #94a3b8;
-            font-size: 1.1rem;
+        .hero-section h1 {
+            font-size: 3rem;
+            font-weight: 900;
+            margin: 0;
+            background: -webkit-linear-gradient(#fff, #f0f0f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-section p {
+            font-size: 1.2rem;
+            color: #b0c4de;
+            margin-top: 10px;
         }
         
-        /* تصميم الأزرار (Gradients and Shadows) */
+        /* تصميم التابات (Tabs) */
+        button[role="tab"] {
+            font-size: 18px !important;
+            font-weight: 700 !important;
+            padding: 10px 20px !important;
+            background-color: transparent;
+        }
+        button[role="tab"][aria-selected="true"] {
+            background-color: #ffffff !important;
+            color: #2563eb !important;
+            border-radius: 15px 15px 0 0 !important;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+        }
+        
+        /* زرار البحث الخارق (Interactive CTA) */
         .stButton > button {
-            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-            color: white !important;
-            border-radius: 12px;
+            background: linear-gradient(45deg, #FF512F 0%, #DD2476 100%);
             border: none;
-            padding: 10px 20px;
-            font-weight: 700;
-            font-size: 18px;
-            box-shadow: 0 4px 15px -3px rgba(37, 99, 235, 0.4);
-            transition: all 0.3s ease;
+            color: white !important;
+            font-size: 22px;
+            font-weight: 800;
+            padding: 15px 30px;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(221, 36, 118, 0.4);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             width: 100%;
+            margin-top: 20px;
         }
         .stButton > button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px -3px rgba(37, 99, 235, 0.5);
-            border: none;
+            transform: scale(1.03) translateY(-3px);
+            box-shadow: 0 15px 35px rgba(221, 36, 118, 0.6);
         }
         
-        /* تصميم كروت النتائج */
-        .result-card {
-            background-color: #ffffff;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            border: 1px solid #f1f5f9;
-            margin-bottom: 10px;
+        /* كروت المنتجات الاحترافية (Product Cards) */
+        .product-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            direction: rtl;
+            text-align: right;
+        }
+        .product-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+        }
+        .product-img {
+            width: 140px;
+            height: 140px;
+            border-radius: 15px;
+            object-fit: cover;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            background: #f8f9fa;
+        }
+        .product-details {
+            flex-grow: 1;
         }
         .code-badge {
-            background-color: #f1f5f9;
-            color: #334155;
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: bold;
             display: inline-block;
-            margin-bottom: 8px;
+            background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+            color: #4f46e5;
+            padding: 6px 15px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 800;
+            margin-bottom: 12px;
         }
-        .product-name {
-            color: #0f172a;
-            font-size: 1.2rem;
+        .product-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1e293b;
+            margin: 0 0 10px 0;
+            line-height: 1.2;
+        }
+        .match-rate {
+            font-size: 14px;
+            color: #10b981;
             font-weight: 700;
-            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# 1. سحب قاعدة البيانات
+# دالة لتحويل الصورة لكود HTML عشان تظهر في الكارت الشيك
+def get_image_base64(img_path):
+    with open(img_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode('utf-8')
+
+# --- 3. محرك الذكاء الاصطناعي (كما هو بقوته) ---
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    marker_file = "./chroma_db/fashion_clip_v2.txt"
+    marker_file = "./chroma_db/fashion_clip_v3.txt"
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     if os.path.exists(extract_path) and not os.path.exists(marker_file):
         shutil.rmtree(extract_path)
     if not os.path.exists(extract_path):
-        with st.spinner('جاري التأكد من قاعدة بيانات Fashion-CLIP...'):
+        with st.spinner('جاري تهيئة قاعدة البيانات...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -118,10 +177,8 @@ def download_new_chroma_db():
                     os.remove(zip_path)
                 with open(marker_file, 'w') as f:
                     f.write("done")
-            except Exception as e:
-                pass
+            except Exception as e: pass
 
-# 2. تحميل موديل Fashion-CLIP
 @st.cache_resource
 def load_vision_system():
     download_new_chroma_db()
@@ -134,7 +191,6 @@ def load_vision_system():
 
 model, processor, collection = load_vision_system()
 
-# 3. قراءة الإكسيل
 @st.cache_data
 def load_csv_data():
     try:
@@ -146,24 +202,19 @@ def load_csv_data():
             df = pd.read_csv('products.csv', encoding='cp1256', on_bad_lines='skip', engine='python')
             df.columns = df.columns.astype(str).str.strip()
             return df, None
-        except Exception as e:
-            return None, str(e)
+        except Exception: return None, "Error"
 
 df_products, error_msg = load_csv_data()
 
-# 4. دوال الذكاء الاصطناعي
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
         if not isinstance(features, torch.Tensor):
-            if hasattr(features, 'image_embeds'):
-                features = features.image_embeds
-            elif hasattr(features, 'pooler_output'):
-                features = features.pooler_output
-            else:
-                features = features[0]
+            if hasattr(features, 'image_embeds'): features = features.image_embeds
+            elif hasattr(features, 'pooler_output'): features = features.pooler_output
+            else: features = features[0]
         embedding = features.squeeze().numpy().tolist()
     return embedding
 
@@ -179,19 +230,19 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2):
     return sum(abs(a - b) for a, b in zip(h1, h2))
 
-# --- بناء الواجهة الجديدة ---
+# --- 4. واجهة المستخدم HTML ---
 st.markdown("""
-<div class="main-header">
-    <h1>ED STORE 👟🔥</h1>
-    <p>محرك البحث البصري الذكي | مدعوم بـ Fashion-CLIP</p>
+<div class="hero-section">
+    <h1>ED STORE 👟</h1>
+    <p>أسرع وأدق محرك بحث بصري للملابس والأحذية</p>
 </div>
 """, unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
+tab1, tab2, tab3 = st.tabs(["📸 التقاط بكاميرا الموبايل", "📁 رفع من الاستوديو", "🔍 بحث بكود المنتج"])
 
 with tab3:
     if df_products is not None:
-        search_query = st.text_input("اكتب اسم أو كود المنتج:")
+        search_query = st.text_input("اكتب اسم أو كود المنتج هنا...")
         if search_query:
             mask = pd.Series([False]*len(df_products))
             for col in df_products.columns:
@@ -199,29 +250,24 @@ with tab3:
             matched = df_products[mask]
             if not matched.empty:
                 for idx, row in matched.iterrows():
-                    st.success(f"👟 النتيجة: {row.to_dict()}")
-            else:
-                st.warning("لا يوجد تطابق.")
+                    st.success(f"النتيجة: {row.to_dict()}")
 
 raw_image = None
 with tab1:
-    cam_photo = st.camera_input("التقط صورة للكوتشي")
-    if cam_photo:
-        raw_image = Image.open(cam_photo).convert("RGB")
+    cam_photo = st.camera_input("صور الكوتشي دلوقتي")
+    if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
 
 with tab2:
-    up_file = st.file_uploader("اختر صورة", type=["jpg", "jpeg", "png"])
-    if up_file:
-        raw_image = Image.open(up_file).convert("RGB")
+    up_file = st.file_uploader("ارفع صورة الكوتشي", type=["jpg", "jpeg", "png"])
+    if up_file: raw_image = Image.open(up_file).convert("RGB")
 
 if raw_image:
-    st.markdown("### ✂️ حدد الكوتشي فقط:")
-    cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#2563eb', aspect_ratio=None)
+    st.markdown("### ✂️ قص الكوتشي بالمربع الأزرق:")
+    cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#FF512F', aspect_ratio=None)
     
-    st.markdown("<br>", unsafe_allow_html=True) # مسافة جمالية
-    if st.button("🔍 ابحث عن الكوتشي المحدد الآن"):
+    if st.button("🚀 ابحث بالذكاء الاصطناعي الآن"):
         st.markdown("---")
-        with st.spinner('👔 جاري تحليل التصميم وتطابق الألوان بدقة...'):
+        with st.spinner('🎯 جاري المسح البصري وتحليل الألوان...'):
             try:
                 results = collection.query(
                     query_embeddings=[get_image_embedding(cropped_img)],
@@ -254,10 +300,12 @@ if raw_image:
                     
                     refined_results.sort(key=lambda x: x['final_score'])
                     
-                    st.success("✅ أفضل التطابقات:")
+                    st.success("✨ تم العثور على هذه التطابقات:")
+                    
+                    # طباعة النتائج في كروت HTML تفاعلية
                     for result in refined_results[:3]:
                         p_code = result['filename'].split('.')[0]
-                        p_name = "غير متوفر"
+                        p_name = "الصنف غير مسجل بالإكسيل"
                         
                         if df_products is not None:
                             try:
@@ -273,17 +321,20 @@ if raw_image:
                                         break
                             except: pass
                         
-                        # تصميم كارت النتيجة الاحترافي
-                        st.markdown('<div class="result-card">', unsafe_allow_html=True)
-                        col1, col2 = st.columns([1, 2])
-                        with col1:
-                            img_path = os.path.join("compressed_images", result['filename'])
-                            if os.path.exists(img_path):
-                                st.image(img_path, use_container_width=True)
-                        with col2:
-                            st.markdown(f'<div class="code-badge">الكود: {p_code}</div>', unsafe_allow_html=True)
-                            st.markdown(f'<div class="product-name">{p_name}</div>', unsafe_allow_html=True)
-                            # إخفاء رقم المطابقة لأنه تفصيلة برمجية ملهاش لازمة للعميل
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        img_path = os.path.join("compressed_images", result['filename'])
+                        if os.path.exists(img_path):
+                            img_base64 = get_image_base64(img_path)
+                            # الكارت السحري
+                            st.markdown(f"""
+                            <div class="product-card">
+                                <img src="data:image/jpeg;base64,{img_base64}" class="product-img">
+                                <div class="product-details">
+                                    <div class="code-badge">كود: {p_code}</div>
+                                    <h3 class="product-title">{p_name}</h3>
+                                    <div class="match-rate">✔️ تطابق بصري ولوني عالي</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
             except Exception as e:
                 st.error(f"خطأ: {e}")
