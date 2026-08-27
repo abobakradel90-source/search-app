@@ -45,7 +45,7 @@ def load_vision_system():
 
 model, processor, collection = load_vision_system()
 
-# 3. قراءة الإكسيل بشكل يقاوم أي أخطاء
+# 3. قراءة الإكسيل بشكل يقاوم أي أخطاء وعلامات تنصيص
 @st.cache_data
 def load_csv_data():
     try:
@@ -62,19 +62,16 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. معالجة وتوضيح صورة الموبايل
+# 4. معالجة الصورة (بدون قص عنيف لتجنب قطع الكوتشي)
 def process_mobile_photo(image):
     image = image.convert("RGB")
-    # توضيح الألوان والتباين
+    
+    # توضيح الألوان والتباين فقط بدون أي قص يضر بتفاصيل الكوتشي
     image = ImageOps.autocontrast(image, cutoff=1)
     
-    # قص هوامش الصورة للتركيز على الكوتشي
-    width, height = image.size
-    cropped_image = image.crop((width * 0.15, height * 0.15, width * 0.85, height * 0.85))
-    
-    # زيادة الحدة لإبراز تفاصيل الكوتشي
-    enhancer = ImageEnhance.Sharpness(cropped_image)
-    return enhancer.enhance(1.8)
+    # زيادة الحدة لإبراز التفاصيل
+    enhancer = ImageEnhance.Sharpness(image)
+    return enhancer.enhance(1.5)
 
 # 5. استخراج البصمة البصرية الدقيقة
 def get_image_embedding(image):
@@ -106,16 +103,16 @@ with tab3:
 
 image_to_search = None
 with tab1:
-    cam_photo = st.camera_input("التقط صورة بحيث يكون الكوتشي في المنتصف تماماً")
+    cam_photo = st.camera_input("التقط صورة بحيث يكون الكوتشي واضح بالكامل")
     if cam_photo:
         image_to_search = process_mobile_photo(Image.open(cam_photo))
-        st.image(image_to_search, caption="الصورة بعد العزل والتركيز الذكي", width=300)
+        st.image(image_to_search, caption="الصورة بعد توضيح التفاصيل", width=300)
 
 with tab2:
     up_file = st.file_uploader("اختر صورة", type=["jpg", "jpeg", "png"])
     if up_file:
         image_to_search = process_mobile_photo(Image.open(up_file))
-        st.image(image_to_search, caption="الصورة بعد العزل والتركيز الذكي", width=300)
+        st.image(image_to_search, caption="الصورة بعد توضيح التفاصيل", width=300)
 
 if image_to_search and st.button("🔍 ابحث بالذكاء الاصطناعي", use_container_width=True):
     st.markdown("---")
