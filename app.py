@@ -17,21 +17,20 @@ import datetime
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
 
 # ==========================================
-# 🔒 إعدادات المستخدمين (ضيف الموظفين هنا براحتك)
+# 🔒 إعدادات المستخدمين
 # ==========================================
 USERS = {
-    "abobakr": "admin2026",    # يوزر وباسورد الإدارة
-    "mohamed": "123456",       # يوزر الموظف الأول
-    "ahmed": "edstore"         # يوزر الموظف الثاني
+    "abobakr": "admin2026",    
+    "mohamed": "123456",       
+    "ahmed": "edstore"         
 }
 
-# تهيئة حالة الدخول
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
-# --- 2. كود الـ CSS الموحد (لصفحة الدخول والموقع) ---
+# --- 2. كود الـ CSS الموحد ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -40,7 +39,6 @@ st.markdown(f"""
         #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
         .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
-        /* ستايل صفحة تسجيل الدخول */
         .login-box {{
             background: white; padding: 40px; border-radius: 20px;
             box-shadow: 0 10px 30px rgba(28, 101, 166, 0.15);
@@ -50,7 +48,6 @@ st.markdown(f"""
         .login-title {{ color: #1C65A6; font-weight: 900; font-size: 28px; margin-bottom: 5px; }}
         .login-subtitle {{ color: #64748B; font-size: 16px; margin-bottom: 30px; }}
         
-        /* ستايل الموقع من الداخل */
         .brand-navbar {{
             background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%);
             padding: 15px 20px; display: flex; align-items: center; justify-content: center;
@@ -68,7 +65,6 @@ st.markdown(f"""
         }}
         .stButton > button:hover {{ background-color: #144A7A !important; transform: translateY(-3px); }}
         
-        /* زر تسجيل الخروج المصغر */
         .logout-btn > button {{
             background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important;
             width: auto !important; margin-bottom: 20px;
@@ -128,13 +124,12 @@ if not st.session_state.logged_in:
             st.error("❌ البيانات غير صحيحة، تأكد من اسم المستخدم أو كلمة المرور.")
     
     st.markdown('</div>', unsafe_allow_html=True)
-    st.stop() # يوقف الكود هنا وميفتحش الموقع إلا لو الدخول نجح
+    st.stop()
 
 # ==========================================
-# ✅ محتوى الموقع بعد تسجيل الدخول بنجاح
+# ✅ محتوى الموقع بعد تسجيل الدخول
 # ==========================================
 
-# تهيئة ذاكرة الجرد
 if 'inventory_session' not in st.session_state: st.session_state.inventory_session = {} 
 if 'inv_active' not in st.session_state: st.session_state.inv_active = False
 if 'inv_name' not in st.session_state: st.session_state.inv_name = ""
@@ -147,7 +142,6 @@ if logo_base64:
 else:
     st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
-# شريط الترحيب وتسجيل الخروج
 col_welc, col_out = st.columns([4, 1])
 with col_welc:
     st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
@@ -199,14 +193,23 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
+# ==========================================
+# 🔥 استرجاع دالة البحث الأصلية التي تعمل بنجاح بنسبة 100%
+# ==========================================
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
         if not isinstance(features, torch.Tensor):
-            features = features.image_embeds if hasattr(features, 'image_embeds') else features[0]
-        return features.flatten().numpy().tolist()
+            if hasattr(features, 'image_embeds'):
+                features = features.image_embeds
+            elif hasattr(features, 'pooler_output'):
+                features = features.pooler_output
+            else:
+                features = features[0]
+        embedding = features.squeeze().numpy().tolist()
+    return embedding
 
 def get_color_histogram(image):
     img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
