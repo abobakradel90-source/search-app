@@ -10,19 +10,19 @@ import pandas as pd
 import shutil
 from streamlit_cropper import st_cropper
 
-# 1. سحب قاعدة البيانات (نفس قاعدة الفاشون اللي عندك)
+# 1. سحب قاعدة البيانات
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
-    marker_file = "./chroma_db/fashion_clip_v2.txt"
+    marker_file = "./chroma_db/fashion_clip_v3.txt"
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     
     if os.path.exists(extract_path) and not os.path.exists(marker_file):
         shutil.rmtree(extract_path)
         
     if not os.path.exists(extract_path):
-        with st.spinner('جاري التأكد من قاعدة بيانات Fashion-CLIP...'):
+        with st.spinner('جاري التأكد من قاعدة البيانات...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -42,7 +42,10 @@ def load_vision_system():
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id)
     client = chromadb.PersistentClient(path="./chroma_db")
-    collection = client.get_collection(name="fashion_collection")
+    
+    # 🔴 السطر ده اللي اتعدل: رجعناه لاسم قاعدتك الأصلية
+    collection = client.get_collection(name="products_collection") 
+    
     return model, processor, collection
 
 model, processor, collection = load_vision_system()
@@ -81,12 +84,11 @@ def get_image_embedding(image):
     return embedding
 
 def get_color_histogram(image):
-    # السحر هنا: تحليل دقيق للألوان بنسبة 100%
+    # تحليل دقيق للألوان بنسبة 100%
     img = image.convert("RGB")
     w, h = img.size
-    # قص الأطراف لضمان التركيز على لون الكوتشي مش الخلفية
     img = img.crop((w*0.15, h*0.15, w*0.85, h*0.85))
-    hist = img.histogram() # بيطلع 768 درجة لون
+    hist = img.histogram() 
     total = sum(hist) / 3
     if total == 0: total = 1
     return [x / total for x in hist]
@@ -96,7 +98,7 @@ def compare_histograms(h1, h2):
 
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 👔 محرك Fashion-CLIP الهجين (هيكل + ألوان) مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 👔 محرك Fashion-CLIP الهجين (هيكل + ألوان)")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -158,7 +160,7 @@ if raw_image:
                             db_color_hist = get_color_histogram(db_img)
                             color_dist = compare_histograms(user_color_hist, db_color_hist)
                         
-                        # 4. دمج دقة الماركة مع دقة اللون (إعطاء وزن ذكي للون)
+                        # 4. دمج دقة الماركة مع دقة اللون
                         final_score = fashion_dist + (color_dist * 0.5)
                         
                         refined_results.append({
@@ -167,7 +169,7 @@ if raw_image:
                             'metadata': meta
                         })
                     
-                    # 5. الترتيب النهائي عشان نظهر الأصح لوناً وتصميماً
+                    # 5. الترتيب النهائي
                     refined_results.sort(key=lambda x: x['final_score'])
                     
                     st.success("✅ أفضل التطابقات (مدعومة بنظارة الألوان):")
