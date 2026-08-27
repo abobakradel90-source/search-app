@@ -13,45 +13,48 @@ from streamlit_cropper import st_cropper
 import io
 import datetime
 
-# --- 1. إعدادات الصفحة وتهيئة الذاكرة المؤقتة (Session State) ---
-st.set_page_config(page_title="ED STORE | المتجر الرسمي", page_icon="👟", layout="wide")
+# --- 1. إعدادات الصفحة ---
+st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
 
-# تهيئة ذاكرة الجرد
-if 'inventory_session' not in st.session_state:
-    st.session_state.inventory_session = {} 
-if 'inv_active' not in st.session_state:
-    st.session_state.inv_active = False
-if 'inv_name' not in st.session_state:
-    st.session_state.inv_name = ""
-if 'inv_reason' not in st.session_state:
-    st.session_state.inv_reason = ""
-if 'inv_date' not in st.session_state:
-    st.session_state.inv_date = ""
-if 'inv_custom_df' not in st.session_state:
-    st.session_state.inv_custom_df = None
+# ==========================================
+# 🔒 إعدادات المستخدمين (ضيف الموظفين هنا براحتك)
+# ==========================================
+USERS = {
+    "abobakr": "admin2026",    # يوزر وباسورد الإدارة
+    "mohamed": "123456",       # يوزر الموظف الأول
+    "ahmed": "edstore"         # يوزر الموظف الثاني
+}
 
-def get_image_base64(img_path):
-    try:
-        with open(img_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode('utf-8')
-    except Exception:
-        return ""
+# تهيئة حالة الدخول
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = ""
 
-logo_base64 = get_image_base64("edstore.jpg")
-
-# --- 2. الهوية البصرية ---
+# --- 2. كود الـ CSS الموحد (لصفحة الدخول والموقع) ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
         html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
         .stApp {{ background-color: #F0F4F8; }}
         #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
-        .block-container {{ padding-top: 0rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
+        .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
+        /* ستايل صفحة تسجيل الدخول */
+        .login-box {{
+            background: white; padding: 40px; border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(28, 101, 166, 0.15);
+            max-width: 450px; margin: 100px auto; text-align: center;
+            border-top: 8px solid #1C65A6;
+        }}
+        .login-title {{ color: #1C65A6; font-weight: 900; font-size: 28px; margin-bottom: 5px; }}
+        .login-subtitle {{ color: #64748B; font-size: 16px; margin-bottom: 30px; }}
+        
+        /* ستايل الموقع من الداخل */
         .brand-navbar {{
             background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%);
             padding: 15px 20px; display: flex; align-items: center; justify-content: center;
-            color: white; width: 100%; margin-bottom: 20px;
+            color: white; width: 100%; margin-top: -30px; margin-bottom: 20px;
             border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;
             box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3);
         }}
@@ -64,6 +67,13 @@ st.markdown(f"""
             box-shadow: 0 6px 15px rgba(28, 101, 166, 0.3); transition: all 0.3s ease;
         }}
         .stButton > button:hover {{ background-color: #144A7A !important; transform: translateY(-3px); }}
+        
+        /* زر تسجيل الخروج المصغر */
+        .logout-btn > button {{
+            background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important;
+            width: auto !important; margin-bottom: 20px;
+        }}
+        .logout-btn > button:hover {{ background-color: #DC2626 !important; }}
         
         .stTabs [data-baseweb="tab-list"] {{ gap: 20px; justify-content: center; background: white; padding: 10px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }}
         .stTabs [data-baseweb="tab"] {{ font-size: 20px !important; font-weight: 900 !important; color: #5C7C99 !important; padding: 10px 20px; border-radius: 10px; }}
@@ -89,32 +99,82 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
+def get_image_base64(img_path):
+    try:
+        with open(img_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode('utf-8')
+    except Exception: return ""
+logo_base64 = get_image_base64("edstore.jpg")
+
+# ==========================================
+# 🛑 بوابة تسجيل الدخول (Login Wall)
+# ==========================================
+if not st.session_state.logged_in:
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    if logo_base64:
+        st.markdown(f'<img src="data:image/jpeg;base64,{logo_base64}" style="height: 80px; border-radius:10px; margin-bottom:15px;">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">نظام إدارة ED STORE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">برجاء تسجيل الدخول للمتابعة</div>', unsafe_allow_html=True)
+    
+    username = st.text_input("👤 اسم المستخدم", placeholder="ادخل اليوزر نيم")
+    password = st.text_input("🔑 كلمة المرور", placeholder="ادخل الباسورد", type="password")
+    
+    if st.button("تسجيل الدخول 🚀"):
+        if username in USERS and USERS[username] == password:
+            st.session_state.logged_in = True
+            st.session_state.current_user = username
+            st.rerun()
+        else:
+            st.error("❌ البيانات غير صحيحة، تأكد من اسم المستخدم أو كلمة المرور.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop() # يوقف الكود هنا وميفتحش الموقع إلا لو الدخول نجح
+
+# ==========================================
+# ✅ محتوى الموقع بعد تسجيل الدخول بنجاح
+# ==========================================
+
+# تهيئة ذاكرة الجرد
+if 'inventory_session' not in st.session_state: st.session_state.inventory_session = {} 
+if 'inv_active' not in st.session_state: st.session_state.inv_active = False
+if 'inv_name' not in st.session_state: st.session_state.inv_name = ""
+if 'inv_reason' not in st.session_state: st.session_state.inv_reason = ""
+if 'inv_date' not in st.session_state: st.session_state.inv_date = ""
+if 'inv_custom_df' not in st.session_state: st.session_state.inv_custom_df = None
+
 if logo_base64:
     st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
-# --- 3. محرك الذكاء الاصطناعي ---
+# شريط الترحيب وتسجيل الخروج
+col_welc, col_out = st.columns([4, 1])
+with col_welc:
+    st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
+with col_out:
+    st.markdown('<div class="logout-btn">', unsafe_allow_html=True)
+    if st.button("تسجيل خروج 🚪"):
+        st.session_state.logged_in = False
+        st.session_state.current_user = ""
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 3. محرك الذكاء الاصطناعي والدوال ---
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
     extract_path = "./chroma_db"
     marker_file = "./chroma_db/fashion_clip_v3.txt"
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
-    
-    if os.path.exists(extract_path) and not os.path.exists(marker_file):
-        shutil.rmtree(extract_path)
+    if os.path.exists(extract_path) and not os.path.exists(marker_file): shutil.rmtree(extract_path)
     if not os.path.exists(extract_path):
         with st.spinner('📦 جاري تهيئة مستودع البيانات الذكي...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_path)
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(".")
-                if os.path.exists(zip_path):
-                    os.remove(zip_path)
-                with open(marker_file, 'w') as f:
-                    f.write("done")
-            except Exception as e: pass
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref: zip_ref.extractall(".")
+                if os.path.exists(zip_path): os.remove(zip_path)
+                with open(marker_file, 'w') as f: f.write("done")
+            except Exception: pass
 
 @st.cache_resource
 def load_vision_system():
@@ -126,10 +186,8 @@ def load_vision_system():
     collection = client.get_collection(name="products_collection")
     return model, processor, collection
 
-try: 
-    model, processor, collection = load_vision_system()
-except Exception as e: 
-    st.error(f"⚠️ حدث خطأ أثناء تحميل محرك الذكاء الاصطناعي: {e}")
+try: model, processor, collection = load_vision_system()
+except Exception as e: st.error(f"⚠️ حدث خطأ في محرك الذكاء الاصطناعي: {e}")
 
 @st.cache_data
 def load_csv_data():
@@ -146,19 +204,9 @@ def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-        
-        # الكود الأصلي المحكم اللي كان شغال وتم إرجاعه + إضافة flatten لضمان عدم حدوث الإيرور 3D
         if not isinstance(features, torch.Tensor):
-            if hasattr(features, 'image_embeds'):
-                features = features.image_embeds
-            elif hasattr(features, 'pooler_output'):
-                features = features.pooler_output
-            else:
-                features = features[0]
-                
-        # flatten بتجبر البيانات إنها تكون في بُعد واحد (1D Array) مهما كان شكلها
-        embedding = features.flatten().numpy().tolist()
-    return embedding
+            features = features.image_embeds if hasattr(features, 'image_embeds') else features[0]
+        return features.flatten().numpy().tolist()
 
 def get_color_histogram(image):
     img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
@@ -197,7 +245,6 @@ def render_product_card(p_code, p_name, p_stock, custom_message=""):
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
     stock_text = f"📦 الرصيد الدفتري: {p_stock}"
-    
     msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
 
     st.markdown(f"""
@@ -215,9 +262,6 @@ def render_product_card(p_code, p_name, p_stock, custom_message=""):
 # --- 4. التخطيط الرئيسي ---
 main_tab1, main_tab2 = st.tabs(["🔍 محرك البحث الذكي", "📦 نظام إدارة الجرد والمخازن"])
 
-# ==========================================
-# التبويب الأول: محرك البحث الأساسي
-# ==========================================
 with main_tab1:
     st.markdown("### 🔍 بحث سريع بكود المنتج أو الاسم")
     search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", key="search_bar", label_visibility="collapsed")
@@ -278,48 +322,36 @@ with main_tab1:
                                         _, p_name, p_stock = parse_row_info(row_data, df_products.columns)
                                         break
                             render_product_card(p_code, p_name, p_stock)
-                except Exception as e: 
-                    st.error(f"⚠️ حدث خطأ في البحث البصري: {e}")
+                except Exception as e: st.error(f"⚠️ حدث خطأ في البحث البصري: {e}")
 
-# ==========================================
-# التبويب الثاني: مديول الجرد المتكامل (نظام الجلسات)
-# ==========================================
 with main_tab2:
     if not st.session_state.inv_active:
         st.markdown("### 🆕 إعداد جلسة جرد جديدة")
-        st.info("قم بإنشاء جلسة جرد ورفع ملف الأرصدة الخاص بها (لو لم ترفع ملف، سيتم الجرد على الأرصدة الحالية في الموقع).")
-        
         with st.form("inv_setup_form"):
             col1, col2, col3 = st.columns(3)
             with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
             with col2: inv_reason = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "جرد نهاية العام", "أخرى"])
             with col3: inv_date = st.date_input("تاريخ الجرد", datetime.date.today())
             
-            uploaded_inv_file = st.file_uploader("📎 رفع ملف الأرصدة الدفترية اللحظية (Excel أو CSV) - اختياري", type=['csv', 'xlsx'])
+            uploaded_inv_file = st.file_uploader("📎 رفع ملف الأرصدة الدفترية اللحظية (Excel/CSV) - اختياري", type=['csv', 'xlsx'])
             
             submitted_setup = st.form_submit_button("🚀 فتح جلسة الجرد وبدء العمل")
             if submitted_setup:
-                if not inv_name:
-                    st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
+                if not inv_name: st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
                 else:
                     st.session_state.inv_name = inv_name
                     st.session_state.inv_reason = inv_reason
                     st.session_state.inv_date = str(inv_date)
                     st.session_state.inventory_session = {}
                     st.session_state.inv_active = True
-                    
                     if uploaded_inv_file is not None:
                         try:
-                            if uploaded_inv_file.name.endswith('.csv'):
-                                st.session_state.inv_custom_df = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig')
-                            else:
-                                st.session_state.inv_custom_df = pd.read_excel(uploaded_inv_file)
+                            if uploaded_inv_file.name.endswith('.csv'): st.session_state.inv_custom_df = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig')
+                            else: st.session_state.inv_custom_df = pd.read_excel(uploaded_inv_file)
                         except:
-                            st.error("حدث خطأ في قراءة الملف المرفق، سيتم الاعتماد على الأرصدة الأساسية.")
+                            st.error("خطأ في الملف المرفق، سيتم استخدام الأرصدة الأساسية.")
                             st.session_state.inv_custom_df = None
-                    else:
-                        st.session_state.inv_custom_df = None
-                        
+                    else: st.session_state.inv_custom_df = None
                     st.rerun()
     else:
         st.markdown(f"""
@@ -330,8 +362,7 @@ with main_tab2:
         
         active_df = st.session_state.inv_custom_df if st.session_state.inv_custom_df is not None else df_products
         
-        if active_df is None:
-            st.error("⚠️ لا توجد داتا أرصدة لإجراء الجرد!")
+        if active_df is None: st.error("⚠️ لا توجد داتا أرصدة لإجراء الجرد!")
         else:
             inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود الفعلي", "⚖️ تقرير الفروقات (تصدير)"])
             
@@ -343,7 +374,6 @@ with main_tab2:
                 code, name, stock = parse_row_info(row, active_df.columns)
                 try: s_val = float(stock)
                 except: s_val = 0
-                
                 total_qty += s_val
                 if s_val <= 0: out_of_stock += 1
                 system_inventory[code] = {'name': name, 'sys_stock': s_val}
@@ -352,9 +382,9 @@ with main_tab2:
                 st.markdown("### 📊 ملخص الأرصدة الدفترية لهذه الجلسة")
                 col1, col2, col3 = st.columns(3)
                 with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{total_items}</div></div>', unsafe_allow_html=True)
-                with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع الدفترية المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
-                with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية دفترية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
-                st.markdown("<br>### 🛒 إجمالي ما تم مسحه فعلياً: **{}** قطعة".format(sum(st.session_state.inventory_session.values())), unsafe_allow_html=True)
+                with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
+                with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
+                st.markdown(f"<br>### 🛒 إجمالي ما تم مسحه فعلياً: **{sum(st.session_state.inventory_session.values())}** قطعة", unsafe_allow_html=True)
 
             with inv_tab2:
                 st.markdown("### 🔫 مسح الباركود للجرد")
@@ -377,53 +407,33 @@ with main_tab2:
                             st.session_state.inventory_session[clean_code] = st.session_state.inventory_session.get(clean_code, 0) + add_qty
                             st.success(f"✅ تمت إضافة ({add_qty}) للصنف: {clean_code} | المجرد الفعلي: {st.session_state.inventory_session[clean_code]}")
                             render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"إجمالي الجرد الفعلي: {st.session_state.inventory_session[clean_code]} قطعة")
-                        else:
-                            st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
+                        else: st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
 
             with inv_tab3:
                 st.markdown("### ⚖️ تقرير الفروقات (الرصيد الدفتري vs الفعلي)")
-                
                 report_data = []
                 for code, info in system_inventory.items():
                     sys_qty = info['sys_stock']
                     actual_qty = st.session_state.inventory_session.get(code, 0)
                     variance = actual_qty - sys_qty
-                    
                     status = "🟢 مطابق"
                     if variance > 0: status = "🔵 زيادة"
                     elif variance < 0: status = "🔴 عجز"
-                    
-                    report_data.append({
-                        "كود الصنف": code,
-                        "اسم الصنف": info['name'],
-                        "الرصيد الدفتري (سيستم)": sys_qty,
-                        "الرصيد الفعلي (مجرد)": actual_qty,
-                        "الفروقات (عجز/زيادة)": variance,
-                        "الحالة": status
-                    })
+                    report_data.append({"كود الصنف": code, "اسم الصنف": info['name'], "الرصيد الدفتري": sys_qty, "الرصيد الفعلي": actual_qty, "الفروقات (عجز/زيادة)": variance, "الحالة": status})
                     
                 df_report = pd.DataFrame(report_data)
-                
                 def color_variance(val):
                     if val < 0: return 'color: red; font-weight: bold;'
                     elif val > 0: return 'color: blue; font-weight: bold;'
                     return 'color: green;'
-                    
-                styled_report = df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)'])
-                st.dataframe(styled_report, use_container_width=True, hide_index=True)
-                
+                st.dataframe(df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)']), use_container_width=True, hide_index=True)
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 csv = df_report.to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(
-                    label="📥 تحميل التقرير النهائي (Excel/CSV)",
-                    data=csv,
-                    file_name=f"Inventory_Report_{st.session_state.inv_name}_{st.session_state.inv_date}.csv",
-                    mime="text/csv",
-                )
+                st.download_button(label="📥 تحميل التقرير النهائي", data=csv, file_name=f"Inventory_Report_{st.session_state.inv_name}_{st.session_state.inv_date}.csv", mime="text/csv")
                 
                 st.markdown("---")
-                if st.button("🛑 إغلاق وإنهاء جلسة الجرد (مسح الذاكرة)"):
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد"):
                     st.session_state.inv_active = False
                     st.session_state.inv_custom_df = None
                     st.session_state.inventory_session = {}
