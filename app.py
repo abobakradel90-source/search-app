@@ -63,27 +63,12 @@ def load_csv_data():
 
 df_products, error_msg = load_csv_data()
 
-# 4. دوال تحليل الألوان (السحر الجديد للتفرقة بين الألوان)
-def get_color_histogram(image, is_db_image=False):
-    img = image.convert("RGB")
-    # لو الصورة من الداتا بيز، بنقص الحواف البيضاء عشان اللون الأبيض مايغطيش على لون الكوتشي
-    if is_db_image:
-        w, h = img.size
-        img = img.crop((w*0.15, h*0.15, w*0.85, h*0.85))
-    
-    img = img.resize((64, 64))
-    hist = img.histogram()
-    total = sum(hist)
-    return [h / total for h in hist] if total > 0 else hist
-
-def compare_colors(hist1, hist2):
-    # حساب نسبة الاختلاف اللوني
-    return sum(abs(a - b) for a, b in zip(hist1, hist2))
-
+# 4. استخراج البصمة البصرية النقية (بدون فلاتر ألوان خارجية)
 def get_image_embedding(image):
+    # توضيح خفيف جداً لتعويض إضاءة الكاميرا
     image = ImageOps.autocontrast(image, cutoff=1)
     enhancer = ImageEnhance.Sharpness(image)
-    image = enhancer.enhance(1.5)
+    image = enhancer.enhance(1.2)
     
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
@@ -93,7 +78,7 @@ def get_image_embedding(image):
 
 # --- الواجهة ---
 st.title("ED STORE ABOBAKR ADEl 👟🔥")
-st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 + فلتر الألوان مفعل")
+st.info(f"📦 المنتجات: {collection.count()} | 🦅 محرك DINOv2 الأصلي مفعل")
 
 tab1, tab2, tab3 = st.tabs(["📷 التقاط بالموبايل", "📁 رفع صورة", "🔍 بحث نصي"])
 
@@ -124,56 +109,26 @@ with tab2:
 
 if raw_image:
     st.markdown("### ✂️ حدد الكوتشي فقط:")
+    st.caption("تجنب إدخال أي علامات مائية أو خلفيات معقدة داخل المربع للحصول على نتيجة 100%")
+    
     cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#0000FF', aspect_ratio=None)
     
     if st.button("🔍 ابحث عن الكوتشي المحدد الآن", use_container_width=True):
         st.markdown("---")
-        with st.spinner('🦅 جاري فحص الهيكل والألوان بدقة...'):
+        with st.spinner('🦅 جاري المطابقة البصرية...'):
             try:
-                # 1. طلب أفضل 10 كوتشيات في الهيكل من الذكاء الاصطناعي
                 results = collection.query(
                     query_embeddings=[get_image_embedding(cropped_img)],
-                    n_results=10, 
+                    n_results=4,  # بنطلب 4 نتايج عشان لو في شبه كبير يعرضهم كلهم
                     include=['distances', 'metadatas']
                 )
                 
                 if results['distances'][0]:
-                    # 2. استخراج البصمة اللونية للصورة اللي إنت صورتها
-                    user_color_hist = get_color_histogram(cropped_img, is_db_image=False)
-                    
-                    refined_results = []
-                    
+                    st.success("✅ أفضل التطابقات:")
                     for i in range(len(results['distances'][0])):
                         meta = results['metadatas'][0][i]
-                        dino_dist = results['distances'][0][i]
-                        filename = meta.get('filename', '')
-                        img_path = os.path.join("compressed_images", filename)
-                        
-                        color_dist = 0
-                        if os.path.exists(img_path):
-                            # 3. حساب البصمة اللونية لصور الداتا بيز ومقارنتها
-                            db_img = Image.open(img_path)
-                            db_color_hist = get_color_histogram(db_img, is_db_image=True)
-                            color_dist = compare_colors(user_color_hist, db_color_hist)
-                        
-                        # 4. دمج دقة الهيكل مع دقة اللون (السر هنا)
-                        final_score = dino_dist + (color_dist * 0.8)
-                        
-                        refined_results.append({
-                            'filename': filename,
-                            'dino_dist': dino_dist,
-                            'color_dist': color_dist,
-                            'final_score': final_score,
-                            'metadata': meta
-                        })
-                    
-                    # 5. ترتيب النتائج من الأفضل للأسوأ بناءً على الهيكل واللون معاً
-                    refined_results.sort(key=lambda x: x['final_score'])
-                    
-                    st.success("✅ أفضل التطابقات (مدعومة بفلتر الألوان):")
-                    # عرض أفضل 3 نتائج فقط
-                    for result in refined_results[:3]:
-                        p_code = result['filename'].split('.')[0]
+                        distance = results['distances'][0][i]
+                        p_code = meta.get('filename', '').split('.')[0]
                         p_name = "غير متوفر"
                         
                         if df_products is not None:
@@ -192,13 +147,13 @@ if raw_image:
                         
                         col1, col2 = st.columns([1, 2])
                         with col1:
-                            img_path = os.path.join("compressed_images", result['filename'])
+                            img_path = os.path.join("compressed_images", meta.get('filename', ''))
                             if os.path.exists(img_path):
                                 st.image(img_path, use_container_width=True)
                         with col2:
                             st.write(f"**الكود:** {p_code}")
                             st.write(f"**الاسم:** {p_name}")
-                            st.caption(f"مؤشر التطابق النهائي: {result['final_score']:.3f}")
+                            st.caption(f"دقة المطابقة (أقل = أفضل): {distance:.3f}")
                         st.markdown("---")
             except Exception as e:
                 st.error(f"خطأ: {e}")
