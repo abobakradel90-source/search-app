@@ -13,12 +13,9 @@ from streamlit_cropper import st_cropper
 import io
 import datetime
 
-# --- 1. إعدادات الصفحة ---
+# --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
 
-# ==========================================
-# 🔒 إعدادات المستخدمين
-# ==========================================
 USERS = {
     "abobakr": "admin2026",    
     "mohamed": "123456",       
@@ -29,8 +26,28 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
+if 'inventory_session' not in st.session_state:
+    st.session_state.inventory_session = {} 
+if 'inv_active' not in st.session_state:
+    st.session_state.inv_active = False
+if 'inv_name' not in st.session_state:
+    st.session_state.inv_name = ""
+if 'inv_reason' not in st.session_state:
+    st.session_state.inv_reason = ""
+if 'inv_date' not in st.session_state:
+    st.session_state.inv_date = ""
+if 'inv_custom_df' not in st.session_state:
+    st.session_state.inv_custom_df = None
 
-# --- 2. كود الـ CSS الموحد ---
+def get_image_base64(img_path):
+    try:
+        with open(img_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode('utf-8')
+    except Exception: return ""
+
+logo_base64 = get_image_base64("edstore.jpg")
+
+# --- 2. الهوية البصرية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -95,13 +112,6 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-def get_image_base64(img_path):
-    try:
-        with open(img_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode('utf-8')
-    except Exception: return ""
-logo_base64 = get_image_base64("edstore.jpg")
-
 # ==========================================
 # 🛑 بوابة تسجيل الدخول (Login Wall)
 # ==========================================
@@ -129,14 +139,6 @@ if not st.session_state.logged_in:
 # ==========================================
 # ✅ محتوى الموقع بعد تسجيل الدخول
 # ==========================================
-
-if 'inventory_session' not in st.session_state: st.session_state.inventory_session = {} 
-if 'inv_active' not in st.session_state: st.session_state.inv_active = False
-if 'inv_name' not in st.session_state: st.session_state.inv_name = ""
-if 'inv_reason' not in st.session_state: st.session_state.inv_reason = ""
-if 'inv_date' not in st.session_state: st.session_state.inv_date = ""
-if 'inv_custom_df' not in st.session_state: st.session_state.inv_custom_df = None
-
 if logo_base64:
     st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 else:
@@ -153,7 +155,7 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 3. محرك الذكاء الاصطناعي والدوال ---
+# --- 3. محرك الذكاء الاصطناعي والدوال (النسخة الأصلية) ---
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -193,9 +195,7 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
-# ==========================================
-# 🔥 استرجاع دالة البحث الأصلية التي تعمل بنجاح بنسبة 100%
-# ==========================================
+# الكود الأصلي النظيف للبحث البصري
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
@@ -234,7 +234,8 @@ def parse_row_info(row, df_cols):
         
     return p_code, p_name, p_stock
 
-def render_product_card(p_code, p_name, p_stock, custom_message=""):
+# دالة تصميم الكارت نظيفة بدون مسافات إضافية لمنع أخطاء الـ HTML
+def render_product_card(p_code, p_name, p_stock, custom_message="", details_html=""):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
     for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
         img_path = os.path.join("compressed_images", f"{p_code}{ext}")
@@ -248,19 +249,22 @@ def render_product_card(p_code, p_name, p_stock, custom_message=""):
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
     stock_text = f"📦 الرصيد الدفتري: {p_stock}"
+    
     msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
 
-    st.markdown(f"""
-    <div class="product-card">
-        {img_html}
-        <div class="product-details" style="flex-grow: 1;">
-            <div class="code-badge">الكود: {p_code}</div>
-            <h3 class="product-title">{p_name}</h3>
-            <div class="{stock_class}">{stock_text}</div>
-            {msg_html}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # كتابة الكود بدون Indentation لمنع Streamlit من تحويله لكود نصي
+    html_str = f"""<div class="product-card">
+{img_html}
+<div class="product-details" style="flex-grow: 1;">
+<div class="code-badge">الكود: {p_code}</div>
+<h3 class="product-title">{p_name}</h3>
+<div class="{stock_class}">{stock_text}</div>
+{details_html}
+{msg_html}
+</div>
+</div>"""
+
+    st.markdown(html_str, unsafe_allow_html=True)
 
 # --- 4. التخطيط الرئيسي ---
 main_tab1, main_tab2 = st.tabs(["🔍 محرك البحث الذكي", "📦 نظام إدارة الجرد والمخازن"])
@@ -276,10 +280,16 @@ with main_tab1:
             mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
         matched = df_products[mask]
         if not matched.empty:
+            st.markdown("### ✨ نتائج البحث النصي:")
             for idx, row in matched.iterrows():
                 p_code, p_name, p_stock = parse_row_info(row, df_products.columns)
-                render_product_card(p_code, p_name, p_stock)
-        else: st.warning("⚠️ لم يتم العثور على المنتج.")
+                # إرجاع تفاصيل كل أعمدة الإكسيل في البحث النصي زي ما كانت
+                details = " | ".join([f"<b>{col}:</b> {row[col]}" for col in df_products.columns])
+                details_html = f'<div style="color: #64748B; font-size: 14px; margin-top: 8px;">{details}</div>'
+                
+                render_product_card(p_code, p_name, p_stock, details_html=details_html)
+        else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
+    
     st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
     cam_tab, upload_tab = st.tabs(["📸 التقاط بكاميرا الموبايل", "📁 رفع صورة من الجهاز"])
