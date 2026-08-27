@@ -11,23 +11,22 @@ import shutil
 import base64
 from streamlit_cropper import st_cropper
 
-# --- 1. إعدادات الصفحة (أول سطر لازم) ---
-st.set_page_config(page_title="ED STORE | Amazon Style", page_icon="🛒", layout="wide")
+# --- 1. إعدادات الصفحة ---
+st.set_page_config(page_title="ED STORE | المتجر الرسمي", page_icon="👟", layout="wide")
 
-# دالة لتحويل الصور (اللوجو) لـ Base64 عشان نعرضها في الـ HTML
+# استخراج اللوجو والصور لعرضها
 def get_image_base64(img_path):
     try:
         with open(img_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode('utf-8')
     except Exception:
-        return "" # لو اللوجو مش موجود ميعملش إيرور
+        return ""
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. كود CSS لمحاكاة تصميم Amazon ---
+# --- 2. الهوية البصرية (ED Store Blue Theme) ---
 st.markdown(f"""
     <style>
-        /* خط احترافي */
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
         
         html, body, [class*="css"] {{
@@ -35,120 +34,131 @@ st.markdown(f"""
             direction: rtl;
         }}
         
-        /* لون خلفية الموقع زي أمازون (رمادي فاتح جداً) */
         .stApp {{
-            background-color: #EAEDED;
+            background-color: #F0F4F8;
         }}
         
-        /* تقليل الفراغ العلوي ليصبح الشريط بالأعلى تماماً */
-        .block-container {{
-            padding-top: 0rem !important;
-            padding-bottom: 5rem !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            max-width: 1400px;
-        }}
-        
-        /* إخفاء قوائم Streamlit */
         #MainMenu {{visibility: hidden;}}
         header {{visibility: hidden;}}
         
-        /* الشريط العلوي (Amazon Navbar) */
-        .amazon-navbar {{
-            background-color: #131921;
-            padding: 10px 20px;
+        .block-container {{
+            padding-top: 0rem !important;
+            padding-bottom: 5rem !important;
+            max-width: 1200px;
+        }}
+        
+        .brand-navbar {{
+            background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%);
+            padding: 15px 20px;
             display: flex;
             align-items: center;
+            justify-content: center;
             color: white;
             width: 100%;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #232f3e;
+            margin-bottom: 30px;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3);
         }}
-        .amazon-navbar img {{
-            height: 45px;
-            margin-left: 20px;
-            border-radius: 5px;
-            object-fit: contain;
+        .brand-navbar img {{
+            height: 55px;
+            margin-left: 15px;
+            border-radius: 8px;
             background-color: white;
             padding: 2px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }}
-        .amazon-navbar h2 {{
+        .brand-navbar h1 {{
             color: white;
             margin: 0;
-            font-weight: 800;
-            font-size: 1.8rem;
+            font-weight: 900;
+            font-size: 2.2rem;
+            letter-spacing: 1px;
         }}
         
-        /* ستايل التابات (زي الأقسام في أمازون) */
-        button[role="tab"] {{
-            font-size: 16px !important;
-            font-weight: 700 !important;
-            color: #0F1111 !important;
-            background-color: transparent;
-        }}
-        button[role="tab"][aria-selected="true"] {{
-            background-color: transparent !important;
-            color: #E47911 !important; /* لون أمازون البرتقالي */
-            border-bottom: 3px solid #E47911 !important;
-        }}
-        
-        /* كروت المنتجات (Product Cards) */
-        .product-card {{
-            background: white;
-            border-radius: 8px;
-            padding: 15px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            transition: box-shadow 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-        }}
-        .product-card:hover {{
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }}
-        .product-img {{
-            width: 120px;
-            height: 120px;
-            object-fit: contain;
-        }}
-        .code-badge {{
-            color: #565959;
-            font-size: 14px;
-            margin-bottom: 5px;
-        }}
-        .product-title {{
-            font-size: 18px;
-            color: #0F1111;
-            font-weight: 700;
-            margin: 0 0 10px 0;
-        }}
-        
-        /* زرار البحث الأساسي */
         .stButton > button {{
-            background-color: #FFD814;
-            border: 1px solid #FCD200;
-            color: #0F1111 !important;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-weight: 700;
-            font-size: 16px;
-            transition: background-color 0.2s;
+            background-color: #1C65A6 !important;
+            color: white !important;
+            border-radius: 12px;
+            border: none;
+            padding: 12px 24px;
+            font-weight: 800;
+            font-size: 18px;
+            box-shadow: 0 6px 15px rgba(28, 101, 166, 0.3);
+            transition: all 0.3s ease;
             width: 100%;
         }}
         .stButton > button:hover {{
-            background-color: #F7CA00;
-            border-color: #F2C200;
+            background-color: #144A7A !important;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(28, 101, 166, 0.4);
         }}
         
-        /* شريط حقوق الملكية السفلي */
+        button[role="tab"] {{
+            font-size: 18px !important;
+            font-weight: 800 !important;
+            color: #5C7C99 !important;
+        }}
+        button[role="tab"][aria-selected="true"] {{
+            color: #1C65A6 !important;
+            border-bottom: 4px solid #1C65A6 !important;
+            background-color: transparent !important;
+        }}
+        
+        .product-card {{
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #E1E8F0;
+            border-right: 6px solid #1C65A6;
+            transition: transform 0.3s ease;
+        }}
+        .product-card:hover {{
+            transform: scale(1.01);
+            box-shadow: 0 8px 20px rgba(28, 101, 166, 0.15);
+        }}
+        .product-img {{
+            width: 130px;
+            height: 130px;
+            object-fit: contain;
+            border-radius: 10px;
+            background-color: #F8FAFC;
+            padding: 5px;
+            border: 1px solid #E1E8F0;
+        }}
+        .code-badge {{
+            background-color: #E8F0F8;
+            color: #1C65A6;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 800;
+            display: inline-block;
+            margin-bottom: 10px;
+        }}
+        .product-title {{
+            font-size: 20px;
+            color: #0F172A;
+            font-weight: 800;
+            margin: 0 0 8px 0;
+        }}
+        .availability {{
+            color: #10B981;
+            font-size: 15px;
+            font-weight: 700;
+        }}
+        
         .footer {{
             position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
-            background-color: #232F3E;
+            background-color: #144A7A;
             color: white;
             text-align: center;
             padding: 12px;
@@ -156,27 +166,33 @@ st.markdown(f"""
             font-size: 14px;
             font-weight: 500;
             z-index: 999;
-            border-top: 1px solid #131921;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
         }}
         .footer span {{
-            color: #FF9900;
-            font-weight: 700;
+            color: #93C5FD;
+            font-weight: 800;
+        }}
+        
+        [data-testid="stCameraInput"] {{
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid #1C65A6;
         }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- واجهة Amazon العلوية (Navbar) ---
+# --- واجهة ED STORE العلوية ---
 if logo_base64:
     st.markdown(f"""
-    <div class="amazon-navbar">
+    <div class="brand-navbar">
         <img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo">
-        <h2>ED STORE</h2>
+        <h1>ED STORE</h1>
     </div>
     """, unsafe_allow_html=True)
 else:
     st.markdown("""
-    <div class="amazon-navbar">
-        <h2>ED STORE</h2>
+    <div class="brand-navbar">
+        <h1>ED STORE</h1>
     </div>
     """, unsafe_allow_html=True)
 
@@ -253,126 +269,151 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2):
     return sum(abs(a - b) for a, b in zip(h1, h2))
 
-# --- 4. تخطيط الموقع (Amazon Layout) ---
+# --- 4. تخطيط الموقع ---
 
-# شريط البحث النصي (الأساسي فوق زي أمازون)
-col_search, col_empty = st.columns([2, 1])
-with col_search:
-    search_query = st.text_input("بحث في ED STORE", placeholder="اكتب اسم أو كود المنتج هنا...", label_visibility="collapsed")
-    if search_query and df_products is not None:
-        mask = pd.Series([False]*len(df_products))
-        for col in df_products.columns:
-            mask = mask | df_products[col].astype(str).str.contains(search_query, case=False, na=False)
-        matched = df_products[mask]
-        if not matched.empty:
-            for idx, row in matched.iterrows():
-                st.success(f"نتيجة البحث: {row.to_dict()}")
+# 🔍 شريط البحث النصي (المطور والاحترافي)
+st.markdown("### 🔍 بحث سريع بكود المنتج أو الاسم")
+search_query = st.text_input("", placeholder="اكتب الكود هنا...", label_visibility="collapsed")
 
-st.markdown("---")
+if df_products is None:
+    st.error("⚠️ ملف الإكسيل (products.csv) غير موجود أو به مشكلة.")
+    
+elif search_query:
+    # تنظيف الكود من أي مسافات وتوحيد حالة الأحرف
+    query = str(search_query).strip().lower()
+    mask = pd.Series([False]*len(df_products))
+    
+    for col in df_products.columns:
+        # بحث مرن يتجاهل الحروف الكبيرة والصغيرة والمسافات
+        mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
+    
+    matched = df_products[mask]
+    
+    if not matched.empty:
+        st.markdown("### ✨ نتائج البحث النصي:")
+        for idx, row in matched.iterrows():
+            # استخراج الكود والاسم
+            p_code = str(row.iloc[0]).strip()
+            p_name = str(row.iloc[1]).strip() if len(row) > 1 else "غير مسجل"
+            
+            # محاولة جلب الصورة لو موجودة بنفس اسم الكود
+            img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
+            for ext in ['.jpg', '.jpeg', '.png']:
+                img_path = os.path.join("compressed_images", f"{p_code}{ext}")
+                if os.path.exists(img_path):
+                    img_base64 = get_image_base64(img_path)
+                    img_html = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">'
+                    break
+            
+            # تجميع التفاصيل
+            details = " | ".join([f"<b>{col}:</b> {row[col]}" for col in df_products.columns])
+            
+            st.markdown(f"""
+            <div class="product-card">
+                {img_html}
+                <div class="product-details">
+                    <div class="code-badge">الكود: {p_code}</div>
+                    <h3 class="product-title">{p_name}</h3>
+                    <div style="color: #64748B; font-size: 14px; margin-top: 5px;">{details}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.warning(f"⚠️ لم يتم العثور على أي منتج يطابق: {search_query}")
+
+st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
 # تقسيم البحث البصري
-tab1, tab2 = st.tabs(["📸 بحث بكاميرا الموبايل", "📁 بحث بصورة من الجهاز"])
+tab1, tab2 = st.tabs(["📸 التقاط بكاميرا الموبايل", "📁 رفع صورة من الجهاز"])
 
 raw_image = None
 with tab1:
-    # تنسيق الكاميرا عشان متكونش مالية الشاشة
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        cam_photo = st.camera_input("وجّه الكاميرا نحو المنتج")
-        if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
+    cam_photo = st.camera_input("وجّه الكاميرا نحو المنتج")
+    if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
 
 with tab2:
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        up_file = st.file_uploader("اختر صورة المنتج", type=["jpg", "jpeg", "png"])
-        if up_file: raw_image = Image.open(up_file).convert("RGB")
+    up_file = st.file_uploader("ارفع صورة المنتج", type=["jpg", "jpeg", "png"])
+    if up_file: raw_image = Image.open(up_file).convert("RGB")
 
 if raw_image:
-    st.markdown("### ✂️ تحديد المنتج:")
-    # تصغير حجم أداة القص لتناسب التصميم
-    crop_col1, crop_col2, crop_col3 = st.columns([1, 2, 1])
-    with crop_col2:
-        cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#E47911', aspect_ratio=None)
+    st.markdown("### ✂️ قص المنتج (تحديد بؤرة البحث):")
+    cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#1C65A6', aspect_ratio=None)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # زرار البحث زي أمازون
-    btn_col1, btn_col2, btn_col3 = st.columns([1, 2, 1])
-    with btn_col2:
-        if st.button("🔍 بحث عن المنتج المطابق"):
-            st.markdown("---")
-            with st.spinner('جاري البحث في المستودع...'):
-                try:
-                    results = collection.query(
-                        query_embeddings=[get_image_embedding(cropped_img)],
-                        n_results=8,
-                        include=['distances', 'metadatas']
-                    )
+    if st.button("🚀 ابحث عن المنتج في المستودع الآن"):
+        st.markdown("---")
+        with st.spinner('جاري المسح البصري وتحليل الألوان...'):
+            try:
+                results = collection.query(
+                    query_embeddings=[get_image_embedding(cropped_img)],
+                    n_results=8,
+                    include=['distances', 'metadatas']
+                )
+                
+                if results['distances'][0]:
+                    user_color_hist = get_color_histogram(cropped_img)
+                    refined_results = []
                     
-                    if results['distances'][0]:
-                        user_color_hist = get_color_histogram(cropped_img)
-                        refined_results = []
+                    for i in range(len(results['distances'][0])):
+                        meta = results['metadatas'][0][i]
+                        fashion_dist = results['distances'][0][i]
+                        filename = meta.get('filename', '')
+                        img_path = os.path.join("compressed_images", filename)
                         
-                        for i in range(len(results['distances'][0])):
-                            meta = results['metadatas'][0][i]
-                            fashion_dist = results['distances'][0][i]
-                            filename = meta.get('filename', '')
-                            img_path = os.path.join("compressed_images", filename)
-                            
-                            color_dist = 0
-                            if os.path.exists(img_path):
-                                db_img = Image.open(img_path)
-                                db_color_hist = get_color_histogram(db_img)
-                                color_dist = compare_histograms(user_color_hist, db_color_hist)
-                            
-                            final_score = fashion_dist + (color_dist * 0.5)
-                            refined_results.append({
-                                'filename': filename,
-                                'final_score': final_score,
-                                'metadata': meta
-                            })
+                        color_dist = 0
+                        if os.path.exists(img_path):
+                            db_img = Image.open(img_path)
+                            db_color_hist = get_color_histogram(db_img)
+                            color_dist = compare_histograms(user_color_hist, db_color_hist)
                         
-                        refined_results.sort(key=lambda x: x['final_score'])
+                        final_score = fashion_dist + (color_dist * 0.5)
+                        refined_results.append({
+                            'filename': filename,
+                            'final_score': final_score,
+                            'metadata': meta
+                        })
+                    
+                    refined_results.sort(key=lambda x: x['final_score'])
+                    
+                    st.markdown("### ✨ المنتجات المطابقة:")
+                    
+                    for result in refined_results[:3]:
+                        p_code = result['filename'].split('.')[0]
+                        p_name = "الصنف غير مسجل بالإكسيل"
                         
-                        st.subheader("المنتجات المطابقة:")
+                        if df_products is not None:
+                            try:
+                                target_code = str(p_code).strip().lower()
+                                for col in df_products.columns:
+                                    cleaned_col = df_products[col].astype(str).str.strip().str.lower()
+                                    if (cleaned_col == target_code).any():
+                                        row_idx = cleaned_col[cleaned_col == target_code].index[0]
+                                        col_index = df_products.columns.get_loc(col)
+                                        name_col_index = 1 if col_index == 0 else 0
+                                        if len(df_products.columns) > 1:
+                                            p_name = str(df_products.iloc[row_idx, name_col_index]).strip()
+                                        break
+                            except: pass
                         
-                        # طباعة النتائج في كروت أمازون
-                        for result in refined_results[:3]:
-                            p_code = result['filename'].split('.')[0]
-                            p_name = "غير مسجل بالإكسيل"
-                            
-                            if df_products is not None:
-                                try:
-                                    target_code = str(p_code).strip().lower()
-                                    for col in df_products.columns:
-                                        cleaned_col = df_products[col].astype(str).str.strip().str.lower()
-                                        if (cleaned_col == target_code).any():
-                                            row_idx = cleaned_col[cleaned_col == target_code].index[0]
-                                            col_index = df_products.columns.get_loc(col)
-                                            name_col_index = 1 if col_index == 0 else 0
-                                            if len(df_products.columns) > 1:
-                                                p_name = str(df_products.iloc[row_idx, name_col_index]).strip()
-                                            break
-                                except: pass
-                            
-                            img_path = os.path.join("compressed_images", result['filename'])
-                            if os.path.exists(img_path):
-                                img_base64 = get_image_base64(img_path)
-                                st.markdown(f"""
-                                <div class="product-card">
-                                    <img src="data:image/jpeg;base64,{img_base64}" class="product-img">
-                                    <div>
-                                        <div class="code-badge">الكود: {p_code}</div>
-                                        <h3 class="product-title">{p_name}</h3>
-                                        <div style="color: #007185; font-size: 14px;">✓ متوفر في المستودع</div>
-                                    </div>
+                        img_path = os.path.join("compressed_images", result['filename'])
+                        if os.path.exists(img_path):
+                            img_base64 = get_image_base64(img_path)
+                            st.markdown(f"""
+                            <div class="product-card">
+                                <img src="data:image/jpeg;base64,{img_base64}" class="product-img">
+                                <div>
+                                    <div class="code-badge">الكود: {p_code}</div>
+                                    <h3 class="product-title">{p_name}</h3>
+                                    <div class="availability">✓ متوفر في المستودع</div>
                                 </div>
-                                """, unsafe_allow_html=True)
-                            
-                except Exception as e:
-                    st.error(f"خطأ: {e}")
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+            except Exception as e:
+                st.error(f"خطأ: {e}")
 
-# --- 5. شريط حقوق الملكية السفلي (Footer) ---
+# --- 5. شريط حقوق الملكية السفلي ---
 st.markdown("""
 <div class="footer">
     تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026
