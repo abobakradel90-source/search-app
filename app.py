@@ -246,7 +246,7 @@ with main_tab2:
         # تجهيز البيانات الأساسية
         total_items = len(df_products)
         out_of_stock, total_qty = 0, 0
-        system_inventory = {} # {code: {'name': name, 'sys_stock': stock}}
+        system_inventory = {} 
         
         for idx, row in df_products.iterrows():
             code, name, stock = parse_row_info(row, df_products.columns)
@@ -270,23 +270,22 @@ with main_tab2:
         # 2. صفحة الجرد الفعلي (بالباركود)
         with inv_tab2:
             st.markdown("### 🔫 مسح الباركود للجرد")
-            st.info("قم بتوجيه مسدس الباركود واضرب الكود، سيتم الجمع التلقائي للرصيد الفعلي.")
+            st.info("قم بتوجيه مسدس الباركود واضرب الكود، أو اكتبه يدوياً واضغط Enter.")
             
-            # Form عشان يشتغل مع الـ Enter بتاع المسدس ويمسح الخانة فوراً
             with st.form("barcode_scanner_form", clear_on_submit=True):
                 col_b, col_q = st.columns([3, 1])
-                with col_b: scan_code = st.text_input("كود الصنف (الباركود):", autofocus=True)
+                # تم إزالة autofocus لمنع تعارض Streamlit
+                with col_b: scan_code = st.text_input("كود الصنف (الباركود):")
                 with col_q: add_qty = st.number_input("الكمية المضافة:", min_value=1, value=1)
                 submitted = st.form_submit_button("إضافة للرصيد الفعلي 📥")
                 
                 if submitted and scan_code:
                     clean_code = str(scan_code).strip().upper()
                     
-                    # البحث عن الكود في السيستم
                     found = False
                     for sys_c in system_inventory.keys():
                         if sys_c.upper() == clean_code:
-                            clean_code = sys_c # لتوحيد حالة الأحرف
+                            clean_code = sys_c 
                             found = True
                             break
                             
@@ -297,7 +296,6 @@ with main_tab2:
                             st.session_state.inventory_session[clean_code] = add_qty
                             
                         st.success(f"✅ تم بنجاح إضافة ({add_qty}) للصنف: {clean_code} | إجمالي المجرد الفعلي: {st.session_state.inventory_session[clean_code]}")
-                        # عرض كارت الصنف الممسوح للتأكيد
                         render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"تم جرد: {st.session_state.inventory_session[clean_code]} قطعة فعلياً")
                     else:
                         st.error(f"❌ الباركود ({scan_code}) غير مسجل في السيستم (الإكسيل)!")
@@ -309,7 +307,7 @@ with main_tab2:
             report_data = []
             for code, info in system_inventory.items():
                 sys_qty = info['sys_stock']
-                actual_qty = st.session_state.inventory_session.get(code, 0) # لو متجردش يبقى صفر
+                actual_qty = st.session_state.inventory_session.get(code, 0)
                 variance = actual_qty - sys_qty
                 
                 status = "🟢 مطابق"
@@ -327,7 +325,6 @@ with main_tab2:
                 
             df_report = pd.DataFrame(report_data)
             
-            # تلوين الجدول بذكاء
             def color_variance(val):
                 if val < 0: return 'color: red; font-weight: bold;'
                 elif val > 0: return 'color: blue; font-weight: bold;'
@@ -336,7 +333,6 @@ with main_tab2:
             styled_report = df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)'])
             st.dataframe(styled_report, use_container_width=True, hide_index=True)
             
-            # زرار مسح الجرد
             if st.button("🗑️ تصفير ذاكرة الجرد وبدء جرد جديد"):
                 st.session_state.inventory_session = {}
                 st.rerun()
