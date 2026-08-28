@@ -30,10 +30,11 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 دوال الجرد التشاركي (الشبكة المركزية)
+# 🌐 دوال الجرد التشاركي والأرشيف (الشبكة المركزية)
 # ==========================================
 SHARED_INV_FILE = "shared_inventory.json"
 SHARED_DF_FILE = "shared_custom_df.csv"
+HISTORY_FILE = "inventory_history.json"
 
 def load_shared_inventory():
     if os.path.exists(SHARED_INV_FILE):
@@ -46,6 +47,20 @@ def load_shared_inventory():
 def save_shared_inventory(data):
     with open(SHARED_INV_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return []
+
+def save_to_history(record):
+    history = load_history()
+    history.append(record)
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=4)
 
 def get_image_base64(img_path):
     try:
@@ -464,8 +479,7 @@ with main_tab2:
                                 
                                 current_qty = latest_inv["scanned_items"].get(clean_code, 0)
                                 new_qty = current_qty + add_qty
-                                if new_qty < 0:
-                                    new_qty = 0
+                                if new_qty < 0: new_qty = 0
                                     
                                 latest_inv["scanned_items"][clean_code] = new_qty
                                 save_shared_inventory(latest_inv)
@@ -529,7 +543,6 @@ with main_tab2:
                 st.dataframe(df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)']), use_container_width=True, hide_index=True)
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # تصدير التقرير كملف إكسيل (.xlsx) بدلاً من CSV لمنع مشاكل اللغة العربية
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                     df_report.to_excel(writer, index=False, sheet_name='تقرير الجرد')
@@ -542,12 +555,60 @@ with main_tab2:
                 )
                 
                 st.markdown("---")
-                if st.button("🛑 إغلاق وإنهاء جلسة الجرد للجميع"):
-                    latest_inv = load_shared_inventory()
-                    latest_inv["is_active"] = False
-                    latest_inv["scanned_items"] = {}
-                    save_shared_inventory(latest_inv)
-                    if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
-                    st.rerun()
+                
+                # إخفاء زرار الإغلاق عن الموظفين، وإظهاره للأدمن فقط مع ميزة الأرشفة
+                if st.session_state.current_user == "abobakr":
+                    if st.button("🛑 إغلاق وإنهاء جلسة الجرد للجميع وحفظها بالأرشيف"):
+                        record = {
+                            "timestamp": str(datetime.datetime.now()),
+                            "name": shared_inv.get('name', 'بدون اسم'),
+                            "date": shared_inv.get('date', ''),
+                            "reason": shared_inv.get('reason', ''),
+                            "report": report_data
+                        }
+                        save_to_history(record)
+                        
+                        latest_inv = load_shared_inventory()
+                        latest_inv["is_active"] = False
+                        latest_inv["scanned_items"] = {}
+                        save_shared_inventory(latest_inv)
+                        if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
+                        st.rerun()
+                else:
+                    st.info("🔒 صلاحية إنهاء وإغلاق الجرد متاحة للإدارة (abobakr) فقط.")
+
+    # ==========================================
+    # 📁 أرشيف الإدارة (يظهر فقط للأدمن abobakr)
+    # ==========================================
+    if st.session_state.current_user == "abobakr":
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        st.markdown("### 📁 أرشيف جلسات الجرد السابقة (للإدارة فقط)")
+        
+        history = load_history()
+        if not history:
+            st.info("لا توجد جلسات جرد سابقة محفوظة في الأرشيف.")
+        else:
+            for idx, record in enumerate(reversed(history)):
+                with st.expander(f"📌 جرد: {record['name']} | التاريخ: {record['date']} | السبب: {record['reason']}"):
+                    df_hist = pd.DataFrame(record['report'])
+                    
+                    def color_variance_hist(val):
+                        if val < 0: return 'color: red; font-weight: bold;'
+                        elif val > 0: return 'color: blue; font-weight: bold;'
+                        return 'color: green;'
+                        
+                    st.dataframe(df_hist.style.map(color_variance_hist, subset=['الفروقات (عجز/زيادة)']), use_container_width=True, hide_index=True)
+                    
+                    buffer_hist = io.BytesIO()
+                    with pd.ExcelWriter(buffer_hist, engine='openpyxl') as writer:
+                        df_hist.to_excel(writer, index=False, sheet_name='تقرير الجرد')
+                    
+                    st.download_button(
+                        label=f"📥 تحميل تقرير {record['name']} (Excel)",
+                        data=buffer_hist.getvalue(),
+                        file_name=f"Archive_{record['name']}_{record['date']}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"dl_hist_{idx}"
+                    )
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
