@@ -13,6 +13,7 @@ from streamlit_cropper import st_cropper
 import io
 import datetime
 import json
+import streamlit.components.v1 as components  # المكتبة المسئولة عن تشغيل الجافا سكريبت
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -348,7 +349,6 @@ with main_tab2:
     
     if not shared_inv.get("is_active", False):
         st.markdown("### 🆕 إعداد جلسة جرد تشاركية جديدة")
-        st.info("عند فتح جلسة الجرد، ستتمكن أنت وكل الموظفين المسجلين من إضافة الأرصدة لنفس الجلسة في نفس الوقت!")
         with st.form("inv_setup_form"):
             col1, col2, col3 = st.columns(3)
             with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
@@ -427,6 +427,8 @@ with main_tab2:
 
             with inv_tab2:
                 st.markdown("### 🔫 مسح الباركود للجرد (مزامنة فورية مع باقي الأجهزة)")
+                
+                # الـ Form الخاص بالمسدس (clear_on_submit بتمسح الخانة فوراً بعد الـ Enter)
                 with st.form("barcode_scanner_form", clear_on_submit=True):
                     col_b, col_q = st.columns([3, 1])
                     with col_b: scan_code = st.text_input("كود الصنف (الباركود):")
@@ -443,7 +445,6 @@ with main_tab2:
                                 break
                                 
                         if found:
-                            # ⚠️ تحميل أحدث نسخة من الجرد عشان لو موظف تاني ضاف حاجة تتحدث فوراً ⚠️
                             latest_inv = load_shared_inventory()
                             if "scanned_items" not in latest_inv: latest_inv["scanned_items"] = {}
                             
@@ -454,6 +455,28 @@ with main_tab2:
                             st.success(f"✅ تمت إضافة ({add_qty}) بواسطة ({st.session_state.current_user}) | إجمالي الصنف الآن: {latest_inv['scanned_items'][clean_code]}")
                             render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"إجمالي الجرد الفعلي للصنف: {latest_inv['scanned_items'][clean_code]} قطعة")
                         else: st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
+                
+                # حقنة الجافا سكريبت لإرجاع الماوس للخانة تلقائياً
+                components.html(
+                    """
+                    <script>
+                    const focusInput = () => {
+                        const inputs = window.parent.document.querySelectorAll('input[type="text"]');
+                        for (let input of inputs) {
+                            if (input.getAttribute('aria-label') === 'كود الصنف (الباركود):') {
+                                input.focus();
+                                break;
+                            }
+                        }
+                    };
+                    // تشغيل السكريبت فوراً وبعد أجزاء من الثانية لضمان الاستجابة بعد الـ Rerun
+                    focusInput();
+                    setTimeout(focusInput, 100);
+                    setTimeout(focusInput, 500);
+                    </script>
+                    """,
+                    height=0
+                )
 
             with inv_tab3:
                 st.markdown("### ⚖️ تقرير الفروقات النهائي (الرصيد الدفتري vs الفعلي)")
