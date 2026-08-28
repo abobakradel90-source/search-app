@@ -427,16 +427,21 @@ with main_tab2:
             with inv_tab2:
                 st.markdown("### 🔫 مسح الباركود للجرد (التحقق قبل الإضافة)")
                 
-                # تهيئة ذاكرة الجرد اللحظية
+                # تهيئة متغيرات الجرد اللحظية وخدعة التفريغ قبل الرسم
                 if "scan_input" not in st.session_state: st.session_state.scan_input = ""
                 if "last_success_msg" not in st.session_state: st.session_state.last_success_msg = ""
+                if "clear_scan" not in st.session_state: st.session_state.clear_scan = False
                 
-                # عرض رسالة النجاح المخزنة
+                # تفريغ الخانة برمجياً قبل رسمها لتجنب StreamlitAPIException
+                if st.session_state.clear_scan:
+                    st.session_state.scan_input = ""
+                    st.session_state.clear_scan = False
+                
                 if st.session_state.last_success_msg:
                     st.success(st.session_state.last_success_msg)
                     st.session_state.last_success_msg = ""
 
-                # خانة الباركود مستقلة (بدون زرار إضافة)
+                # رسم خانة الباركود
                 scan_code = st.text_input("كود الصنف (الباركود):", key="scan_input")
                 
                 if scan_code:
@@ -450,10 +455,8 @@ with main_tab2:
                             
                     if found:
                         st.info("✅ تم العثور على الصنف. تأكد من البيانات ثم أضف الكمية:")
-                        # عرض كارت الصنف فوراً للمراجعة بالعين
                         render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'])
                         
-                        # فورم الإضافة (بيظهر بس لو الكود صح)
                         with st.form("confirm_add_form"):
                             add_qty = st.number_input("الكمية المضافة:", min_value=1, value=1)
                             confirmed = st.form_submit_button("تأكيد الإضافة للرصيد الفعلي 📥")
@@ -465,17 +468,16 @@ with main_tab2:
                                 latest_inv["scanned_items"][clean_code] = current_qty + add_qty
                                 save_shared_inventory(latest_inv)
                                 
-                                # حفظ رسالة النجاح وتفريغ الخانة لبدء مسح جديد
                                 st.session_state.last_success_msg = f"✅ تمت إضافة ({add_qty}) للصنف: {clean_code} | إجمالي الصنف الآن: {latest_inv['scanned_items'][clean_code]}"
-                                st.session_state.scan_input = ""
+                                # تفعيل خدعة التفريغ للّفة القادمة
+                                st.session_state.clear_scan = True
                                 st.rerun()
                     else:
                         st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
                         if st.button("مسح الكود والمحاولة مرة أخرى"):
-                            st.session_state.scan_input = ""
+                            st.session_state.clear_scan = True
                             st.rerun()
 
-                # حقنة الجافا سكريبت الذكية للتركيز التلقائي
                 js_code = """
                 <script>
                 const focusInput = () => {
