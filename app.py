@@ -12,33 +12,39 @@ import base64
 from streamlit_cropper import st_cropper
 import io
 import datetime
+import json
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
 
 USERS = {
     "abobakr": "admin2026",    
-    "SAWY": "123456",       
-    "ZIDAN": "123456",
-    "AHMED": "123456",         # موظف جديد
-    "GOMAA": "654321"      # موظف جديد تاني
+    "mohamed": "123456",       
+    "ahmed": "edstore"         
 }
+
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
-if 'inventory_session' not in st.session_state:
-    st.session_state.inventory_session = {} 
-if 'inv_active' not in st.session_state:
-    st.session_state.inv_active = False
-if 'inv_name' not in st.session_state:
-    st.session_state.inv_name = ""
-if 'inv_reason' not in st.session_state:
-    st.session_state.inv_reason = ""
-if 'inv_date' not in st.session_state:
-    st.session_state.inv_date = ""
-if 'inv_custom_df' not in st.session_state:
-    st.session_state.inv_custom_df = None
+
+# ==========================================
+# 🌐 دوال الجرد التشاركي (الشبكة المركزية)
+# ==========================================
+SHARED_INV_FILE = "shared_inventory.json"
+SHARED_DF_FILE = "shared_custom_df.csv"
+
+def load_shared_inventory():
+    if os.path.exists(SHARED_INV_FILE):
+        try:
+            with open(SHARED_INV_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}}
+
+def save_shared_inventory(data):
+    with open(SHARED_INV_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 def get_image_base64(img_path):
     try:
@@ -114,7 +120,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🛑 بوابة تسجيل الدخول (Login Wall)
+# 🛑 بوابة تسجيل الدخول
 # ==========================================
 if not st.session_state.logged_in:
     st.markdown('<div class="login-box">', unsafe_allow_html=True)
@@ -127,9 +133,12 @@ if not st.session_state.logged_in:
     password = st.text_input("🔑 كلمة المرور", placeholder="ادخل الباسورد", type="password")
     
     if st.button("تسجيل الدخول 🚀"):
-        if username in USERS and USERS[username] == password:
+        clean_user = str(username).strip().lower()
+        clean_pass = str(password).strip()
+        
+        if clean_user in USERS and USERS[clean_user] == clean_pass:
             st.session_state.logged_in = True
-            st.session_state.current_user = username
+            st.session_state.current_user = clean_user
             st.rerun()
         else:
             st.error("❌ البيانات غير صحيحة، تأكد من اسم المستخدم أو كلمة المرور.")
@@ -156,7 +165,7 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 3. محرك الذكاء الاصطناعي والدوال (النسخة الأصلية) ---
+# --- 3. محرك الذكاء الاصطناعي والدوال ---
 @st.cache_resource
 def download_new_chroma_db():
     zip_path = "chroma_db.zip"
@@ -196,7 +205,6 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
-# الكود الأصلي النظيف للبحث البصري
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
@@ -235,7 +243,6 @@ def parse_row_info(row, df_cols):
         
     return p_code, p_name, p_stock
 
-# دالة تصميم الكارت نظيفة بدون مسافات إضافية لمنع أخطاء الـ HTML
 def render_product_card(p_code, p_name, p_stock, custom_message="", details_html=""):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
     for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
@@ -250,10 +257,8 @@ def render_product_card(p_code, p_name, p_stock, custom_message="", details_html
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
     stock_text = f"📦 الرصيد الدفتري: {p_stock}"
-    
     msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
 
-    # كتابة الكود بدون Indentation لمنع Streamlit من تحويله لكود نصي
     html_str = f"""<div class="product-card">
 {img_html}
 <div class="product-details" style="flex-grow: 1;">
@@ -264,7 +269,6 @@ def render_product_card(p_code, p_name, p_stock, custom_message="", details_html
 {msg_html}
 </div>
 </div>"""
-
     st.markdown(html_str, unsafe_allow_html=True)
 
 # --- 4. التخطيط الرئيسي ---
@@ -284,10 +288,8 @@ with main_tab1:
             st.markdown("### ✨ نتائج البحث النصي:")
             for idx, row in matched.iterrows():
                 p_code, p_name, p_stock = parse_row_info(row, df_products.columns)
-                # إرجاع تفاصيل كل أعمدة الإكسيل في البحث النصي زي ما كانت
                 details = " | ".join([f"<b>{col}:</b> {row[col]}" for col in df_products.columns])
                 details_html = f'<div style="color: #64748B; font-size: 14px; margin-top: 8px;">{details}</div>'
-                
                 render_product_card(p_code, p_name, p_stock, details_html=details_html)
         else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
     
@@ -338,9 +340,15 @@ with main_tab1:
                             render_product_card(p_code, p_name, p_stock)
                 except Exception as e: st.error(f"⚠️ حدث خطأ في البحث البصري: {e}")
 
+# ==========================================
+# 🌐 التبويب الثاني: مديول الجرد الشبكي المتكامل
+# ==========================================
 with main_tab2:
-    if not st.session_state.inv_active:
-        st.markdown("### 🆕 إعداد جلسة جرد جديدة")
+    shared_inv = load_shared_inventory()
+    
+    if not shared_inv.get("is_active", False):
+        st.markdown("### 🆕 إعداد جلسة جرد تشاركية جديدة")
+        st.info("عند فتح جلسة الجرد، ستتمكن أنت وكل الموظفين المسجلين من إضافة الأرصدة لنفس الجلسة في نفس الوقت!")
         with st.form("inv_setup_form"):
             col1, col2, col3 = st.columns(3)
             with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
@@ -349,33 +357,45 @@ with main_tab2:
             
             uploaded_inv_file = st.file_uploader("📎 رفع ملف الأرصدة الدفترية اللحظية (Excel/CSV) - اختياري", type=['csv', 'xlsx'])
             
-            submitted_setup = st.form_submit_button("🚀 فتح جلسة الجرد وبدء العمل")
+            submitted_setup = st.form_submit_button("🚀 فتح جلسة الجرد للجميع")
             if submitted_setup:
                 if not inv_name: st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
                 else:
-                    st.session_state.inv_name = inv_name
-                    st.session_state.inv_reason = inv_reason
-                    st.session_state.inv_date = str(inv_date)
-                    st.session_state.inventory_session = {}
-                    st.session_state.inv_active = True
                     if uploaded_inv_file is not None:
                         try:
-                            if uploaded_inv_file.name.endswith('.csv'): st.session_state.inv_custom_df = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig')
-                            else: st.session_state.inv_custom_df = pd.read_excel(uploaded_inv_file)
+                            if uploaded_inv_file.name.endswith('.csv'): 
+                                df_custom = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig')
+                            else: 
+                                df_custom = pd.read_excel(uploaded_inv_file)
+                            df_custom.to_csv(SHARED_DF_FILE, index=False, encoding='utf-8-sig')
                         except:
                             st.error("خطأ في الملف المرفق، سيتم استخدام الأرصدة الأساسية.")
-                            st.session_state.inv_custom_df = None
-                    else: st.session_state.inv_custom_df = None
+                            if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
+                    else:
+                        if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
+                    
+                    data = {
+                        "is_active": True,
+                        "name": inv_name,
+                        "reason": inv_reason,
+                        "date": str(inv_date),
+                        "scanned_items": {}
+                    }
+                    save_shared_inventory(data)
                     st.rerun()
     else:
         st.markdown(f"""
         <div class="inv-active-bar">
-            <div>📌 <b>جرد نشط:</b> {st.session_state.inv_name} &nbsp;|&nbsp; <b>السبب:</b> {st.session_state.inv_reason} &nbsp;|&nbsp; <b>التاريخ:</b> {st.session_state.inv_date}</div>
+            <div>📌 <b>جرد شبكي نشط:</b> {shared_inv.get('name')} &nbsp;|&nbsp; <b>السبب:</b> {shared_inv.get('reason')} &nbsp;|&nbsp; <b>التاريخ:</b> {shared_inv.get('date')}</div>
         </div>
         """, unsafe_allow_html=True)
         
-        active_df = st.session_state.inv_custom_df if st.session_state.inv_custom_df is not None else df_products
-        
+        if os.path.exists(SHARED_DF_FILE):
+            try: active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
+            except: active_df = df_products
+        else:
+            active_df = df_products
+            
         if active_df is None: st.error("⚠️ لا توجد داتا أرصدة لإجراء الجرد!")
         else:
             inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود الفعلي", "⚖️ تقرير الفروقات (تصدير)"])
@@ -391,6 +411,9 @@ with main_tab2:
                 total_qty += s_val
                 if s_val <= 0: out_of_stock += 1
                 system_inventory[code] = {'name': name, 'sys_stock': s_val}
+                
+            scanned_items = shared_inv.get("scanned_items", {})
+            total_scanned = sum(scanned_items.values())
 
             with inv_tab1:
                 st.markdown("### 📊 ملخص الأرصدة الدفترية لهذه الجلسة")
@@ -398,10 +421,12 @@ with main_tab2:
                 with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{total_items}</div></div>', unsafe_allow_html=True)
                 with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
                 with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
-                st.markdown(f"<br>### 🛒 إجمالي ما تم مسحه فعلياً: **{sum(st.session_state.inventory_session.values())}** قطعة", unsafe_allow_html=True)
+                st.markdown(f"<br>### 🛒 إجمالي ما تم مسحه فعلياً من جميع الموظفين: **{total_scanned}** قطعة", unsafe_allow_html=True)
+                
+                if st.button("🔄 تحديث الأرقام (ريفرش)"): st.rerun()
 
             with inv_tab2:
-                st.markdown("### 🔫 مسح الباركود للجرد")
+                st.markdown("### 🔫 مسح الباركود للجرد (مزامنة فورية مع باقي الأجهزة)")
                 with st.form("barcode_scanner_form", clear_on_submit=True):
                     col_b, col_q = st.columns([3, 1])
                     with col_b: scan_code = st.text_input("كود الصنف (الباركود):")
@@ -418,17 +443,24 @@ with main_tab2:
                                 break
                                 
                         if found:
-                            st.session_state.inventory_session[clean_code] = st.session_state.inventory_session.get(clean_code, 0) + add_qty
-                            st.success(f"✅ تمت إضافة ({add_qty}) للصنف: {clean_code} | المجرد الفعلي: {st.session_state.inventory_session[clean_code]}")
-                            render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"إجمالي الجرد الفعلي: {st.session_state.inventory_session[clean_code]} قطعة")
+                            # ⚠️ تحميل أحدث نسخة من الجرد عشان لو موظف تاني ضاف حاجة تتحدث فوراً ⚠️
+                            latest_inv = load_shared_inventory()
+                            if "scanned_items" not in latest_inv: latest_inv["scanned_items"] = {}
+                            
+                            current_qty = latest_inv["scanned_items"].get(clean_code, 0)
+                            latest_inv["scanned_items"][clean_code] = current_qty + add_qty
+                            save_shared_inventory(latest_inv)
+                            
+                            st.success(f"✅ تمت إضافة ({add_qty}) بواسطة ({st.session_state.current_user}) | إجمالي الصنف الآن: {latest_inv['scanned_items'][clean_code]}")
+                            render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"إجمالي الجرد الفعلي للصنف: {latest_inv['scanned_items'][clean_code]} قطعة")
                         else: st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
 
             with inv_tab3:
-                st.markdown("### ⚖️ تقرير الفروقات (الرصيد الدفتري vs الفعلي)")
+                st.markdown("### ⚖️ تقرير الفروقات النهائي (الرصيد الدفتري vs الفعلي)")
                 report_data = []
                 for code, info in system_inventory.items():
                     sys_qty = info['sys_stock']
-                    actual_qty = st.session_state.inventory_session.get(code, 0)
+                    actual_qty = scanned_items.get(code, 0)
                     variance = actual_qty - sys_qty
                     status = "🟢 مطابق"
                     if variance > 0: status = "🔵 زيادة"
@@ -444,13 +476,15 @@ with main_tab2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 csv = df_report.to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(label="📥 تحميل التقرير النهائي", data=csv, file_name=f"Inventory_Report_{st.session_state.inv_name}_{st.session_state.inv_date}.csv", mime="text/csv")
+                st.download_button(label="📥 تحميل التقرير النهائي للتسليم", data=csv, file_name=f"Inventory_Report_{shared_inv.get('name')}_{shared_inv.get('date')}.csv", mime="text/csv")
                 
                 st.markdown("---")
-                if st.button("🛑 إغلاق وإنهاء جلسة الجرد"):
-                    st.session_state.inv_active = False
-                    st.session_state.inv_custom_df = None
-                    st.session_state.inventory_session = {}
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد للجميع"):
+                    latest_inv = load_shared_inventory()
+                    latest_inv["is_active"] = False
+                    latest_inv["scanned_items"] = {}
+                    save_shared_inventory(latest_inv)
+                    if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
                     st.rerun()
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
