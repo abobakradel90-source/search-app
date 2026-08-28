@@ -13,7 +13,7 @@ from streamlit_cropper import st_cropper
 import io
 import datetime
 import json
-import streamlit.components.v1 as components  # المكتبة المسئولة عن تشغيل الجافا سكريبت
+import streamlit.components.v1 as components
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -422,61 +422,86 @@ with main_tab2:
                 with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
                 with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
                 st.markdown(f"<br>### 🛒 إجمالي ما تم مسحه فعلياً من جميع الموظفين: **{total_scanned}** قطعة", unsafe_allow_html=True)
-                
                 if st.button("🔄 تحديث الأرقام (ريفرش)"): st.rerun()
 
             with inv_tab2:
-                st.markdown("### 🔫 مسح الباركود للجرد (مزامنة فورية مع باقي الأجهزة)")
+                st.markdown("### 🔫 مسح الباركود للجرد (التحقق قبل الإضافة)")
                 
-                # الـ Form الخاص بالمسدس (clear_on_submit بتمسح الخانة فوراً بعد الـ Enter)
-                with st.form("barcode_scanner_form", clear_on_submit=True):
-                    col_b, col_q = st.columns([3, 1])
-                    with col_b: scan_code = st.text_input("كود الصنف (الباركود):")
-                    with col_q: add_qty = st.number_input("الكمية المضافة:", min_value=1, value=1)
-                    submitted = st.form_submit_button("إضافة للرصيد الفعلي 📥")
-                    
-                    if submitted and scan_code:
-                        clean_code = str(scan_code).strip().upper()
-                        found = False
-                        for sys_c in system_inventory.keys():
-                            if sys_c.upper() == clean_code:
-                                clean_code = sys_c 
-                                found = True
-                                break
+                # تهيئة ذاكرة الجرد اللحظية
+                if "scan_input" not in st.session_state: st.session_state.scan_input = ""
+                if "last_success_msg" not in st.session_state: st.session_state.last_success_msg = ""
+                
+                # عرض رسالة النجاح المخزنة
+                if st.session_state.last_success_msg:
+                    st.success(st.session_state.last_success_msg)
+                    st.session_state.last_success_msg = ""
+
+                # خانة الباركود مستقلة (بدون زرار إضافة)
+                scan_code = st.text_input("كود الصنف (الباركود):", key="scan_input")
+                
+                if scan_code:
+                    clean_code = str(scan_code).strip().upper()
+                    found = False
+                    for sys_c in system_inventory.keys():
+                        if sys_c.upper() == clean_code:
+                            clean_code = sys_c 
+                            found = True
+                            break
+                            
+                    if found:
+                        st.info("✅ تم العثور على الصنف. تأكد من البيانات ثم أضف الكمية:")
+                        # عرض كارت الصنف فوراً للمراجعة بالعين
+                        render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'])
+                        
+                        # فورم الإضافة (بيظهر بس لو الكود صح)
+                        with st.form("confirm_add_form"):
+                            add_qty = st.number_input("الكمية المضافة:", min_value=1, value=1)
+                            confirmed = st.form_submit_button("تأكيد الإضافة للرصيد الفعلي 📥")
+                            
+                            if confirmed:
+                                latest_inv = load_shared_inventory()
+                                if "scanned_items" not in latest_inv: latest_inv["scanned_items"] = {}
+                                current_qty = latest_inv["scanned_items"].get(clean_code, 0)
+                                latest_inv["scanned_items"][clean_code] = current_qty + add_qty
+                                save_shared_inventory(latest_inv)
                                 
-                        if found:
-                            latest_inv = load_shared_inventory()
-                            if "scanned_items" not in latest_inv: latest_inv["scanned_items"] = {}
-                            
-                            current_qty = latest_inv["scanned_items"].get(clean_code, 0)
-                            latest_inv["scanned_items"][clean_code] = current_qty + add_qty
-                            save_shared_inventory(latest_inv)
-                            
-                            st.success(f"✅ تمت إضافة ({add_qty}) بواسطة ({st.session_state.current_user}) | إجمالي الصنف الآن: {latest_inv['scanned_items'][clean_code]}")
-                            render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'], f"إجمالي الجرد الفعلي للصنف: {latest_inv['scanned_items'][clean_code]} قطعة")
-                        else: st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
-                
-                # حقنة الجافا سكريبت لإرجاع الماوس للخانة تلقائياً
-                components.html(
-                    """
-                    <script>
-                    const focusInput = () => {
-                        const inputs = window.parent.document.querySelectorAll('input[type="text"]');
+                                # حفظ رسالة النجاح وتفريغ الخانة لبدء مسح جديد
+                                st.session_state.last_success_msg = f"✅ تمت إضافة ({add_qty}) للصنف: {clean_code} | إجمالي الصنف الآن: {latest_inv['scanned_items'][clean_code]}"
+                                st.session_state.scan_input = ""
+                                st.rerun()
+                    else:
+                        st.error(f"❌ الباركود ({scan_code}) غير مسجل في أرصدة هذه الجلسة!")
+                        if st.button("مسح الكود والمحاولة مرة أخرى"):
+                            st.session_state.scan_input = ""
+                            st.rerun()
+
+                # حقنة الجافا سكريبت الذكية للتركيز التلقائي
+                js_code = """
+                <script>
+                const focusInput = () => {
+                    const doc = window.parent.document;
+                    const isScanEmpty = "%s" === "";
+                    if (isScanEmpty) {
+                        const inputs = doc.querySelectorAll('input[type="text"]');
                         for (let input of inputs) {
                             if (input.getAttribute('aria-label') === 'كود الصنف (الباركود):') {
                                 input.focus();
                                 break;
                             }
                         }
-                    };
-                    // تشغيل السكريبت فوراً وبعد أجزاء من الثانية لضمان الاستجابة بعد الـ Rerun
-                    focusInput();
-                    setTimeout(focusInput, 100);
-                    setTimeout(focusInput, 500);
-                    </script>
-                    """,
-                    height=0
-                )
+                    } else {
+                        const numInputs = doc.querySelectorAll('input[type="number"]');
+                        if(numInputs.length > 0) {
+                            numInputs[0].focus();
+                        }
+                    }
+                };
+                focusInput();
+                setTimeout(focusInput, 100);
+                setTimeout(focusInput, 500);
+                </script>
+                """ % (st.session_state.scan_input)
+                components.html(js_code, height=0)
 
             with inv_tab3:
                 st.markdown("### ⚖️ تقرير الفروقات النهائي (الرصيد الدفتري vs الفعلي)")
