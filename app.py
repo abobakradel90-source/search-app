@@ -18,10 +18,11 @@ st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="�
 
 USERS = {
     "abobakr": "admin2026",    
-    "mohamed": "123456",       
-    "ahmed": "edstore"         
+    "SAWY": "123456",       
+    "ZIDAN": "123456",
+    "AHMED": "123456",         # موظف جديد
+    "GOMAA": "654321"      # موظف جديد تاني
 }
-
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'current_user' not in st.session_state:
