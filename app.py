@@ -455,7 +455,6 @@ with main_tab2:
                         render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'])
                         
                         with st.form("confirm_add_form"):
-                            # تم إزالة min_value عشان يقبل أرقام سالبة للخصم العكسي
                             add_qty = st.number_input("الكمية المضافة أو المخصومة (اكتب - قبل الرقم للخصم):", value=1)
                             confirmed = st.form_submit_button("تأكيد العملية 📥")
                             
@@ -464,8 +463,6 @@ with main_tab2:
                                 if "scanned_items" not in latest_inv: latest_inv["scanned_items"] = {}
                                 
                                 current_qty = latest_inv["scanned_items"].get(clean_code, 0)
-                                
-                                # حساب الرصيد الجديد ومنعه من النزول تحت الصفر
                                 new_qty = current_qty + add_qty
                                 if new_qty < 0:
                                     new_qty = 0
@@ -473,7 +470,6 @@ with main_tab2:
                                 latest_inv["scanned_items"][clean_code] = new_qty
                                 save_shared_inventory(latest_inv)
                                 
-                                # تحديد كلمة "إضافة" أو "خصم" للرسالة بناءً على إشارة الرقم
                                 action_word = "إضافة" if add_qty >= 0 else "خصم"
                                 abs_qty = abs(add_qty)
                                 
@@ -533,8 +529,17 @@ with main_tab2:
                 st.dataframe(df_report.style.map(color_variance, subset=['الفروقات (عجز/زيادة)']), use_container_width=True, hide_index=True)
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                csv = df_report.to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(label="📥 تحميل التقرير النهائي للتسليم", data=csv, file_name=f"Inventory_Report_{shared_inv.get('name')}_{shared_inv.get('date')}.csv", mime="text/csv")
+                # تصدير التقرير كملف إكسيل (.xlsx) بدلاً من CSV لمنع مشاكل اللغة العربية
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_report.to_excel(writer, index=False, sheet_name='تقرير الجرد')
+                
+                st.download_button(
+                    label="📥 تحميل التقرير النهائي للتسليم (Excel)",
+                    data=buffer.getvalue(),
+                    file_name=f"Inventory_Report_{shared_inv.get('name')}_{shared_inv.get('date')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
                 
                 st.markdown("---")
                 if st.button("🛑 إغلاق وإنهاء جلسة الجرد للجميع"):
