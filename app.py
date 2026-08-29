@@ -196,7 +196,6 @@ def load_vision_system():
 try: model, processor, collection = load_vision_system()
 except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
 
-# ⚠️ إزالة الكاش عشان يقرأ آخر إكسيل إنت رافعه فوراً
 def load_csv_data():
     try:
         df = pd.read_csv('products.csv', encoding='utf-8-sig', on_bad_lines='skip', engine='python')
@@ -206,9 +205,11 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
-# الدمج الكامل: لو رافع شيت جرد حديث، هنعتبره هو الأساس للأسعار والمبيعات
+# تحديث البيانات اللحظي
 if os.path.exists(SHARED_DF_FILE):
-    try: active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
+    try: 
+        active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
+        active_df.columns = active_df.columns.astype(str).str.strip()
     except: active_df = df_products
 else:
     active_df = df_products
@@ -231,29 +232,33 @@ def get_color_histogram(image):
 
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
+# الدالة المُحدثة لقراءة الإكسيل بالذكاء الاصطناعي لتفادي المسافات الوهمية
 def parse_row_info(row, df_cols):
     raw_code = str(row.iloc[0]).strip()
     p_code = raw_code.split('.')[0] 
     p_name, p_stock, p_price = "الاسم غير مسجل", "0", 0.0
     
-    name_cols = [c for c in df_cols if any(k in c.lower() for k in ['اسم', 'صنف', 'name', 'title'])]
-    if name_cols: p_name = str(row[name_cols[0]]).strip()
+    df_cols_str = [str(c).lower().strip() for c in df_cols]
+    
+    name_idx = next((i for i, c in enumerate(df_cols_str) if any(k in c for k in ['اسم', 'صنف', 'name', 'title'])), -1)
+    if name_idx >= 0: p_name = str(row.iloc[name_idx]).strip()
     elif len(df_cols) > 1: p_name = str(row.iloc[1]).strip()
         
-    stock_cols = [c for c in df_cols if any(k in c.lower() for k in ['رصيد', 'كمية', 'عدد', 'stock', 'qty'])]
-    if stock_cols: p_stock = str(row[stock_cols[0]]).strip()
+    stock_idx = next((i for i, c in enumerate(df_cols_str) if any(k in c for k in ['رصيد', 'كمية', 'عدد', 'stock', 'qty'])), -1)
+    if stock_idx >= 0: p_stock = str(row.iloc[stock_idx]).strip()
     elif len(df_cols) > 2: p_stock = str(row.iloc[2]).strip()
     
-    price_cols = [c for c in df_cols if any(k in c.lower() for k in ['سعر', 'ثمن', 'price', 'جملة', 'بيع', 'قيمة'])]
-    if price_cols:
-        raw_val = str(row[price_cols[0]]).replace(',', '').strip()
-        match = re.search(r'\d+(\.\d+)?', raw_val)
-        if match:
-            p_price = float(match.group())
-            
+    price_idx = next((i for i, c in enumerate(df_cols_str) if any(k in c for k in ['سعر', 'ثمن', 'price', 'جملة', 'بيع', 'قيمة'])), -1)
+    if price_idx >= 0:
+        raw_val = str(row.iloc[price_idx]).replace(',', '').strip()
+        if raw_val.lower() not in ['nan', 'none', 'null', '']:
+            match = re.search(r'\d+(\.\d+)?', raw_val)
+            if match:
+                p_price = float(match.group())
+                
     return p_code, p_name, p_stock, p_price
 
-def render_product_card(p_code, p_name, p_stock, custom_message="", details_html="", is_sales=False):
+def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message="", details_html="", is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
     for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
         img_path = os.path.join("compressed_images", f"{p_code}{ext}")
@@ -266,7 +271,12 @@ def render_product_card(p_code, p_name, p_stock, custom_message="", details_html
     is_out = s_val <= 0
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
-    stock_text = f"🛒 الرصيد المتاح: {p_stock}" if is_sales else f"📦 الرصيد الدفتري: {p_stock}"
+    if is_sales:
+        price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price is not None else ""
+        stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}"
+    else:
+        stock_text = f"📦 الرصيد الدفتري: {p_stock}"
+        
     msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
 
     html_str = f"""<div class="product-card">
@@ -288,7 +298,7 @@ if active_df is not None:
         code, name, stock, price = parse_row_info(row, active_df.columns)
         try: s_val = float(stock)
         except: s_val = 0
-        system_inventory[code] = {'name': name, 'sys_stock': s_val, 'price': price}
+        system_inventory[str(code).upper()] = {'name': name, 'sys_stock': s_val, 'price': price}
 
 main_tab1, main_tab2, main_tab3 = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
 
@@ -563,7 +573,8 @@ with main_tab3:
                     local_cart_qty = sum(item["qty"] for item in st.session_state.invoice_cart if item["code"] == clean_code)
                     live_qty = sys_qty - global_sold - local_cart_qty
                     
-                    render_product_card(clean_code, system_inventory[clean_code]['name'], live_qty, is_sales=True)
+                    # الكارت الآن بيعرض السعر مباشرة للتأكيد السريع
+                    render_product_card(clean_code, system_inventory[clean_code]['name'], live_qty, p_price=auto_price, is_sales=True)
                     
                     if live_qty <= 0:
                         st.error("❌ تحذير: رصيد هذا الصنف نفذ ولا يمكنك إضافته للفاتورة!")
@@ -573,7 +584,6 @@ with main_tab3:
                             cc1, cc2 = st.columns(2)
                             with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1)
                             with cc2: 
-                                # إزالة הـ Key لمنع تعليق الخانة على الصفر
                                 st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True)
                                 sell_price = float(auto_price)
                             
