@@ -196,6 +196,7 @@ def load_vision_system():
 try: model, processor, collection = load_vision_system()
 except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
 
+# ⚠️ إزالة نظام الكاش بالكامل هنا عشان الإكسيل يتحدث فوراً ⚠️
 def load_csv_data():
     try:
         df = pd.read_csv('products.csv', encoding='utf-8-sig', on_bad_lines='skip', engine='python')
@@ -205,8 +206,9 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
-# تحديث البيانات اللحظي
-if os.path.exists(SHARED_DF_FILE):
+# تحديد الشيت الفعال للكميات
+shared_inv_state = load_shared_inventory()
+if shared_inv_state.get("is_active", False) and os.path.exists(SHARED_DF_FILE):
     try: 
         active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
         active_df.columns = active_df.columns.astype(str).str.strip()
@@ -232,7 +234,7 @@ def get_color_histogram(image):
 
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
-# الدالة المُحدثة لقراءة الإكسيل بالذكاء الاصطناعي لتفادي المسافات الوهمية
+# استخراج ذكي وشامل للسعر
 def parse_row_info(row, df_cols):
     raw_code = str(row.iloc[0]).strip()
     p_code = raw_code.split('.')[0] 
@@ -248,14 +250,19 @@ def parse_row_info(row, df_cols):
     if stock_idx >= 0: p_stock = str(row.iloc[stock_idx]).strip()
     elif len(df_cols) > 2: p_stock = str(row.iloc[2]).strip()
     
-    price_idx = next((i for i, c in enumerate(df_cols_str) if any(k in c for k in ['سعر', 'ثمن', 'price', 'جملة', 'بيع', 'قيمة'])), -1)
+    # محاولة سحب السعر من اسم العمود، ولو فشل يسحب من العمود الخامس (E) إجبارياً
+    price_idx = next((i for i, c in enumerate(df_cols_str) if any(k in c for k in ['سعر', 'ثمن', 'price', 'جملة', 'بيع', 'قيمة', 'السعر'])), -1)
+    
+    raw_val = ""
     if price_idx >= 0:
         raw_val = str(row.iloc[price_idx]).replace(',', '').strip()
-        if raw_val.lower() not in ['nan', 'none', 'null', '']:
-            match = re.search(r'\d+(\.\d+)?', raw_val)
-            if match:
-                p_price = float(match.group())
-                
+    elif len(df_cols) >= 5: # Column E
+        raw_val = str(row.iloc[4]).replace(',', '').strip()
+        
+    if raw_val.lower() not in ['nan', 'none', 'null', '']:
+        match = re.search(r'\d+(\.\d+)?', raw_val)
+        if match: p_price = float(match.group())
+            
     return p_code, p_name, p_stock, p_price
 
 def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message="", details_html="", is_sales=False):
@@ -271,8 +278,9 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message=""
     is_out = s_val <= 0
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
+    
     if is_sales:
-        price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price is not None else ""
+        price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price else ""
         stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}"
     else:
         stock_text = f"📦 الرصيد الدفتري: {p_stock}"
@@ -291,14 +299,28 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message=""
 </div>"""
     st.markdown(html_str, unsafe_allow_html=True)
 
-# بناء القاموس الموحد لكل النظام من الشيت الفعال
+# بناء القاموس: دمج الكميات من الشيت الفعال، والأسعار الإجبارية من products.csv
 system_inventory = {}
 if active_df is not None:
     for idx, row in active_df.iterrows():
         code, name, stock, price = parse_row_info(row, active_df.columns)
+        c_up = str(code).upper()
         try: s_val = float(stock)
         except: s_val = 0
-        system_inventory[str(code).upper()] = {'name': name, 'sys_stock': s_val, 'price': price}
+        system_inventory[c_up] = {'name': name, 'sys_stock': s_val, 'price': price}
+
+# إجبار السيستم إنه يسحب السعر من products.csv لو شيت الجرد مفيهوش سعر
+if df_products is not None:
+    for idx, row in df_products.iterrows():
+        code, name, stock, price = parse_row_info(row, df_products.columns)
+        c_up = str(code).upper()
+        if c_up in system_inventory:
+            if system_inventory[c_up]['price'] == 0.0 and price > 0:
+                system_inventory[c_up]['price'] = price
+        else:
+            try: s_val = float(stock)
+            except: s_val = 0
+            system_inventory[c_up] = {'name': name, 'sys_stock': s_val, 'price': price}
 
 main_tab1, main_tab2, main_tab3 = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
 
@@ -573,7 +595,6 @@ with main_tab3:
                     local_cart_qty = sum(item["qty"] for item in st.session_state.invoice_cart if item["code"] == clean_code)
                     live_qty = sys_qty - global_sold - local_cart_qty
                     
-                    # الكارت الآن بيعرض السعر مباشرة للتأكيد السريع
                     render_product_card(clean_code, system_inventory[clean_code]['name'], live_qty, p_price=auto_price, is_sales=True)
                     
                     if live_qty <= 0:
@@ -584,12 +605,12 @@ with main_tab3:
                             cc1, cc2 = st.columns(2)
                             with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1)
                             with cc2: 
-                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True)
+                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True, key=f"price_disp_{clean_code}")
                                 sell_price = float(auto_price)
                             
                             if st.form_submit_button("إضافة الصنف لمسودة الفاتورة 📥"):
                                 if sell_price <= 0: 
-                                    st.error("⚠️ سعر هذا الصنف غير مسجل في السيستم! يرجى تحديث الإكسيل من الإدارة أولاً.")
+                                    st.error("⚠️ سعر هذا الصنف غير مسجل في السيستم! تأكد من عمود السعر في ملف products.csv المرفوع.")
                                 else:
                                     st.session_state.invoice_cart.append({
                                         "code": clean_code,
