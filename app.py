@@ -14,7 +14,7 @@ import io
 import datetime
 import json
 import streamlit.components.v1 as components
-import re  # مكتبة الفلترة الذكية للأرقام
+import re
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -40,7 +40,6 @@ HISTORY_INV_FILE = "inventory_history.json"
 SHARED_SALES_FILE = "shared_sales.json"
 HISTORY_SALES_FILE = "sales_history.json"
 
-# -- دوال الجرد --
 def load_shared_inventory():
     if os.path.exists(SHARED_INV_FILE):
         try:
@@ -63,7 +62,6 @@ def save_to_inv_history(record):
     history.append(record)
     with open(HISTORY_INV_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
 
-# -- دوال المبيعات (فواتير الجملة) --
 def load_shared_sales():
     if os.path.exists(SHARED_SALES_FILE):
         try:
@@ -198,7 +196,7 @@ def load_vision_system():
 try: model, processor, collection = load_vision_system()
 except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
 
-@st.cache_data
+# ⚠️ إزالة الكاش عشان يقرأ آخر إكسيل إنت رافعه فوراً
 def load_csv_data():
     try:
         df = pd.read_csv('products.csv', encoding='utf-8-sig', on_bad_lines='skip', engine='python')
@@ -208,9 +206,31 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
-# ==========================================
-# 🔍 المُحلل الذكي للأسعار
-# ==========================================
+# الدمج الكامل: لو رافع شيت جرد حديث، هنعتبره هو الأساس للأسعار والمبيعات
+if os.path.exists(SHARED_DF_FILE):
+    try: active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
+    except: active_df = df_products
+else:
+    active_df = df_products
+
+def get_image_embedding(image):
+    image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
+    inputs = processor(images=image, return_tensors="pt")
+    with torch.no_grad():
+        features = model.get_image_features(**inputs)
+        if not isinstance(features, torch.Tensor):
+            if hasattr(features, 'image_embeds'): features = features.image_embeds
+            elif hasattr(features, 'pooler_output'): features = features.pooler_output
+            else: features = features[0]
+        return features.squeeze().numpy().tolist()
+
+def get_color_histogram(image):
+    img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
+    hist = img.histogram(); total = sum(hist) / 3
+    return [x / (total if total > 0 else 1) for x in hist]
+
+def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
+
 def parse_row_info(row, df_cols):
     raw_code = str(row.iloc[0]).strip()
     p_code = raw_code.split('.')[0] 
@@ -224,7 +244,6 @@ def parse_row_info(row, df_cols):
     if stock_cols: p_stock = str(row[stock_cols[0]]).strip()
     elif len(df_cols) > 2: p_stock = str(row.iloc[2]).strip()
     
-    # فلترة السعر باستخدام Regex لتجاهل الكلمات وجلب الرقم فقط
     price_cols = [c for c in df_cols if any(k in c.lower() for k in ['سعر', 'ثمن', 'price', 'جملة', 'بيع', 'قيمة'])]
     if price_cols:
         raw_val = str(row[price_cols[0]]).replace(',', '').strip()
@@ -262,10 +281,11 @@ def render_product_card(p_code, p_name, p_stock, custom_message="", details_html
 </div>"""
     st.markdown(html_str, unsafe_allow_html=True)
 
+# بناء القاموس الموحد لكل النظام من الشيت الفعال
 system_inventory = {}
-if df_products is not None:
-    for idx, row in df_products.iterrows():
-        code, name, stock, price = parse_row_info(row, df_products.columns)
+if active_df is not None:
+    for idx, row in active_df.iterrows():
+        code, name, stock, price = parse_row_info(row, active_df.columns)
         try: s_val = float(stock)
         except: s_val = 0
         system_inventory[code] = {'name': name, 'sys_stock': s_val, 'price': price}
@@ -277,16 +297,16 @@ main_tab1, main_tab2, main_tab3 = st.tabs(["🔍 محرك البحث الذكي"
 # ==========================================
 with main_tab1:
     search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", key="search_bar", label_visibility="collapsed")
-    if df_products is not None and search_query:
+    if active_df is not None and search_query:
         query = str(search_query).strip().lower().split('.')[0]
-        mask = pd.Series([False]*len(df_products))
-        for col in df_products.columns: mask = mask | df_products[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
-        matched = df_products[mask]
+        mask = pd.Series([False]*len(active_df))
+        for col in active_df.columns: mask = mask | active_df[col].astype(str).str.lower().str.contains(query, case=False, na=False, regex=False)
+        matched = active_df[mask]
         if not matched.empty:
             st.markdown("### ✨ نتائج البحث النصي:")
             for idx, row in matched.iterrows():
-                p_code, p_name, p_stock, _ = parse_row_info(row, df_products.columns)
-                details = " | ".join([f"<b>{col}:</b> {row[col]}" for col in df_products.columns])
+                p_code, p_name, p_stock, _ = parse_row_info(row, active_df.columns)
+                details = " | ".join([f"<b>{col}:</b> {row[col]}" for col in active_df.columns])
                 render_product_card(p_code, p_name, p_stock, details_html=f'<div style="color: #64748B; font-size: 14px; margin-top: 8px;">{details}</div>')
         else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
     
@@ -321,13 +341,13 @@ with main_tab1:
                         for res in refined[:3]:
                             p_code = res['fn'].split('.')[0]
                             p_name, p_stock = "غير مسجل", "0"
-                            if df_products is not None:
+                            if active_df is not None:
                                 tc = str(p_code).strip().lower()
-                                for col in df_products.columns:
-                                    cleaned = df_products[col].astype(str).str.strip().str.lower().str.replace('.jpg','',regex=False).str.replace('.png','',regex=False)
+                                for col in active_df.columns:
+                                    cleaned = active_df[col].astype(str).str.strip().str.lower().str.replace('.jpg','',regex=False).str.replace('.png','',regex=False)
                                     if (cleaned == tc).any():
-                                        row_data = df_products.loc[cleaned[cleaned == tc].index[0]]
-                                        _, p_name, p_stock, _ = parse_row_info(row_data, df_products.columns)
+                                        row_data = active_df.loc[cleaned[cleaned == tc].index[0]]
+                                        _, p_name, p_stock, _ = parse_row_info(row_data, active_df.columns)
                                         break
                             render_product_card(p_code, p_name, p_stock)
                 except Exception as e: st.error(f"⚠️ خطأ في البحث البصري: {e}")
@@ -362,25 +382,17 @@ with main_tab2:
                     st.rerun()
     else:
         st.markdown(f'<div class="inv-active-bar"><div>📌 <b>جرد شبكي نشط:</b> {shared_inv.get("name")} &nbsp;|&nbsp; <b>السبب:</b> {shared_inv.get("reason")}</div></div>', unsafe_allow_html=True)
-        active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig') if os.path.exists(SHARED_DF_FILE) else df_products
         if active_df is None: st.error("⚠️ لا توجد داتا أرصدة!")
         else:
             inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود الفعلي", "⚖️ تقرير الفروقات (تصدير)"])
-            sys_inv = {}
-            total_qty = 0; out_of_stock = 0
-            for idx, row in active_df.iterrows():
-                code, name, stock, _ = parse_row_info(row, active_df.columns)
-                try: s_val = float(stock)
-                except: s_val = 0
-                total_qty += s_val
-                if s_val <= 0: out_of_stock += 1
-                sys_inv[code] = {'name': name, 'sys_stock': s_val}
+            total_qty = sum(info['sys_stock'] for info in system_inventory.values())
+            out_of_stock = sum(1 for info in system_inventory.values() if info['sys_stock'] <= 0)
             
             scanned_items = shared_inv.get("scanned_items", {})
             
             with inv_tab1:
                 col1, col2, col3 = st.columns(3)
-                with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(active_df)}</div></div>', unsafe_allow_html=True)
+                with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(system_inventory)}</div></div>', unsafe_allow_html=True)
                 with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
                 with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
                 st.markdown(f"<br>### 🛒 إجمالي المجرد فعلياً: **{sum(scanned_items.values())}** قطعة", unsafe_allow_html=True)
@@ -398,10 +410,10 @@ with main_tab2:
                 scan_code = st.text_input("كود الصنف للجرد:", key="inv_scan")
                 if scan_code:
                     clean_code = str(scan_code).strip().upper()
-                    found_code = next((c for c in sys_inv.keys() if c.upper() == clean_code), None)
+                    found_code = next((c for c in system_inventory.keys() if c.upper() == clean_code), None)
                     if found_code:
                         st.info("✅ تم العثور على الصنف. أضف/اخصم الكمية:")
-                        render_product_card(found_code, sys_inv[found_code]['name'], sys_inv[found_code]['sys_stock'])
+                        render_product_card(found_code, system_inventory[found_code]['name'], system_inventory[found_code]['sys_stock'])
                         with st.form("confirm_add_form"):
                             add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
                             if st.form_submit_button("تأكيد العملية 📥"):
@@ -419,7 +431,7 @@ with main_tab2:
                 f(); setTimeout(f, 100); setTimeout(f, 500);</script>""" % st.session_state.inv_scan, height=0)
 
             with inv_tab3:
-                report = [{"كود الصنف": c, "اسم الصنف": i['name'], "الرصيد الدفتري": i['sys_stock'], "الرصيد الفعلي": scanned_items.get(c, 0), "الفروقات": scanned_items.get(c, 0) - i['sys_stock']} for c, i in sys_inv.items()]
+                report = [{"كود الصنف": c, "اسم الصنف": i['name'], "الرصيد الدفتري": i['sys_stock'], "الرصيد الفعلي": scanned_items.get(c, 0), "الفروقات": scanned_items.get(c, 0) - i['sys_stock']} for c, i in system_inventory.items()]
                 df_report = pd.DataFrame(report)
                 st.dataframe(df_report.style.map(lambda v: 'color:red;font-weight:bold;' if v<0 else ('color:blue;font-weight:bold;' if v>0 else 'color:green;'), subset=['الفروقات']), use_container_width=True, hide_index=True)
                 buffer = io.BytesIO()
@@ -559,10 +571,10 @@ with main_tab3:
                     else:
                         with st.form("add_to_cart_form"):
                             cc1, cc2 = st.columns(2)
-                            # إعطاء key مميز للحقول لضمان التحديث التلقائي الفوري للقيمة الجديدة
-                            with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1, key=f"qty_{clean_code}")
+                            with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1)
                             with cc2: 
-                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True, key=f"price_{clean_code}")
+                                # إزالة הـ Key لمنع تعليق الخانة على الصفر
+                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True)
                                 sell_price = float(auto_price)
                             
                             if st.form_submit_button("إضافة الصنف لمسودة الفاتورة 📥"):
