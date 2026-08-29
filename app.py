@@ -15,6 +15,7 @@ import datetime
 import json
 import streamlit.components.v1 as components
 import re
+import time
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -31,10 +32,10 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 دوال إدارة قواعد البيانات (JSON)
+# 🌐 دوال إدارة قواعد البيانات (JSON & CSV)
 # ==========================================
 SHARED_INV_FILE = "shared_inventory.json"
-SHARED_DF_FILE = "shared_custom_df.csv"
+MASTER_DB_FILE = "master_database.csv" # الشيت الدائم الجديد اللي مش بيتمسح
 HISTORY_INV_FILE = "inventory_history.json"
 
 SHARED_SALES_FILE = "shared_sales.json"
@@ -157,7 +158,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==========================================
-# ✅ محتوى الموقع
+# ✅ محتوى الموقع والقائمة الجانبية
 # ==========================================
 if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
@@ -171,6 +172,25 @@ with col_out:
         st.session_state.current_user = ""
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+
+# 🌟 لوحة تحكم الإدارة لرفع الإكسيل بشكل دائم 🌟
+if st.session_state.current_user == "abobakr":
+    with st.sidebar:
+        st.markdown("### ⚙️ إدارة النظام والأسعار")
+        st.markdown("ارفع شيت الإكسيل لتحديث **الأسعار والأرصدة** بشكل دائم:")
+        new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
+        if new_db:
+            if st.button("تحديث الداتا الآن 💾"):
+                try:
+                    if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
+                    else: d = pd.read_excel(new_db)
+                    d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
+                    st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"حدث خطأ: {e}")
+        st.markdown("---")
 
 # --- محرك الذكاء والدوال ---
 @st.cache_resource
@@ -196,21 +216,6 @@ def load_vision_system():
 try: model, processor, collection = load_vision_system()
 except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
 
-def load_csv_data():
-    try:
-        df = pd.read_csv('products.csv', encoding='utf-8-sig', on_bad_lines='skip', engine='python')
-        return df
-    except: return None
-
-df_products = load_csv_data()
-shared_inv_state = load_shared_inventory()
-
-if shared_inv_state.get("is_active", False) and os.path.exists(SHARED_DF_FILE):
-    try: active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
-    except: active_df = None
-else:
-    active_df = None
-
 def get_image_embedding(image):
     image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
     inputs = processor(images=image, return_tensors="pt")
@@ -230,52 +235,45 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🚀 محرك البلدوزر الجديد (استخراج بيانات مضاد للأخطاء)
+# 🚀 محرك استخراج البيانات الموحد (الأساس + التحديثات)
 # ==========================================
 system_inventory = {}
 
-def process_df_into_inventory(df, overwrite_stock=False):
+def process_df_into_inventory(df):
     if df is None or df.empty: return
     
-    # 1. تحديد الأعمدة بشكل ذكي
+    cols = [str(c).lower().strip() for c in df.columns]
     code_col, name_col, stock_col, price_col = None, None, None, None
-    for c in df.columns:
-        cl = str(c).lower().strip()
-        if not code_col and any(k in cl for k in ['code', 'كود', 'باركود', 'file']): code_col = c
-        elif not name_col and any(k in cl for k in ['name', 'اسم', 'صنف', 'title']): name_col = c
-        elif not stock_col and any(k in cl for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = c
-        elif not price_col and any(k in cl for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = c
+    for orig, low in zip(df.columns, cols):
+        if not code_col and any(k in low for k in ['code', 'كود', 'باركود', 'file']): code_col = orig
+        elif not name_col and any(k in low for k in ['name', 'اسم', 'صنف', 'title']): name_col = orig
+        elif not stock_col and any(k in low for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = orig
+        elif not price_col and any(k in low for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = orig
     
-    # أعمدة احتياطية لو المسميات مش مظبوطة
+    # محاولة بديلة لو مفيش عناوين واضحة
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
     if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
     if not price_col and len(df.columns) > 4: price_col = df.columns[4]
 
     for _, row in df.iterrows():
-        # استخراج الكود
         raw_code = str(row[code_col]).strip() if code_col else ""
         if raw_code.lower() in ['nan', 'none', '']: continue
         p_code = raw_code.split('.')[0].upper()
         
-        # استخراج الاسم
         p_name = str(row[name_col]).strip() if name_col else "بدون اسم"
         if p_name.lower() in ['nan', 'none']: p_name = "بدون اسم"
         
-        # استخراج الرصيد
         p_stock = 0.0
         if stock_col:
             m = re.search(r'-?\d+(\.\d+)?', str(row[stock_col]).replace(',', ''))
             if m: p_stock = float(m.group())
         
-        # استخراج السعر (البلدوزر)
         p_price = 0.0
-        # المحاولة الأولى من عمود السعر المباشر
         if price_col:
             m = re.search(r'\d+(\.\d+)?', str(row[price_col]).replace(',', ''))
             if m: p_price = float(m.group())
-        
-        # المحاولة التانية: لو السعر لسه بصفر، هندور في كل أعمدة الشيت عن أي حاجة فيها كلمة سعر
+            
         if p_price == 0.0:
             for c in df.columns:
                 if any(k in str(c).lower().strip() for k in ['price', 'سعر', 'ثمن', 'جملة']):
@@ -284,19 +282,19 @@ def process_df_into_inventory(df, overwrite_stock=False):
                         p_price = float(m.group())
                         break
                         
-        # تعبئة القاموس اللحظي للسيستم
-        if p_code not in system_inventory:
-            system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
-        else:
-            if overwrite_stock: system_inventory[p_code]['sys_stock'] = p_stock
-            if p_name != "بدون اسم" and system_inventory[p_code]['name'] == "بدون اسم":
-                system_inventory[p_code]['name'] = p_name
-            if p_price > 0: system_inventory[p_code]['price'] = p_price
+        # تعبئة أو تحديث القاموس
+        system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
 
-# دمج البيانات
-process_df_into_inventory(df_products) # ملف الأساس
-if active_df is not None:
-    process_df_into_inventory(active_df, overwrite_stock=True) # ملف الجرد اللحظي إن وُجد
+# 1. تحميل الملف الأساسي (Fallback)
+try: df_products = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
+except: df_products = None
+process_df_into_inventory(df_products)
+
+# 2. تحميل الملف الدائم (Master) اللي هيفضل يكتب فوق الداتا القديمة
+if os.path.exists(MASTER_DB_FILE):
+    try: df_master = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
+    except: df_master = None
+    process_df_into_inventory(df_master)
 
 def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message="", details_html="", is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
@@ -345,7 +343,7 @@ with main_tab1:
         
         if matched_codes:
             st.markdown("### ✨ نتائج البحث:")
-            for p_code in matched_codes[:10]:
+            for p_code in matched_codes[:15]:
                 item = system_inventory[p_code]
                 render_product_card(p_code, item['name'], item['sys_stock'], p_price=item['price'], is_sales=True)
         else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
@@ -389,6 +387,7 @@ with main_tab1:
 # التبويب 2: الجرد التشاركي
 # ==========================================
 with main_tab2:
+    shared_inv_state = load_shared_inventory()
     if not shared_inv_state.get("is_active", False):
         st.markdown("### 🆕 إعداد جلسة جرد تشاركية جديدة")
         with st.form("inv_setup_form"):
@@ -396,20 +395,20 @@ with main_tab2:
             with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
             with col2: inv_reason = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "جرد نهاية العام", "أخرى"])
             with col3: inv_date = st.date_input("تاريخ الجرد", datetime.date.today())
-            uploaded_inv_file = st.file_uploader("📎 رفع ملف الأرصدة (Excel/CSV) - اختياري", type=['csv', 'xlsx'])
+            
+            # تغيير الشيت من هنا بيسمع في الداتا الدائمة فوراً
+            uploaded_inv_file = st.file_uploader("📎 رفع شيت الإكسيل وتحديث الداتا (Excel/CSV) - اختياري", type=['csv', 'xlsx'])
+            
             if st.form_submit_button("🚀 فتح جلسة الجرد للجميع"):
                 if not inv_name: st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
                 else:
                     if uploaded_inv_file is not None:
                         try:
-                            if uploaded_inv_file.name.endswith('.csv'): df_custom = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig')
+                            if uploaded_inv_file.name.endswith('.csv'): df_custom = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig', sep=None, engine='python')
                             else: df_custom = pd.read_excel(uploaded_inv_file)
-                            df_custom.to_csv(SHARED_DF_FILE, index=False, encoding='utf-8-sig')
+                            df_custom.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
                         except:
                             st.error("خطأ في الملف، سيتم استخدام الأرصدة الأساسية.")
-                            if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
-                    else:
-                        if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
                     save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
                     st.rerun()
     else:
@@ -472,7 +471,7 @@ with main_tab2:
                 if st.button("🛑 إغلاق وإنهاء جلسة الجرد وحفظها بالأرشيف"):
                     save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv_state.get('name'), "date": shared_inv_state.get('date'), "report": report})
                     save_shared_inventory({"is_active": False, "scanned_items": {}})
-                    if os.path.exists(SHARED_DF_FILE): os.remove(SHARED_DF_FILE)
+                    # ⚠️ الملف الدائم MASTER_DB_FILE مبقاش يتمسح عشان الأسعار متضيعش!
                     st.rerun()
             else: st.info("🔒 الإغلاق متاح للإدارة (abobakr) فقط.")
 
@@ -608,7 +607,7 @@ with main_tab3:
                             
                             if st.form_submit_button("إضافة الصنف لمسودة الفاتورة 📥"):
                                 if sell_price <= 0: 
-                                    st.error("⚠️ سعر هذا الصنف غير مسجل في السيستم! يرجى تحديث الإكسيل من الإدارة أولاً.")
+                                    st.error("⚠️ سعر هذا الصنف غير مسجل في السيستم! يرجى تحديث الإكسيل من القائمة الجانبية للإدارة.")
                                 else:
                                     st.session_state.invoice_cart.append({
                                         "code": clean_code,
