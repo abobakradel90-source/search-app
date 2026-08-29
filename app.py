@@ -66,7 +66,11 @@ def save_to_inv_history(record):
 def load_shared_sales():
     if os.path.exists(SHARED_SALES_FILE):
         try:
-            with open(SHARED_SALES_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+            with open(SHARED_SALES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if "invoices" not in data: data["invoices"] = []
+                if "deductions" not in data: data["deductions"] = {}
+                return data
         except: pass
     return {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}}
 
@@ -224,14 +228,22 @@ def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 def parse_row_info(row, df_cols):
     raw_code = str(row.iloc[0]).strip()
     p_code = raw_code.split('.')[0] 
-    p_name, p_stock = "الاسم غير مسجل", "0"
+    p_name, p_stock, p_price = "الاسم غير مسجل", "0", 0.0
+    
     name_cols = [c for c in df_cols if any(k in c.lower() for k in ['اسم', 'صنف', 'name', 'title'])]
     if name_cols: p_name = str(row[name_cols[0]]).strip()
     elif len(df_cols) > 1: p_name = str(row.iloc[1]).strip()
+        
     stock_cols = [c for c in df_cols if any(k in c.lower() for k in ['رصيد', 'كمية', 'عدد', 'stock', 'qty'])]
     if stock_cols: p_stock = str(row[stock_cols[0]]).strip()
     elif len(df_cols) > 2: p_stock = str(row.iloc[2]).strip()
-    return p_code, p_name, p_stock
+    
+    price_cols = [c for c in df_cols if any(k in c.lower() for k in ['سعر', 'ثمن', 'price'])]
+    if price_cols:
+        try: p_price = float(str(row[price_cols[0]]).replace(',', '').strip())
+        except: p_price = 0.0
+        
+    return p_code, p_name, p_stock, p_price
 
 def render_product_card(p_code, p_name, p_stock, custom_message="", details_html="", is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
@@ -246,7 +258,7 @@ def render_product_card(p_code, p_name, p_stock, custom_message="", details_html
     is_out = s_val <= 0
         
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
-    stock_text = f"🛒 الرصيد المتاح للبيع: {p_stock}" if is_sales else f"📦 الرصيد الدفتري: {p_stock}"
+    stock_text = f"🛒 الرصيد المتاح: {p_stock}" if is_sales else f"📦 الرصيد الدفتري: {p_stock}"
     msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
 
     html_str = f"""<div class="product-card">
@@ -265,10 +277,10 @@ def render_product_card(p_code, p_name, p_stock, custom_message="", details_html
 system_inventory = {}
 if df_products is not None:
     for idx, row in df_products.iterrows():
-        code, name, stock = parse_row_info(row, df_products.columns)
+        code, name, stock, price = parse_row_info(row, df_products.columns)
         try: s_val = float(stock)
         except: s_val = 0
-        system_inventory[code] = {'name': name, 'sys_stock': s_val}
+        system_inventory[code] = {'name': name, 'sys_stock': s_val, 'price': price}
 
 # --- التخطيط الرئيسي ---
 main_tab1, main_tab2, main_tab3 = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
@@ -286,7 +298,7 @@ with main_tab1:
         if not matched.empty:
             st.markdown("### ✨ نتائج البحث النصي:")
             for idx, row in matched.iterrows():
-                p_code, p_name, p_stock = parse_row_info(row, df_products.columns)
+                p_code, p_name, p_stock, _ = parse_row_info(row, df_products.columns)
                 details = " | ".join([f"<b>{col}:</b> {row[col]}" for col in df_products.columns])
                 render_product_card(p_code, p_name, p_stock, details_html=f'<div style="color: #64748B; font-size: 14px; margin-top: 8px;">{details}</div>')
         else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
@@ -328,7 +340,7 @@ with main_tab1:
                                     cleaned = df_products[col].astype(str).str.strip().str.lower().str.replace('.jpg','',regex=False).str.replace('.png','',regex=False)
                                     if (cleaned == tc).any():
                                         row_data = df_products.loc[cleaned[cleaned == tc].index[0]]
-                                        _, p_name, p_stock = parse_row_info(row_data, df_products.columns)
+                                        _, p_name, p_stock, _ = parse_row_info(row_data, df_products.columns)
                                         break
                             render_product_card(p_code, p_name, p_stock)
                 except Exception as e: st.error(f"⚠️ خطأ في البحث البصري: {e}")
@@ -370,7 +382,7 @@ with main_tab2:
             sys_inv = {}
             total_qty = 0; out_of_stock = 0
             for idx, row in active_df.iterrows():
-                code, name, stock = parse_row_info(row, active_df.columns)
+                code, name, stock, _ = parse_row_info(row, active_df.columns)
                 try: s_val = float(stock)
                 except: s_val = 0
                 total_qty += s_val
@@ -456,7 +468,6 @@ with main_tab3:
     else:
         st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية الجملة النشطة:</b> {shared_sales.get("name")} &nbsp;|&nbsp; <b>التاريخ:</b> {shared_sales.get("date")}</div></div>', unsafe_allow_html=True)
         
-        # مؤشرات لوحة التحكم
         all_invoices = shared_sales.get("invoices", [])
         total_revenue = sum(inv["total"] for inv in all_invoices)
         total_invoices_count = len(all_invoices)
@@ -469,7 +480,6 @@ with main_tab3:
         
         st.markdown("---")
         
-        # متغيرات جلسة الفاتورة المفتوحة
         if "active_customer" not in st.session_state: st.session_state.active_customer = ""
         if "invoice_cart" not in st.session_state: st.session_state.invoice_cart = []
         if "inv_scan" not in st.session_state: st.session_state.inv_scan = ""
@@ -492,13 +502,14 @@ with main_tab3:
         else:
             st.markdown(f"### 🧾 جاري تحضير فاتورة العميل: <span style='color:#1C65A6;'>{st.session_state.active_customer}</span>", unsafe_allow_html=True)
             
-            # قسم إضافة الأصناف للفاتورة
             scan_code = st.text_input("كود الصنف للفاتورة:", key="inv_scan")
             
             if scan_code:
                 clean_code = str(scan_code).strip().upper()
                 if clean_code in system_inventory:
                     sys_qty = system_inventory[clean_code]['sys_stock']
+                    auto_price = system_inventory[clean_code].get('price', 0.0) 
+                    
                     global_sold = shared_sales.get("deductions", {}).get(clean_code, 0)
                     local_cart_qty = sum(item["qty"] for item in st.session_state.invoice_cart if item["code"] == clean_code)
                     live_qty = sys_qty - global_sold - local_cart_qty
@@ -512,10 +523,14 @@ with main_tab3:
                         with st.form("add_to_cart_form"):
                             cc1, cc2 = st.columns(2)
                             with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1)
-                            with cc2: sell_price = st.number_input("سعر الجملة للقطعة الواحدة (ج.م):", min_value=0.0, value=0.0, step=10.0)
+                            with cc2: 
+                                # إغلاق خانة السعر لمنع التعديل (Read-Only)
+                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True)
+                                sell_price = float(auto_price)
                             
                             if st.form_submit_button("إضافة الصنف لمسودة الفاتورة 📥"):
-                                if sell_price <= 0: st.error("⚠️ يرجى إدخال سعر البيع الجملة!")
+                                if sell_price <= 0: 
+                                    st.error("⚠️ سعر هذا الصنف غير مسجل في السيستم! يرجى تحديث الإكسيل من الإدارة أولاً.")
                                 else:
                                     st.session_state.invoice_cart.append({
                                         "code": clean_code,
@@ -531,12 +546,10 @@ with main_tab3:
                     st.error("❌ الباركود غير مسجل!")
                     if st.button("حاول مرة أخرى"): st.session_state.inv_clear = True; st.rerun()
             
-            # جافا سكريبت للفوكس التلقائي
             components.html("""<script>
-            const f = () => { const i = window.parent.document.querySelector('input[aria-label="كود الصنف للفاتورة:"]'); if(i && "%s"==="") i.focus(); else {const n = window.parent.document.querySelectorAll('input[type="number"]'); if(n.length>0) n[0].focus();}};
+            const f = () => { const i = window.parent.document.querySelector('input[aria-label="كود الصنف للفاتورة:"]'); if(i && "%s"==="") i.focus(); else {const n = window.parent.document.querySelectorAll('input[type="number"]:not([disabled])'); if(n.length>0) n[0].focus();}};
             f(); setTimeout(f, 100); setTimeout(f, 500);</script>""" % st.session_state.inv_scan, height=0)
 
-            # عرض محتويات سلة الفاتورة الحالية
             if st.session_state.invoice_cart:
                 st.markdown("#### 🛒 الأصناف الحالية في مسودة الفاتورة:")
                 df_cart = pd.DataFrame(st.session_state.invoice_cart)
@@ -549,6 +562,10 @@ with main_tab3:
                 with col_save:
                     if st.button("✅ إصدار الفاتورة وحفظها نهائياً", type="primary"):
                         l_sales = load_shared_sales()
+                        
+                        if "invoices" not in l_sales: l_sales["invoices"] = []
+                        if "deductions" not in l_sales: l_sales["deductions"] = {}
+                            
                         invoice_id = len(l_sales["invoices"]) + 1
                         
                         new_invoice = {
@@ -561,14 +578,12 @@ with main_tab3:
                         }
                         l_sales["invoices"].append(new_invoice)
                         
-                        # خصم الكميات من الرصيد الحي
                         for item in st.session_state.invoice_cart:
-                            l_sales["deductions"][item["code"]] = l_sales.get("deductions", {}).get(item["code"], 0) + item["qty"]
+                            l_sales["deductions"][item["code"]] = l_sales["deductions"].get(item["code"], 0) + item["qty"]
                             
                         save_shared_sales(l_sales)
                         st.success(f"🎉 تم حفظ الفاتورة بنجاح برقم #{invoice_id}")
                         
-                        # تفريغ المسودة لعميل جديد
                         st.session_state.active_customer = ""
                         st.session_state.invoice_cart = []
                         st.rerun()
@@ -624,7 +639,6 @@ if st.session_state.current_user == "abobakr":
         for idx, rec in enumerate(reversed(sales_hist)):
             with st.expander(f"💳 وردية: {rec['name']} | إجمالي الإيرادات: {rec['total_revenue']} ج.م"):
                 
-                # تجميع كل عناصر الفواتير في شيت إكسيل واحد لتسهيل الحسابات
                 flat_records = []
                 for inv in rec.get('invoices', []):
                     for item in inv['items']:
