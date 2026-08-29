@@ -14,6 +14,7 @@ import io
 import datetime
 import json
 import streamlit.components.v1 as components
+import re  # مكتبة الفلترة الذكية للأرقام
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -39,6 +40,7 @@ HISTORY_INV_FILE = "inventory_history.json"
 SHARED_SALES_FILE = "shared_sales.json"
 HISTORY_SALES_FILE = "sales_history.json"
 
+# -- دوال الجرد --
 def load_shared_inventory():
     if os.path.exists(SHARED_INV_FILE):
         try:
@@ -61,6 +63,7 @@ def save_to_inv_history(record):
     history.append(record)
     with open(HISTORY_INV_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
 
+# -- دوال المبيعات (فواتير الجملة) --
 def load_shared_sales():
     if os.path.exists(SHARED_SALES_FILE):
         try:
@@ -205,24 +208,9 @@ def load_csv_data():
 
 df_products = load_csv_data()
 
-def get_image_embedding(image):
-    image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
-    inputs = processor(images=image, return_tensors="pt")
-    with torch.no_grad():
-        features = model.get_image_features(**inputs)
-        if not isinstance(features, torch.Tensor):
-            if hasattr(features, 'image_embeds'): features = features.image_embeds
-            elif hasattr(features, 'pooler_output'): features = features.pooler_output
-            else: features = features[0]
-        return features.squeeze().numpy().tolist()
-
-def get_color_histogram(image):
-    img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
-    hist = img.histogram(); total = sum(hist) / 3
-    return [x / (total if total > 0 else 1) for x in hist]
-
-def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
-
+# ==========================================
+# 🔍 المُحلل الذكي للأسعار
+# ==========================================
 def parse_row_info(row, df_cols):
     raw_code = str(row.iloc[0]).strip()
     p_code = raw_code.split('.')[0] 
@@ -236,11 +224,14 @@ def parse_row_info(row, df_cols):
     if stock_cols: p_stock = str(row[stock_cols[0]]).strip()
     elif len(df_cols) > 2: p_stock = str(row.iloc[2]).strip()
     
-    price_cols = [c for c in df_cols if any(k in c.lower() for k in ['سعر', 'ثمن', 'price'])]
+    # فلترة السعر باستخدام Regex لتجاهل الكلمات وجلب الرقم فقط
+    price_cols = [c for c in df_cols if any(k in c.lower() for k in ['سعر', 'ثمن', 'price', 'جملة', 'بيع', 'قيمة'])]
     if price_cols:
-        try: p_price = float(str(row[price_cols[0]]).replace(',', '').strip())
-        except: p_price = 0.0
-        
+        raw_val = str(row[price_cols[0]]).replace(',', '').strip()
+        match = re.search(r'\d+(\.\d+)?', raw_val)
+        if match:
+            p_price = float(match.group())
+            
     return p_code, p_name, p_stock, p_price
 
 def render_product_card(p_code, p_name, p_stock, custom_message="", details_html="", is_sales=False):
@@ -447,11 +438,9 @@ with main_tab2:
 # التبويب 3: 🛒 نظام فواتير الجملة
 # ==========================================
 with main_tab3:
-    # تهيئة متغيرات التحميل التلقائي
     if "auto_download_b64" not in st.session_state: st.session_state.auto_download_b64 = None
     if "auto_download_filename" not in st.session_state: st.session_state.auto_download_filename = None
     
-    # تنفيذ التحميل التلقائي لو الفاتورة اتحفظت
     if st.session_state.auto_download_b64:
         js_download = f"""
         <script>
@@ -519,7 +508,6 @@ with main_tab3:
                         st.rerun()
                     else: st.error("⚠️ يرجى إدخال اسم العميل.")
             
-            # -- قائمة فواتير الوردية للتعديل --
             if all_invoices:
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("### 📋 فواتير الوردية الحالية (للمراجعة أو التعديل)")
@@ -532,17 +520,14 @@ with main_tab3:
                         with col_e:
                             if st.button(f"✏️ تعديل ومتابعة إضافة الأصناف", key=f"edit_{inv['invoice_id']}"):
                                 l_sales = load_shared_sales()
-                                # عكس الرصيد مؤقتاً عشان يقدر يعدل
-                                for item in inv['items']:
-                                    l_sales["deductions"][item["code"]] -= item["qty"]
-                                # إزالة الفاتورة من القائمة لحين الحفظ الجديد
+                                for item in inv['items']: l_sales["deductions"][item["code"]] -= item["qty"]
                                 l_sales["invoices"] = [i for i in l_sales["invoices"] if i["invoice_id"] != inv["invoice_id"]]
                                 save_shared_sales(l_sales)
                                 
                                 st.session_state.active_customer = inv['customer']
                                 st.session_state.invoice_cart = inv['items']
                                 st.session_state.active_invoice_id = inv['invoice_id']
-                                st.session_state.original_invoice = inv  # حفظ الأصل للرجوع في حالة الإلغاء
+                                st.session_state.original_invoice = inv
                                 st.rerun()
                         with col_d:
                             df_dl = df_v.rename(columns={'code':'كود الصنف', 'name':'اسم الصنف', 'qty':'الكمية', 'price':'سعر الجملة', 'total':'الإجمالي'})
@@ -574,9 +559,10 @@ with main_tab3:
                     else:
                         with st.form("add_to_cart_form"):
                             cc1, cc2 = st.columns(2)
-                            with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1)
+                            # إعطاء key مميز للحقول لضمان التحديث التلقائي الفوري للقيمة الجديدة
+                            with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty), value=1, key=f"qty_{clean_code}")
                             with cc2: 
-                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True)
+                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True, key=f"price_{clean_code}")
                                 sell_price = float(auto_price)
                             
                             if st.form_submit_button("إضافة الصنف لمسودة الفاتورة 📥"):
@@ -613,12 +599,10 @@ with main_tab3:
                 with col_save:
                     if st.button("✅ حفظ الفاتورة وتنزيل ملف الإكسيل التلقائي", type="primary"):
                         l_sales = load_shared_sales()
-                        
-                        # تحديد رقم الفاتورة (جديد أو نفس القديم لو تعديل)
-                        if st.session_state.active_invoice_id:
-                            invoice_id = st.session_state.active_invoice_id
-                        else:
-                            invoice_id = max([i["invoice_id"] for i in l_sales["invoices"]], default=0) + 1
+                        if "invoices" not in l_sales: l_sales["invoices"] = []
+                        if "deductions" not in l_sales: l_sales["deductions"] = {}
+                            
+                        invoice_id = st.session_state.active_invoice_id if st.session_state.active_invoice_id else max([i.get("invoice_id", 0) for i in l_sales["invoices"]] + [0]) + 1
                         
                         new_invoice = {
                             "invoice_id": invoice_id,
@@ -629,14 +613,13 @@ with main_tab3:
                             "items": st.session_state.invoice_cart
                         }
                         l_sales["invoices"].append(new_invoice)
-                        l_sales["invoices"].sort(key=lambda x: x["invoice_id"]) # ترتيب الفواتير
+                        l_sales["invoices"].sort(key=lambda x: x.get("invoice_id", 0))
                         
                         for item in st.session_state.invoice_cart:
                             l_sales["deductions"][item["code"]] = l_sales["deductions"].get(item["code"], 0) + item["qty"]
                             
                         save_shared_sales(l_sales)
                         
-                        # تجهيز ملف الإكسيل للتحميل التلقائي
                         df_ex = pd.DataFrame(st.session_state.invoice_cart).rename(columns={'code':'كود الصنف', 'name':'اسم الصنف', 'qty':'الكمية', 'price':'سعر الجملة', 'total':'الإجمالي'})
                         buf = io.BytesIO()
                         with pd.ExcelWriter(buf, engine='openpyxl') as w: df_ex.to_excel(w, index=False)
@@ -655,10 +638,9 @@ with main_tab3:
                     btn_text = "إلغاء التعديلات والعودة" if st.session_state.active_invoice_id else "🗑️ إلغاء الفاتورة بالكامل"
                     if st.button(btn_text):
                         if st.session_state.active_invoice_id and st.session_state.original_invoice:
-                            # لو بيلغي تعديل، نرجع الفاتورة القديمة زي ما كانت
                             l_sales = load_shared_sales()
                             l_sales["invoices"].append(st.session_state.original_invoice)
-                            l_sales["invoices"].sort(key=lambda x: x["invoice_id"])
+                            l_sales["invoices"].sort(key=lambda x: x.get("invoice_id", 0))
                             for item in st.session_state.original_invoice["items"]:
                                 l_sales["deductions"][item["code"]] = l_sales["deductions"].get(item["code"], 0) + item["qty"]
                             save_shared_sales(l_sales)
@@ -670,7 +652,7 @@ with main_tab3:
                         st.rerun()
             else:
                 st.info("لم يتم إضافة أي أصناف للفاتورة حتى الآن.")
-                if st.button("إلغاء والعودة للقائمة الرئيسية"):
+                if st.button("إلغاء والعودة لعميل جديد"):
                     st.session_state.active_customer = ""
                     st.rerun()
 
@@ -718,15 +700,15 @@ if st.session_state.current_user == "abobakr":
                 for inv in rec.get('invoices', []):
                     for item in inv['items']:
                         flat_records.append({
-                            "رقم الفاتورة": inv['invoice_id'],
-                            "وقت الإصدار": inv['time'],
-                            "البائع": inv['salesperson'],
-                            "اسم العميل": inv['customer'],
-                            "كود الصنف": item['code'],
-                            "اسم الصنف": item['name'],
-                            "الكمية": item['qty'],
-                            "سعر الجملة": item['price'],
-                            "الإجمالي": item['total']
+                            "رقم الفاتورة": inv.get('invoice_id', ''),
+                            "وقت الإصدار": inv.get('time', ''),
+                            "البائع": inv.get('salesperson', ''),
+                            "اسم العميل": inv.get('customer', ''),
+                            "كود الصنف": item.get('code', ''),
+                            "اسم الصنف": item.get('name', ''),
+                            "الكمية": item.get('qty', ''),
+                            "سعر الجملة": item.get('price', ''),
+                            "الإجمالي": item.get('total', '')
                         })
                         
                 if flat_records:
