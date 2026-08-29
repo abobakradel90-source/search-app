@@ -204,6 +204,7 @@ def load_csv_data():
 
 df_products = load_csv_data()
 shared_inv_state = load_shared_inventory()
+
 if shared_inv_state.get("is_active", False) and os.path.exists(SHARED_DF_FILE):
     try: active_df = pd.read_csv(SHARED_DF_FILE, encoding='utf-8-sig')
     except: active_df = None
@@ -229,60 +230,73 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🛠️ محرك البيانات المُدمر للأخطاء (Data Engine)
+# 🚀 محرك البلدوزر الجديد (استخراج بيانات مضاد للأخطاء)
 # ==========================================
 system_inventory = {}
 
 def process_df_into_inventory(df, overwrite_stock=False):
     if df is None or df.empty: return
-    cols = [str(c).lower().strip() for c in df.columns]
     
-    code_col = df.columns[0]
-    name_col = df.columns[1] if len(df.columns) > 1 else None
-    stock_col = df.columns[2] if len(df.columns) > 2 else None
-    price_col = None
+    # 1. تحديد الأعمدة بشكل ذكي
+    code_col, name_col, stock_col, price_col = None, None, None, None
+    for c in df.columns:
+        cl = str(c).lower().strip()
+        if not code_col and any(k in cl for k in ['code', 'كود', 'باركود', 'file']): code_col = c
+        elif not name_col and any(k in cl for k in ['name', 'اسم', 'صنف', 'title']): name_col = c
+        elif not stock_col and any(k in cl for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = c
+        elif not price_col and any(k in cl for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = c
     
-    # تحديد الأعمدة بدقة شديدة بناءً على الاسم مش الترتيب
-    for orig, low in zip(df.columns, cols):
-        if any(k in low for k in ['code', 'كود', 'باركود', 'file']): code_col = orig
-        elif any(k in low for k in ['name', 'اسم', 'صنف', 'title']): name_col = orig
-        elif any(k in low for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = orig
-        elif any(k in low for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع']): price_col = orig
+    # أعمدة احتياطية لو المسميات مش مظبوطة
+    if not code_col and len(df.columns) > 0: code_col = df.columns[0]
+    if not name_col and len(df.columns) > 1: name_col = df.columns[1]
+    if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
+    if not price_col and len(df.columns) > 4: price_col = df.columns[4]
 
     for _, row in df.iterrows():
-        raw_code = str(row[code_col]).strip()
+        # استخراج الكود
+        raw_code = str(row[code_col]).strip() if code_col else ""
         if raw_code.lower() in ['nan', 'none', '']: continue
         p_code = raw_code.split('.')[0].upper()
         
+        # استخراج الاسم
         p_name = str(row[name_col]).strip() if name_col else "بدون اسم"
+        if p_name.lower() in ['nan', 'none']: p_name = "بدون اسم"
         
-        try: p_stock = float(str(row[stock_col]).replace(',', '').strip()) if stock_col else 0.0
-        except: p_stock = 0.0
+        # استخراج الرصيد
+        p_stock = 0.0
+        if stock_col:
+            m = re.search(r'-?\d+(\.\d+)?', str(row[stock_col]).replace(',', ''))
+            if m: p_stock = float(m.group())
         
+        # استخراج السعر (البلدوزر)
         p_price = 0.0
+        # المحاولة الأولى من عمود السعر المباشر
         if price_col:
-            raw_val = str(row[price_col]).replace(',', '').strip()
-            match = re.search(r'\d+(\.\d+)?', raw_val)
-            if match: p_price = float(match.group())
-        elif len(df.columns) >= 5: # لو مفيش اسم عمود، جرب العمود الخامس إحتياطياً
-            raw_val = str(row.iloc[4]).replace(',', '').strip()
-            match = re.search(r'\d+(\.\d+)?', raw_val)
-            if match: p_price = float(match.group())
+            m = re.search(r'\d+(\.\d+)?', str(row[price_col]).replace(',', ''))
+            if m: p_price = float(m.group())
         
+        # المحاولة التانية: لو السعر لسه بصفر، هندور في كل أعمدة الشيت عن أي حاجة فيها كلمة سعر
+        if p_price == 0.0:
+            for c in df.columns:
+                if any(k in str(c).lower().strip() for k in ['price', 'سعر', 'ثمن', 'جملة']):
+                    m = re.search(r'\d+(\.\d+)?', str(row[c]).replace(',', ''))
+                    if m and float(m.group()) > 0:
+                        p_price = float(m.group())
+                        break
+                        
+        # تعبئة القاموس اللحظي للسيستم
         if p_code not in system_inventory:
             system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
         else:
             if overwrite_stock: system_inventory[p_code]['sys_stock'] = p_stock
             if p_name != "بدون اسم" and system_inventory[p_code]['name'] == "بدون اسم":
                 system_inventory[p_code]['name'] = p_name
-            if p_price > 0: # حماية: لا تقم بمسح السعر لو كان الشيت الجديد مفيهوش أسعار
-                system_inventory[p_code]['price'] = p_price
+            if p_price > 0: system_inventory[p_code]['price'] = p_price
 
-# 1. سحب الداتا والأسعار من products.csv الأساسي
-process_df_into_inventory(df_products)
-# 2. تحديث (الأرصدة فقط) من جلسة الجرد النشطة لو موجودة
+# دمج البيانات
+process_df_into_inventory(df_products) # ملف الأساس
 if active_df is not None:
-    process_df_into_inventory(active_df, overwrite_stock=True)
+    process_df_into_inventory(active_df, overwrite_stock=True) # ملف الجرد اللحظي إن وُجد
 
 def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message="", details_html="", is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
@@ -331,7 +345,7 @@ with main_tab1:
         
         if matched_codes:
             st.markdown("### ✨ نتائج البحث:")
-            for p_code in matched_codes[:10]: # عرض أول 10 مطاباقات لتسريع النظام
+            for p_code in matched_codes[:10]:
                 item = system_inventory[p_code]
                 render_product_card(p_code, item['name'], item['sys_stock'], p_price=item['price'], is_sales=True)
         else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
@@ -426,9 +440,10 @@ with main_tab2:
             scan_code = st.text_input("كود الصنف للجرد:", key="inv_scan")
             if scan_code:
                 clean_code = str(scan_code).strip().upper()
-                if clean_code in system_inventory:
+                found_code = next((c for c in system_inventory.keys() if c.upper() == clean_code), None)
+                if found_code:
                     st.info("✅ تم العثور على الصنف. أضف/اخصم الكمية:")
-                    render_product_card(clean_code, system_inventory[clean_code]['name'], system_inventory[clean_code]['sys_stock'])
+                    render_product_card(found_code, system_inventory[found_code]['name'], system_inventory[found_code]['sys_stock'])
                     with st.form("confirm_add_form"):
                         add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
                         if st.form_submit_button("تأكيد العملية 📥"):
