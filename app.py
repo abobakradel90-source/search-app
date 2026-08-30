@@ -70,6 +70,16 @@ def get_image_base64(img_path):
         with open(img_path, "rb") as img_file: return base64.b64encode(img_file.read()).decode('utf-8')
     except: return ""
 
+def get_thumbnail_base64(img_path):
+    try:
+        with Image.open(img_path) as img:
+            img.thumbnail((70, 70))
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=70)
+            return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+    except Exception:
+        return None
+
 logo_base64 = get_image_base64("edstore.jpg")
 
 # --- 2. الهوية البصرية ---
@@ -149,6 +159,7 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
+# 🌟 الإدارة: تحديث قاعدة البيانات 🌟
 if st.session_state.current_user == "abobakr":
     with st.sidebar:
         st.markdown("### ⚙️ إدارة النظام والأسعار")
@@ -167,7 +178,7 @@ if st.session_state.current_user == "abobakr":
                     st.error(f"حدث خطأ أثناء القراءة: {e}")
         st.markdown("---")
 
-# --- محرك البحث الذكي (معالجة الأبعاد بدقة) ---
+# --- محرك البحث الذكي (مُعالج الأبعاد بدقة) ---
 @st.cache_resource
 def download_chroma_db():
     zip_p, ext_p, mark_f = "chroma_db.zip", "./chroma_db", "./chroma_db/fashion_clip_v3.txt"
@@ -199,8 +210,9 @@ def get_image_embedding(image):
         if hasattr(features, 'image_embeds'): features = features.image_embeds
         elif hasattr(features, 'pooler_output'): features = features.pooler_output
         elif not isinstance(features, torch.Tensor): features = features[0]
-        emb = features.cpu().detach().numpy().flatten()
-        return emb.tolist()
+        # تسطيح المصفوفة 1D بشكل صريح ومباشر
+        emb = features.squeeze().cpu().detach().numpy().flatten().tolist()
+        return [float(x) for x in emb]
 
 def get_color_histogram(image):
     img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
@@ -517,7 +529,7 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل (المعالج بالكامل)
+# 4. تبويب الكاتالوج الشامل (المعالج والكامل بالصور والأرصدة)
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
@@ -534,17 +546,15 @@ with main_tab_cat:
         price_val = float(p_inf.get('price', 0.0))
         
         if stk_avail > 0:
-            img_val = None
+            thumb_val = None
             for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
                 img_p = os.path.join("compressed_images", f"{p_c}{ext}")
                 if os.path.exists(img_p):
-                    b64_str = get_image_base64(img_p)
-                    if b64_str:
-                        img_val = f"data:image/jpeg;base64,{b64_str}"
+                    thumb_val = get_thumbnail_base64(img_p)
                     break
                     
             cat_rows.append({
-                "صورة المنتج": img_val,
+                "صورة المنتج": thumb_val,
                 "كود الصنف": p_c,
                 "اسم الصنف": p_inf.get('name', ''),
                 "سعر القطعة (ج.م)": price_val,
@@ -563,12 +573,12 @@ with main_tab_cat:
         st.dataframe(
             df_cat,
             column_config={
-                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الصنف"),
+                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الصنف المصغرة"),
                 "كود الصنف": st.column_config.TextColumn("كود الصنف"),
                 "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
                 "سعر القطعة (ج.م)": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
                 "الرصيد الدفتري (قبل البيع)": st.column_config.NumberColumn("الرصيد الدفتري"),
-                "كمية المبيعات بالوردية": st.column_config.NumberColumn("كمية المبيعات"),
+                "كمية المبيعات بالوردية": st.column_config.NumberColumn("المبيعات"),
                 "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد المتاح للبيع")
             },
             use_container_width=True,
