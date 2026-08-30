@@ -36,57 +36,34 @@ if 'current_user' not in st.session_state:
 SHARED_INV_FILE = "shared_inventory.json"
 MASTER_DB_FILE = "master_database.csv"
 HISTORY_INV_FILE = "inventory_history.json"
-
 SHARED_SALES_FILE = "shared_sales.json"
 HISTORY_SALES_FILE = "sales_history.json"
 
-def load_shared_inventory():
-    if os.path.exists(SHARED_INV_FILE):
+def load_json(file_path, default_data):
+    if os.path.exists(file_path):
         try:
-            with open(SHARED_INV_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+            with open(file_path, 'r', encoding='utf-8') as f: return json.load(f)
         except: pass
-    return {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}}
+    return default_data
 
-def save_shared_inventory(data):
-    with open(SHARED_INV_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+def save_json(file_path, data):
+    with open(file_path, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
-def load_inv_history():
-    if os.path.exists(HISTORY_INV_FILE):
-        try:
-            with open(HISTORY_INV_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-        except: pass
-    return []
-
+def load_shared_inventory(): return load_json(SHARED_INV_FILE, {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}})
+def save_shared_inventory(data): save_json(SHARED_INV_FILE, data)
+def load_inv_history(): return load_json(HISTORY_INV_FILE, [])
 def save_to_inv_history(record):
     history = load_inv_history()
     history.append(record)
-    with open(HISTORY_INV_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
+    save_json(HISTORY_INV_FILE, history)
 
-def load_shared_sales():
-    if os.path.exists(SHARED_SALES_FILE):
-        try:
-            with open(SHARED_SALES_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if "invoices" not in data: data["invoices"] = []
-                if "deductions" not in data: data["deductions"] = {}
-                return data
-        except: pass
-    return {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}}
-
-def save_shared_sales(data):
-    with open(SHARED_SALES_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
-
-def load_sales_history():
-    if os.path.exists(HISTORY_SALES_FILE):
-        try:
-            with open(HISTORY_SALES_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-        except: pass
-    return []
-
+def load_shared_sales(): return load_json(SHARED_SALES_FILE, {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}})
+def save_shared_sales(data): save_json(SHARED_SALES_FILE, data)
+def load_sales_history(): return load_json(HISTORY_SALES_FILE, [])
 def save_to_sales_history(record):
     history = load_sales_history()
     history.append(record)
-    with open(HISTORY_SALES_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
+    save_json(HISTORY_SALES_FILE, history)
 
 def get_image_base64(img_path):
     try:
@@ -231,7 +208,7 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🚀 محرك استخراج البيانات الموحد والنظيف
+# 🚀 محرك استخراج البيانات الموحد
 # ==========================================
 system_inventory = {}
 
@@ -455,6 +432,7 @@ with main_tab3:
     else:
         st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية نشطة:</b> {shared_sales.get("name","")}</div></div>', unsafe_allow_html=True)
         
+        # نظام التحميل الآمن
         if st.session_state.get("last_invoice_b64"):
             st.success(f"🎉 تم حفظ الفاتورة بنجاح: {st.session_state.get('last_invoice_name')}")
             st.download_button(
@@ -574,22 +552,22 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 🌟 التبويب 4: 📖 الكاتالوج (مُضاف إليه تفاصيل الرصيد والصور)
+# 🌟 التبويب 4: 📖 الكاتالوج (النسخة الكاملة بالصور)
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف (Live Catalog)")
     st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد.")
-    
+
     shared_sales_cat = load_shared_sales()
     deductions_cat = shared_sales_cat.get("deductions", {})
-    
+
     catalog_data = []
     for p_code, p_info in system_inventory.items():
         stock_before = float(p_info.get('sys_stock', 0.0))
         sales_qty = float(deductions_cat.get(p_code, 0.0))
         stock_after = stock_before - sales_qty
         item_price = float(p_info.get('price', 0.0))
-        
+
         if stock_after > 0:
             img_uri = ""
             for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
@@ -598,7 +576,7 @@ with main_tab_cat:
                     b64 = get_image_base64(img_path)
                     if b64: img_uri = f"data:image/jpeg;base64,{b64}"
                     break
-                    
+
             catalog_data.append({
                 "صورة المنتج": img_uri,
                 "كود الصنف": p_code,
@@ -608,31 +586,31 @@ with main_tab_cat:
                 "كمية المبيعات": sales_qty,
                 "الرصيد اللحظي المتاح": stock_after
             })
-            
+
     if catalog_data:
         df_catalog = pd.DataFrame(catalog_data)
-        
+
         st.dataframe(
             df_catalog,
             column_config={
-                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الكوتشي المصغرة"),
+                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الكوتشي"),
                 "كود الصنف": st.column_config.TextColumn("كود الصنف"),
                 "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
                 "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
-                "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل المبيعات"),
-                "كمية المبيعات": st.column_config.NumberColumn("كمية المبيعات"),
-                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد اللحظي المتاح")
+                "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل"),
+                "كمية المبيعات": st.column_config.NumberColumn("المبيعات"),
+                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("المتاح")
             },
             use_container_width=True,
             hide_index=True,
             height=600
         )
-        
+
         df_excel_cat = df_catalog.drop(columns=["صورة المنتج"])
         buf_cat = io.BytesIO()
-        with pd.ExcelWriter(buf_cat, engine='openpyxl') as w: 
+        with pd.ExcelWriter(buf_cat, engine='openpyxl') as w:
             df_excel_cat.to_excel(w, index=False, sheet_name='الكاتالوج')
-            
+
         st.download_button(
             label="📥 تحميل الكاتالوج (Excel)",
             data=buf_cat.getvalue(),
