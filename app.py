@@ -15,6 +15,9 @@ import datetime
 import json
 import re
 import time
+import openpyxl
+from openpyxl.drawing.image import Image as OpenpyxlImage
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -73,12 +76,78 @@ def get_image_base64(img_path):
 def get_thumbnail_base64(img_path):
     try:
         with Image.open(img_path) as img:
-            img.thumbnail((70, 70))
+            img.thumbnail((140, 140))  # تكبير الصورة للضعف وبجودة أوضح
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=70)
+            img.convert("RGB").save(buf, format="JPEG", quality=85)
             return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
     except Exception:
         return None
+
+def generate_catalog_excel(catalog_items):
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "الكاتالوج"
+        if ws.views and len(ws.views.sheetView) > 0:
+            ws.views.sheetView[0].rightToLeft = True
+        
+        headers = ["صورة المنتج", "كود الصنف", "اسم الصنف", "سعر القطعة (ج.م)", "الرصيد الدفتري (قبل البيع)", "كمية المبيعات بالوردية", "الرصيد اللحظي المتاح"]
+        ws.append(headers)
+        
+        header_fill = PatternFill(start_color="1C65A6", end_color="1C65A6", fill_type="solid")
+        header_font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin', color='D3D3D3'), right=Side(style='thin', color='D3D3D3'),
+            top=Side(style='thin', color='D3D3D3'), bottom=Side(style='thin', color='D3D3D3')
+        )
+        
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+        ws.row_dimensions[1].height = 28
+        
+        ws.column_dimensions['A'].width = 16
+        ws.column_dimensions['B'].width = 18
+        ws.column_dimensions['C'].width = 30
+        ws.column_dimensions['D'].width = 18
+        ws.column_dimensions['E'].width = 22
+        ws.column_dimensions['F'].width = 22
+        ws.column_dimensions['G'].width = 22
+        
+        for row_idx, item in enumerate(catalog_items, start=2):
+            ws.row_dimensions[row_idx].height = 65
+            ws.cell(row=row_idx, column=2, value=item.get("كود الصنف", "")).alignment = center_align
+            ws.cell(row=row_idx, column=3, value=item.get("اسم الصنف", "")).alignment = center_align
+            ws.cell(row=row_idx, column=4, value=item.get("سعر القطعة (ج.م)", 0.0)).alignment = center_align
+            ws.cell(row=row_idx, column=5, value=item.get("الرصيد الدفتري (قبل البيع)", 0.0)).alignment = center_align
+            ws.cell(row=row_idx, column=6, value=item.get("كمية المبيعات بالوردية", 0.0)).alignment = center_align
+            ws.cell(row=row_idx, column=7, value=item.get("الرصيد اللحظي المتاح", 0.0)).alignment = center_align
+            
+            for col_num in range(1, 8):
+                ws.cell(row=row_idx, column=col_num).border = thin_border
+                
+            img_path = item.get("img_path")
+            if img_path and os.path.exists(img_path):
+                try:
+                    xl_img = OpenpyxlImage(img_path)
+                    xl_img.width = 75
+                    xl_img.height = 75
+                    ws.add_image(xl_img, f"A{row_idx}")
+                except Exception:
+                    pass
+                    
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+    except Exception:
+        df_fallback = pd.DataFrame(catalog_items).drop(columns=["صورة المنتج", "img_path"], errors="ignore")
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine='openpyxl') as w:
+            df_fallback.to_excel(w, index=False, sheet_name='الكاتالوج')
+        return buf.getvalue()
 
 logo_base64 = get_image_base64("edstore.jpg")
 
@@ -159,7 +228,6 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 🌟 الإدارة: تحديث قاعدة البيانات 🌟
 if st.session_state.current_user == "abobakr":
     with st.sidebar:
         st.markdown("### ⚙️ إدارة النظام والأسعار")
@@ -178,7 +246,7 @@ if st.session_state.current_user == "abobakr":
                     st.error(f"حدث خطأ أثناء القراءة: {e}")
         st.markdown("---")
 
-# --- محرك البحث الذكي (مُعالج الأبعاد بدقة) ---
+# --- محرك البحث الذكي ---
 @st.cache_resource
 def download_chroma_db():
     zip_p, ext_p, mark_f = "chroma_db.zip", "./chroma_db", "./chroma_db/fashion_clip_v3.txt"
@@ -210,7 +278,6 @@ def get_image_embedding(image):
         if hasattr(features, 'image_embeds'): features = features.image_embeds
         elif hasattr(features, 'pooler_output'): features = features.pooler_output
         elif not isinstance(features, torch.Tensor): features = features[0]
-        # تسطيح المصفوفة 1D بشكل صريح ومباشر
         emb = features.squeeze().cpu().detach().numpy().flatten().tolist()
         return [float(x) for x in emb]
 
@@ -529,11 +596,11 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل (المعالج والكامل بالصور والأرصدة)
+# 4. تبويب الكاتالوج الشامل (مُرتب بالصور في الإكسيل والشاشة)
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
-    st.markdown("يعرض الأصناف المتوفرة بالمستودع مع حركة الرصيد والأسعار اللحظية:")
+    st.markdown("يعرض الأصناف المتوفرة بالمستودع مرتبة تصاعدياً مع حركة الرصيد والأسعار والصور:")
     
     shared_s_cat = load_shared_sales()
     deductions = shared_s_cat.get("deductions", {})
@@ -547,9 +614,11 @@ with main_tab_cat:
         
         if stk_avail > 0:
             thumb_val = None
+            raw_img_path = None
             for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
                 img_p = os.path.join("compressed_images", f"{p_c}{ext}")
                 if os.path.exists(img_p):
+                    raw_img_path = img_p
                     thumb_val = get_thumbnail_base64(img_p)
                     break
                     
@@ -560,20 +629,25 @@ with main_tab_cat:
                 "سعر القطعة (ج.م)": price_val,
                 "الرصيد الدفتري (قبل البيع)": stk_before,
                 "كمية المبيعات بالوردية": sold_amt,
-                "الرصيد اللحظي المتاح": stk_avail
+                "الرصيد اللحظي المتاح": stk_avail,
+                "img_path": raw_img_path
             })
             
     if cat_rows:
+        # ترتيب الكاتالوج تصاعدياً بناءً على كود الصنف
+        cat_rows.sort(key=lambda x: str(x.get("كود الصنف", "")).upper())
         df_cat = pd.DataFrame(cat_rows)
         
         filter_q = st.text_input("🔍 تصفية سريعة بالكاتالوج:", placeholder="ابحث بكود أو اسم الموديل...", key="cat_filter")
         if filter_q:
             df_cat = df_cat[df_cat['كود الصنف'].str.contains(filter_q, case=False, na=False) | df_cat['اسم الصنف'].str.contains(filter_q, case=False, na=False)]
             
+        df_display = df_cat.drop(columns=["img_path"], errors="ignore")
+        
         st.dataframe(
-            df_cat,
+            df_display,
             column_config={
-                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الصنف المصغرة"),
+                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الصنف واضحة"),
                 "كود الصنف": st.column_config.TextColumn("كود الصنف"),
                 "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
                 "سعر القطعة (ج.م)": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
@@ -585,10 +659,14 @@ with main_tab_cat:
             hide_index=True
         )
         
-        df_excel_cat = df_cat.drop(columns=["صورة المنتج"])
-        buf_c = io.BytesIO()
-        with pd.ExcelWriter(buf_c, engine='openpyxl') as w: df_excel_cat.to_excel(w, index=False, sheet_name='الكاتالوج')
-        st.download_button("📥 تحميل الكاتالوج الكامل (Excel)", buf_c.getvalue(), f"Live_Catalog_{datetime.date.today()}.xlsx", type="primary")
+        # إنشاء شيت الإكسيل بالصور الحقيقية مدمجة
+        excel_catalog_bytes = generate_catalog_excel(df_cat.to_dict('records'))
+        st.download_button(
+            label="📥 تحميل الكاتالوج الكامل بالصور (Excel)",
+            data=excel_catalog_bytes,
+            file_name=f"Live_Catalog_Images_{datetime.date.today()}.xlsx",
+            type="primary"
+        )
     else:
         st.info("📦 لا توجد أي أصناف متوفرة في المستودع حالياً (الأرصدة صفر).")
 
