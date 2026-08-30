@@ -470,12 +470,10 @@ with main_tab3:
     if "auto_download_b64" not in st.session_state: st.session_state.auto_download_b64 = None
     if "auto_download_filename" not in st.session_state: st.session_state.auto_download_filename = None
     
-    # 🌟 التحميل التلقائي المحسن باستخدام Blob ObjectURL على نافذة المتصفح الرئيسية 🌟
     if st.session_state.auto_download_b64:
         b64_data = st.session_state.auto_download_b64
         f_name = st.session_state.auto_download_filename
         
-        # 1. زرار تحميل أحتياطي فوري شغال بضغطة واحدة
         st.success(f"🎉 تم حفظ الفاتورة بنجاح: {f_name}")
         excel_bytes = base64.b64decode(b64_data)
         st.download_button(
@@ -486,39 +484,28 @@ with main_tab3:
             type="primary"
         )
         
-        # 2. كود التحميل التلقائي العابر للـ Sandbox
         js_download = """
         <script>
         try {
             const base64Data = "%s";
             const fileName = "%s";
-            
             const byteCharacters = atob(base64Data);
             const byteArrays = [];
             for (let offset = 0; offset < byteCharacters.length; offset += 512) {
                 const slice = byteCharacters.slice(offset, offset + 512);
                 const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) {
-                    byteNumbers[i] = slice.charCodeAt(i);
-                }
+                for (let i = 0; i < slice.length; i++) { byteNumbers[i] = slice.charCodeAt(i); }
                 byteArrays.push(new Uint8Array(byteNumbers));
             }
             const blob = new Blob(byteArrays, {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
             const blobUrl = URL.createObjectURL(blob);
-            
             const link = window.parent.document.createElement('a');
             link.href = blobUrl;
             link.download = fileName;
             window.parent.document.body.appendChild(link);
             link.click();
-            
-            setTimeout(() => {
-                window.parent.document.body.removeChild(link);
-                URL.revokeObjectURL(blobUrl);
-            }, 1000);
-        } catch (err) {
-            console.error("Auto download error:", err);
-        }
+            setTimeout(() => { window.parent.document.body.removeChild(link); URL.revokeObjectURL(blobUrl); }, 1000);
+        } catch (err) { console.error("Auto download error:", err); }
         </script>
         """ % (b64_data, f_name)
         components.html(js_download, height=0)
@@ -809,6 +796,17 @@ if st.session_state.current_user == "abobakr":
                 st.markdown("#### 👟 أكثر الكوتشيات مبيعاً (Top Sellers)")
                 top_items = df_all_sales.groupby(['كود الصنف', 'اسم الصنف'])['الكمية'].sum().reset_index().sort_values(by='الكمية', ascending=False)
                 st.dataframe(top_items.head(10), use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            
+            # 🌟 إضافة تقرير العملاء المفصل 🌟
+            st.markdown("#### 👥 تقرير مشتريات العملاء (كشف حساب)")
+            customer_report = df_all_sales.groupby('اسم العميل').agg({
+                'الكمية': 'sum', 
+                'الإجمالي': 'sum'
+            }).reset_index().sort_values(by='الإجمالي', ascending=False)
+            
+            st.dataframe(customer_report, use_container_width=True, hide_index=True)
 
             st.markdown("---")
             st.markdown("#### 📥 سجل المبيعات الشامل (كل الفواتير)")
