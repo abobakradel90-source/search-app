@@ -40,7 +40,6 @@ HISTORY_INV_FILE = "inventory_history.json"
 SHARED_SALES_FILE = "shared_sales.json"
 HISTORY_SALES_FILE = "sales_history.json"
 
-# --- استرجاع الدوال الأساسية التي تم حذفها بالخطأ ---
 def load_shared_inventory():
     if os.path.exists(SHARED_INV_FILE):
         try:
@@ -575,30 +574,71 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 🌟 التبويب 4: 📖 الكاتالوج
+# 🌟 التبويب 4: 📖 الكاتالوج (مُضاف إليه تفاصيل الرصيد والصور)
 # ==========================================
 with main_tab_cat:
-    st.markdown("### 📖 الكاتالوج (المتاح فقط)")
+    st.markdown("### 📖 الكاتالوج الشامل للأصناف (Live Catalog)")
+    st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد.")
+    
     shared_sales_cat = load_shared_sales()
     deductions_cat = shared_sales_cat.get("deductions", {})
     
     catalog_data = []
     for p_code, p_info in system_inventory.items():
-        stock_after = float(p_info.get('sys_stock', 0.0)) - float(deductions_cat.get(p_code, 0.0))
+        stock_before = float(p_info.get('sys_stock', 0.0))
+        sales_qty = float(deductions_cat.get(p_code, 0.0))
+        stock_after = stock_before - sales_qty
+        item_price = float(p_info.get('price', 0.0))
+        
         if stock_after > 0:
+            img_uri = ""
+            for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
+                img_path = os.path.join("compressed_images", f"{p_code}{ext}")
+                if os.path.exists(img_path):
+                    b64 = get_image_base64(img_path)
+                    if b64: img_uri = f"data:image/jpeg;base64,{b64}"
+                    break
+                    
             catalog_data.append({
+                "صورة المنتج": img_uri,
                 "كود الصنف": p_code,
                 "اسم الصنف": p_info.get('name', ''),
-                "سعر القطعة": float(p_info.get('price', 0.0)),
-                "الرصيد المتاح": stock_after
+                "سعر القطعة": item_price,
+                "الرصيد قبل المبيعات": stock_before,
+                "كمية المبيعات": sales_qty,
+                "الرصيد اللحظي المتاح": stock_after
             })
             
     if catalog_data:
         df_catalog = pd.DataFrame(catalog_data)
-        st.dataframe(df_catalog, use_container_width=True, hide_index=True)
+        
+        st.dataframe(
+            df_catalog,
+            column_config={
+                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الكوتشي المصغرة"),
+                "كود الصنف": st.column_config.TextColumn("كود الصنف"),
+                "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
+                "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
+                "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل المبيعات"),
+                "كمية المبيعات": st.column_config.NumberColumn("كمية المبيعات"),
+                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد اللحظي المتاح")
+            },
+            use_container_width=True,
+            hide_index=True,
+            height=600
+        )
+        
+        df_excel_cat = df_catalog.drop(columns=["صورة المنتج"])
         buf_cat = io.BytesIO()
-        with pd.ExcelWriter(buf_cat, engine='openpyxl') as w: df_catalog.to_excel(w, index=False)
-        st.download_button("📥 تحميل الكاتالوج (Excel)", buf_cat.getvalue(), f"Catalog_{datetime.date.today()}.xlsx", type="primary")
+        with pd.ExcelWriter(buf_cat, engine='openpyxl') as w: 
+            df_excel_cat.to_excel(w, index=False, sheet_name='الكاتالوج')
+            
+        st.download_button(
+            label="📥 تحميل الكاتالوج (Excel)",
+            data=buf_cat.getvalue(),
+            file_name=f"Catalog_{datetime.date.today()}.xlsx",
+            type="primary"
+        )
     else:
         st.info("📦 لا توجد أصناف متاحة.")
 
