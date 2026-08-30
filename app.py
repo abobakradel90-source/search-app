@@ -16,7 +16,7 @@ import json
 import re
 import time
 
-# --- 1. إعدادات الصفحة ---
+# --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
 
 USERS = {
@@ -31,7 +31,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 دوال قواعد البيانات
+# 🌐 دوال إدارة قواعد البيانات
 # ==========================================
 SHARED_INV_FILE = "shared_inventory.json"
 MASTER_DB_FILE = "master_database.csv"
@@ -72,7 +72,7 @@ def get_image_base64(img_path):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. التصميم والهوية البصرية ---
+# --- 2. الهوية البصرية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -149,7 +149,6 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 🌟 الإدارة: تحديث قاعدة البيانات 🌟
 if st.session_state.current_user == "abobakr":
     with st.sidebar:
         st.markdown("### ⚙️ إدارة النظام والأسعار")
@@ -168,7 +167,7 @@ if st.session_state.current_user == "abobakr":
                     st.error(f"حدث خطأ أثناء القراءة: {e}")
         st.markdown("---")
 
-# --- محرك البحث الذكي ---
+# --- محرك البحث الذكي (معالجة الأبعاد بدقة) ---
 @st.cache_resource
 def download_chroma_db():
     zip_p, ext_p, mark_f = "chroma_db.zip", "./chroma_db", "./chroma_db/fashion_clip_v3.txt"
@@ -197,8 +196,11 @@ def get_image_embedding(image):
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-        if not isinstance(features, torch.Tensor): features = features.image_embeds if hasattr(features, 'image_embeds') else features[0]
-        return features.squeeze().numpy().tolist()
+        if hasattr(features, 'image_embeds'): features = features.image_embeds
+        elif hasattr(features, 'pooler_output'): features = features.pooler_output
+        elif not isinstance(features, torch.Tensor): features = features[0]
+        emb = features.cpu().detach().numpy().flatten()
+        return emb.tolist()
 
 def get_color_histogram(image):
     img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
@@ -320,7 +322,8 @@ with main_tab1:
         if st.button("🚀 ابحث عن المنتج الآن"):
             with st.spinner('جاري المسح البصري...'):
                 try:
-                    res = collection.query(query_embeddings=[get_image_embedding(c_img)], n_results=8, include=['distances', 'metadatas'])
+                    emb = get_image_embedding(c_img)
+                    res = collection.query(query_embeddings=[emb], n_results=8, include=['distances', 'metadatas'])
                     if res['distances'][0]:
                         u_color = get_color_histogram(c_img)
                         refined = []
@@ -514,11 +517,11 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل (الآمن والسريع)
+# 4. تبويب الكاتالوج الشامل (المعالج بالكامل)
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
-    st.markdown("يعرض الأصناف المتوفرة بالمستودع مع حركة الرصيد اللحظية:")
+    st.markdown("يعرض الأصناف المتوفرة بالمستودع مع حركة الرصيد والأسعار اللحظية:")
     
     shared_s_cat = load_shared_sales()
     deductions = shared_s_cat.get("deductions", {})
@@ -531,27 +534,50 @@ with main_tab_cat:
         price_val = float(p_inf.get('price', 0.0))
         
         if stk_avail > 0:
+            img_val = None
+            for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
+                img_p = os.path.join("compressed_images", f"{p_c}{ext}")
+                if os.path.exists(img_p):
+                    b64_str = get_image_base64(img_p)
+                    if b64_str:
+                        img_val = f"data:image/jpeg;base64,{b64_str}"
+                    break
+                    
             cat_rows.append({
+                "صورة المنتج": img_val,
                 "كود الصنف": p_c,
                 "اسم الصنف": p_inf.get('name', ''),
-                "سعر الجملة (ج.م)": price_val,
-                "الرصيد الدفتري": stk_before,
-                "المبيعات الحالية": sold_amt,
-                "الرصيد المتاح للبيع": stk_avail
+                "سعر القطعة (ج.م)": price_val,
+                "الرصيد الدفتري (قبل البيع)": stk_before,
+                "كمية المبيعات بالوردية": sold_amt,
+                "الرصيد اللحظي المتاح": stk_avail
             })
             
     if cat_rows:
         df_cat = pd.DataFrame(cat_rows)
         
-        # حقل بحث وتصفية داخل الكاتالوج
         filter_q = st.text_input("🔍 تصفية سريعة بالكاتالوج:", placeholder="ابحث بكود أو اسم الموديل...", key="cat_filter")
         if filter_q:
             df_cat = df_cat[df_cat['كود الصنف'].str.contains(filter_q, case=False, na=False) | df_cat['اسم الصنف'].str.contains(filter_q, case=False, na=False)]
             
-        st.dataframe(df_cat, use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_cat,
+            column_config={
+                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الصنف"),
+                "كود الصنف": st.column_config.TextColumn("كود الصنف"),
+                "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
+                "سعر القطعة (ج.م)": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
+                "الرصيد الدفتري (قبل البيع)": st.column_config.NumberColumn("الرصيد الدفتري"),
+                "كمية المبيعات بالوردية": st.column_config.NumberColumn("كمية المبيعات"),
+                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد المتاح للبيع")
+            },
+            use_container_width=True,
+            hide_index=True
+        )
         
+        df_excel_cat = df_cat.drop(columns=["صورة المنتج"])
         buf_c = io.BytesIO()
-        with pd.ExcelWriter(buf_c, engine='openpyxl') as w: df_cat.to_excel(w, index=False, sheet_name='الكاتالوج')
+        with pd.ExcelWriter(buf_c, engine='openpyxl') as w: df_excel_cat.to_excel(w, index=False, sheet_name='الكاتالوج')
         st.download_button("📥 تحميل الكاتالوج الكامل (Excel)", buf_c.getvalue(), f"Live_Catalog_{datetime.date.today()}.xlsx", type="primary")
     else:
         st.info("📦 لا توجد أي أصناف متوفرة في المستودع حالياً (الأرصدة صفر).")
