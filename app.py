@@ -120,20 +120,35 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['G'].width = 24
     
     for row_idx, item in enumerate(catalog_items, start=2):
-        ws.row_dimensions[row_idx].height = 60
+        ws.row_dimensions[row_idx].height = 65
         ws.cell(row=row_idx, column=1, value="")
-        ws.cell(row=row_idx, column=2, value=str(item.get("كود الصنف", ""))).alignment = center_align
-        ws.cell(row=row_idx, column=3, value=str(item.get("اسم الصنف", ""))).alignment = center_align
-        ws.cell(row=row_idx, column=4, value=float(item.get("سعر القطعة (ج.م)", 0.0))).alignment = center_align
-        ws.cell(row=row_idx, column=5, value=float(item.get("الرصيد الدفتري (قبل البيع)", 0.0))).alignment = center_align
-        ws.cell(row=row_idx, column=6, value=float(item.get("كمية المبيعات بالوردية", 0.0))).alignment = center_align
-        ws.cell(row=row_idx, column=7, value=float(item.get("الرصيد اللحظي المتاح", 0.0))).alignment = center_align
+        
+        c_code = item.get("كود الصنف", "")
+        c_name = item.get("اسم الصنف", "")
+        ws.cell(row=row_idx, column=2, value=str(c_code if pd.notna(c_code) else "")).alignment = center_align
+        ws.cell(row=row_idx, column=3, value=str(c_name if pd.notna(c_name) else "")).alignment = center_align
+        
+        try: p_val = float(item.get("سعر القطعة (ج.م)", 0.0))
+        except: p_val = 0.0
+        ws.cell(row=row_idx, column=4, value=p_val if pd.notna(p_val) else 0.0).alignment = center_align
+        
+        try: s_val = float(item.get("الرصيد الدفتري (قبل البيع)", 0.0))
+        except: s_val = 0.0
+        ws.cell(row=row_idx, column=5, value=s_val if pd.notna(s_val) else 0.0).alignment = center_align
+        
+        try: m_val = float(item.get("كمية المبيعات بالوردية", 0.0))
+        except: m_val = 0.0
+        ws.cell(row=row_idx, column=6, value=m_val if pd.notna(m_val) else 0.0).alignment = center_align
+        
+        try: a_val = float(item.get("الرصيد اللحظي المتاح", 0.0))
+        except: a_val = 0.0
+        ws.cell(row=row_idx, column=7, value=a_val if pd.notna(a_val) else 0.0).alignment = center_align
         
         for col_num in range(1, len(headers) + 1):
             ws.cell(row=row_idx, column=col_num).border = thin_border
             
         img_path = item.get("img_path")
-        if img_path and os.path.exists(img_path):
+        if img_path and isinstance(img_path, str) and os.path.exists(img_path):
             try:
                 xl_img = OpenpyxlImage(img_path)
                 xl_img.width = 65
@@ -632,13 +647,15 @@ with main_tab_cat:
             
     if cat_rows:
         cat_rows.sort(key=lambda x: str(x.get("كود الصنف", "")).upper())
-        df_cat = pd.DataFrame(cat_rows)
         
         filter_q = st.text_input("🔍 تصفية سريعة بالكاتالوج:", placeholder="ابحث بكود أو اسم الموديل...", key="cat_filter")
+        
+        filtered_rows = cat_rows
         if filter_q:
-            df_cat = df_cat[df_cat['كود الصنف'].str.contains(filter_q, case=False, na=False) | df_cat['اسم الصنف'].str.contains(filter_q, case=False, na=False)]
+            fq = filter_q.strip().lower()
+            filtered_rows = [r for r in cat_rows if fq in str(r.get("كود الصنف","")).lower() or fq in str(r.get("اسم الصنف","")).lower()]
             
-        df_display = df_cat.drop(columns=["img_path"], errors="ignore")
+        df_display = pd.DataFrame(filtered_rows).drop(columns=["img_path"], errors="ignore")
         
         st.dataframe(
             df_display,
@@ -655,7 +672,7 @@ with main_tab_cat:
             hide_index=True
         )
         
-        excel_catalog_bytes = generate_catalog_excel(df_cat.to_dict('records'))
+        excel_catalog_bytes = generate_catalog_excel(filtered_rows)
         st.download_button(
             label="📥 تحميل الكاتالوج الكامل بالصور (Excel)",
             data=excel_catalog_bytes,
