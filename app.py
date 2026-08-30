@@ -173,7 +173,6 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 🌟 لوحة تحكم الإدارة لرفع الإكسيل بشكل دائم 🌟
 if st.session_state.current_user == "abobakr":
     with st.sidebar:
         st.markdown("### ⚙️ إدارة النظام والأسعار")
@@ -326,7 +325,6 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message=""
 </div>"""
     st.markdown(html_str, unsafe_allow_html=True)
 
-# 🛑 إخفاء تبويب لوحة التحكم عن الموظفين العاديين
 if st.session_state.current_user == "abobakr":
     tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📈 لوحة تحكم الإدارة"])
     main_tab1, main_tab2, main_tab3, main_tab4 = tabs[0], tabs[1], tabs[2], tabs[3]
@@ -472,18 +470,59 @@ with main_tab3:
     if "auto_download_b64" not in st.session_state: st.session_state.auto_download_b64 = None
     if "auto_download_filename" not in st.session_state: st.session_state.auto_download_filename = None
     
+    # 🌟 التحميل التلقائي المحسن باستخدام Blob ObjectURL على نافذة المتصفح الرئيسية 🌟
     if st.session_state.auto_download_b64:
-        js_download = f"""
+        b64_data = st.session_state.auto_download_b64
+        f_name = st.session_state.auto_download_filename
+        
+        # 1. زرار تحميل أحتياطي فوري شغال بضغطة واحدة
+        st.success(f"🎉 تم حفظ الفاتورة بنجاح: {f_name}")
+        excel_bytes = base64.b64decode(b64_data)
+        st.download_button(
+            label="📥 اضغط هنا للتحميل المباشر للملف (إذا لم يبدأ تلقائياً)",
+            data=excel_bytes,
+            file_name=f_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+        
+        # 2. كود التحميل التلقائي العابر للـ Sandbox
+        js_download = """
         <script>
-        const link = document.createElement('a');
-        link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{st.session_state.auto_download_b64}';
-        link.download = '{st.session_state.auto_download_filename}';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        try {
+            const base64Data = "%s";
+            const fileName = "%s";
+            
+            const byteCharacters = atob(base64Data);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+            const blob = new Blob(byteArrays, {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const link = window.parent.document.createElement('a');
+            link.href = blobUrl;
+            link.download = fileName;
+            window.parent.document.body.appendChild(link);
+            link.click();
+            
+            setTimeout(() => {
+                window.parent.document.body.removeChild(link);
+                URL.revokeObjectURL(blobUrl);
+            }, 1000);
+        } catch (err) {
+            console.error("Auto download error:", err);
+        }
         </script>
-        """
+        """ % (b64_data, f_name)
         components.html(js_download, height=0)
+        
         st.session_state.auto_download_b64 = None
         st.session_state.auto_download_filename = None
 
@@ -708,10 +747,8 @@ if st.session_state.current_user == "abobakr":
         st.markdown("## 📈 لوحة تحكم الإدارة الشاملة (Live Dashboard)")
         st.markdown("تُعرض هنا تحليلات حية ومباشرة لجميع المبيعات (الوردية النشطة + الأرشيف القديم) بدون الحاجة لإغلاق أي وردية.")
         
-        # تجميع كل بيانات المبيعات (النشطة والقديمة) في مكان واحد
         flat_records = []
         
-        # 1. سحب بيانات الأرشيف القديم
         sales_hist = load_sales_history()
         for rec in sales_hist:
             for inv in rec.get('invoices', []):
@@ -729,7 +766,6 @@ if st.session_state.current_user == "abobakr":
                         "الإجمالي": item.get('total', 0.0)
                     })
                     
-        # 2. سحب بيانات الوردية النشطة حالياً
         shared_sales = load_shared_sales()
         for inv in shared_sales.get('invoices', []):
             for item in inv['items']:
@@ -751,7 +787,6 @@ if st.session_state.current_user == "abobakr":
         else:
             df_all_sales = pd.DataFrame(flat_records)
             
-            # --- المؤشرات العلوية ---
             total_rev_all = df_all_sales['الإجمالي'].sum()
             total_items_all = df_all_sales['الكمية'].sum()
             total_invoices_all = df_all_sales['رقم الفاتورة'].nunique()
@@ -763,7 +798,6 @@ if st.session_state.current_user == "abobakr":
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # --- الرسوم البيانية والجداول ---
             col_chart, col_table = st.columns(2)
             
             with col_chart:
@@ -780,7 +814,6 @@ if st.session_state.current_user == "abobakr":
             st.markdown("#### 📥 سجل المبيعات الشامل (كل الفواتير)")
             st.dataframe(df_all_sales, use_container_width=True, hide_index=True)
             
-            # زرار التصدير الشامل
             buf_all = io.BytesIO()
             with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all_sales.to_excel(w, index=False, sheet_name='كل المبيعات')
             st.download_button(
@@ -790,3 +823,5 @@ if st.session_state.current_user == "abobakr":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary"
             )
+
+st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
