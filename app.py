@@ -14,6 +14,7 @@ import io
 import datetime
 import json
 import re
+import time
 
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
@@ -24,11 +25,10 @@ USERS = {
     "ahmed": "edstore"         
 }
 
-# 🌟 تغيير اسم متغير الجلسة لإجبار السيرفر على مسح الذاكرة القديمة (مسح العفريت) 🌟
-if 'is_authenticated' not in st.session_state:
-    st.session_state.is_authenticated = False
-if 'active_user' not in st.session_state:
-    st.session_state.active_user = ""
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = ""
 
 # ==========================================
 # 🌐 دوال إدارة قواعد البيانات
@@ -109,61 +109,61 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-def main_app():
-    # ==========================================
-    # 🛑 بوابة تسجيل الدخول
-    # ==========================================
-    if not st.session_state.is_authenticated:
-        st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        if logo_base64: st.markdown(f'<img src="data:image/jpeg;base64,{logo_base64}" style="height: 80px; border-radius:10px; margin-bottom:15px;">', unsafe_allow_html=True)
-        st.markdown('<div class="login-title">نظام إدارة ED STORE</div>', unsafe_allow_html=True)
-        st.markdown('<div class="login-subtitle">برجاء تسجيل الدخول للمتابعة</div>', unsafe_allow_html=True)
-        
-        username = st.text_input("👤 اسم المستخدم", placeholder="ادخل اليوزر نيم")
-        password = st.text_input("🔑 كلمة المرور", placeholder="ادخل الباسورد", type="password")
-        
-        if st.button("تسجيل الدخول 🚀"):
-            clean_user = str(username).strip().lower()
-            clean_pass = str(password).strip()
-            if clean_user in USERS and USERS[clean_user] == clean_pass:
-                st.session_state.is_authenticated = True
-                st.session_state.active_user = clean_user
-                st.rerun()
-            else: st.error("❌ البيانات غير صحيحة.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return  # يمنع تنفيذ باقي الكود لو مش مسجل دخول
+# ==========================================
+# 🛑 بوابة الدخول (النظام المباشر)
+# ==========================================
+if not st.session_state.logged_in:
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    if logo_base64: st.markdown(f'<img src="data:image/jpeg;base64,{logo_base64}" style="height: 80px; border-radius:10px; margin-bottom:15px;">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">نظام إدارة ED STORE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">برجاء تسجيل الدخول للمتابعة</div>', unsafe_allow_html=True)
+    
+    username = st.text_input("👤 اسم المستخدم", placeholder="ادخل اليوزر نيم")
+    password = st.text_input("🔑 كلمة المرور", placeholder="ادخل الباسورد", type="password")
+    
+    if st.button("تسجيل الدخول 🚀"):
+        clean_user = str(username).strip().lower()
+        clean_pass = str(password).strip()
+        if clean_user in USERS and USERS[clean_user] == clean_pass:
+            st.session_state.logged_in = True
+            st.session_state.current_user = clean_user
+            st.rerun()
+        else: st.error("❌ البيانات غير صحيحة.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ==========================================
-    # ✅ محتوى الموقع والقائمة الجانبية
-    # ==========================================
+# ==========================================
+# ✅ محتوى الموقع الشامل
+# ==========================================
+else:
     if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
     else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
     col_welc, col_out = st.columns([4, 1])
-    with col_welc: st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.active_user}</b></h4>", unsafe_allow_html=True)
+    with col_welc: st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
     with col_out:
         st.markdown('<div class="logout-btn">', unsafe_allow_html=True)
         if st.button("تسجيل خروج 🚪"):
-            st.session_state.is_authenticated = False
-            st.session_state.active_user = ""
+            st.session_state.logged_in = False
+            st.session_state.current_user = ""
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.active_user == "abobakr":
+    if st.session_state.current_user == "abobakr":
         with st.sidebar:
             st.markdown("### ⚙️ إدارة النظام والأسعار")
-            st.markdown("ارفع شيت الإكسيل لتحديث **الأسعار والأرصدة** بشكل دائم:")
-            
-            # 🌟 إزالة الـ form تماماً وإرجاع زرار التحديث للوضع المستقر 🌟
-            new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
-            if new_db is not None:
-                if st.button("تحديث الداتا الآن 💾"):
-                    try:
-                        if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
-                        else: d = pd.read_excel(new_db)
-                        d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                        st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
-                    except Exception as e: st.error(f"حدث خطأ: {e}")
+            with st.form("upload_form"):
+                new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
+                if st.form_submit_button("تحديث الداتا الآن 💾"):
+                    if new_db is not None:
+                        try:
+                            if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
+                            else: d = pd.read_excel(new_db)
+                            d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
+                            st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e: st.error(f"حدث خطأ: {e}")
+                    else: st.warning("⚠️ برجاء اختيار ملف أولاً.")
             st.markdown("---")
 
     # --- محرك الذكاء والدوال ---
@@ -289,7 +289,7 @@ def main_app():
     </div></div>""", unsafe_allow_html=True)
 
     # 🛑 تجهيز التبويبات
-    if st.session_state.active_user == "abobakr":
+    if st.session_state.current_user == "abobakr":
         tabs = st.tabs(["🔍 البحث", "📦 الجرد", "🛒 الفواتير", "📖 الكاتالوج", "📈 الإدارة"])
         main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
     else:
@@ -353,16 +353,15 @@ def main_app():
         shared_inv_state = load_shared_inventory()
         if not shared_inv_state.get("is_active", False):
             st.markdown("### 🆕 جلسة جرد جديدة")
-            # 🌟 إزالة الـ Form لفتح الجلسة بدون تهنيج 🌟
-            inv_name = st.text_input("اسم الجرد")
-            inv_reason = st.selectbox("السبب", ["دوري", "مفاجئ", "نهاية العام"])
-            inv_date = st.date_input("التاريخ")
-            
-            if st.button("🚀 فتح الجرد"):
-                if not inv_name: st.error("اكتب اسم الجرد أولاً!")
-                else:
-                    save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
-                    st.rerun()
+            with st.form("inv_setup_form"):
+                inv_name = st.text_input("اسم الجرد")
+                inv_reason = st.selectbox("السبب", ["دوري", "مفاجئ", "نهاية العام"])
+                inv_date = st.date_input("التاريخ")
+                if st.form_submit_button("🚀 فتح الجرد"):
+                    if not inv_name: st.error("اكتب اسم الجرد أولاً!")
+                    else:
+                        save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
+                        st.rerun()
         else:
             st.markdown(f'<div class="inv-active-bar"><div>📌 <b>جرد نشط:</b> {shared_inv_state.get("name","")}</div></div>', unsafe_allow_html=True)
             inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص", "🔫 مسح الباركود", "⚖️ التقرير"])
@@ -382,15 +381,15 @@ def main_app():
                     clean_code = str(scan_code).strip().upper()
                     if clean_code in system_inventory:
                         render_product_card(clean_code, system_inventory[clean_code].get('name',''), system_inventory[clean_code].get('sys_stock',0))
-                        
-                        add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
-                        if st.button("تأكيد 📥"):
-                            l_inv = load_shared_inventory()
-                            if "scanned_items" not in l_inv: l_inv["scanned_items"] = {}
-                            l_inv["scanned_items"][clean_code] = max(0, l_inv.get("scanned_items", {}).get(clean_code, 0) + add_qty)
-                            save_shared_inventory(l_inv)
-                            st.session_state.inv_clear = True
-                            st.rerun()
+                        with st.form("confirm_add_form"):
+                            add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
+                            if st.form_submit_button("تأكيد 📥"):
+                                l_inv = load_shared_inventory()
+                                if "scanned_items" not in l_inv: l_inv["scanned_items"] = {}
+                                l_inv["scanned_items"][clean_code] = max(0, l_inv.get("scanned_items", {}).get(clean_code, 0) + add_qty)
+                                save_shared_inventory(l_inv)
+                                st.session_state.inv_clear = True
+                                st.rerun()
                     else:
                         st.error("❌ غير مسجل!")
                         if st.button("حاول مرة أخرى"): st.session_state.inv_clear = True; st.rerun()
@@ -404,7 +403,7 @@ def main_app():
                     with pd.ExcelWriter(buf, engine='openpyxl') as w: df_report.to_excel(w, index=False)
                     st.download_button("📥 تحميل التقرير", buf.getvalue(), f"Inventory_{shared_inv_state.get('name','')}.xlsx")
                 
-                if st.session_state.active_user == "abobakr":
+                if st.session_state.current_user == "abobakr":
                     if st.button("🛑 إغلاق وإنهاء الجرد"):
                         save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv_state.get('name',''), "report": report})
                         save_shared_inventory({"is_active": False, "scanned_items": {}})
@@ -418,15 +417,14 @@ def main_app():
         
         if not shared_sales.get("is_active", False):
             st.markdown("### 🏬 فتح وردية مبيعات جديدة")
-            
-            # 🌟 إزالة الـ Form لفتح الوردية بدون تهنيج 🌟
-            s_name = st.text_input("اسم/رقم الوردية")
-            s_date = st.date_input("تاريخ الوردية", datetime.date.today())
-            if st.button("🚀 فتح الوردية"):
-                if not s_name: st.error("اكتب اسم الوردية!")
-                else:
-                    save_shared_sales({"is_active": True, "name": s_name, "date": str(s_date), "invoices": [], "deductions": {}})
-                    st.rerun()
+            with st.form("sales_setup_form"):
+                s_name = st.text_input("اسم/رقم الوردية")
+                s_date = st.date_input("تاريخ الوردية", datetime.date.today())
+                if st.form_submit_button("🚀 فتح الوردية"):
+                    if not s_name: st.error("اكتب اسم الوردية!")
+                    else:
+                        save_shared_sales({"is_active": True, "name": s_name, "date": str(s_date), "invoices": [], "deductions": {}})
+                        st.rerun()
         else:
             st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية نشطة:</b> {shared_sales.get("name","")}</div></div>', unsafe_allow_html=True)
             
@@ -454,13 +452,14 @@ def main_app():
 
             if not st.session_state.active_customer:
                 st.markdown("### 📝 فاتورة لعميل جديد")
-                cust_name = st.text_input("اسم العميل:")
-                if st.button("بدء الفاتورة 🛒"):
-                    if cust_name.strip():
-                        st.session_state.active_customer = cust_name.strip()
-                        st.session_state.invoice_cart = []
-                        st.rerun()
-                    else: st.error("يرجى إدخال الاسم.")
+                with st.form("new_customer_form"):
+                    cust_name = st.text_input("اسم العميل:")
+                    if st.form_submit_button("بدء الفاتورة 🛒"):
+                        if cust_name.strip():
+                            st.session_state.active_customer = cust_name.strip()
+                            st.session_state.invoice_cart = []
+                            st.rerun()
+                        else: st.error("يرجى إدخال الاسم.")
             else:
                 st.markdown(f"### 🧾 العميل: <span style='color:#1C65A6;'>{st.session_state.active_customer}</span>", unsafe_allow_html=True)
                 
@@ -481,20 +480,21 @@ def main_app():
                             st.error("❌ تحذير: رصيد هذا الصنف نفذ!")
                             if st.button("تخطي"): st.session_state.pos_clear = True; st.rerun()
                         else:
-                            c1, c2 = st.columns(2)
-                            with c1: sell_qty = st.number_input("الكمية:", min_value=1, max_value=int(live_qty) if live_qty>0 else 1, value=1)
-                            with c2: 
-                                st.number_input("السعر (للقراءة):", value=float(auto_price), disabled=True)
-                                sell_price = float(auto_price)
-                            
-                            if st.button("إضافة 📥"):
-                                if sell_price <= 0: st.error("⚠️ السعر غير مسجل.")
-                                else:
-                                    st.session_state.invoice_cart.append({
-                                        "code": clean_code, "name": p_info.get('name',''), "qty": sell_qty, "price": sell_price, "total": sell_qty * sell_price
-                                    })
-                                    st.session_state.pos_clear = True
-                                    st.rerun()
+                            with st.form("add_to_cart_form"):
+                                c1, c2 = st.columns(2)
+                                with c1: sell_qty = st.number_input("الكمية:", min_value=1, max_value=int(live_qty) if live_qty>0 else 1, value=1)
+                                with c2: 
+                                    st.number_input("السعر (للقراءة):", value=float(auto_price), disabled=True)
+                                    sell_price = float(auto_price)
+                                
+                                if st.form_submit_button("إضافة 📥"):
+                                    if sell_price <= 0: st.error("⚠️ السعر غير مسجل.")
+                                    else:
+                                        st.session_state.invoice_cart.append({
+                                            "code": clean_code, "name": p_info.get('name',''), "qty": sell_qty, "price": sell_price, "total": sell_qty * sell_price
+                                        })
+                                        st.session_state.pos_clear = True
+                                        st.rerun()
                     else:
                         st.error("❌ الباركود غير مسجل!")
                         if st.button("تخطي"): st.session_state.pos_clear = True; st.rerun()
@@ -515,7 +515,7 @@ def main_app():
                             
                             l_sales["invoices"].append({
                                 "invoice_id": inv_id, "time": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
-                                "salesperson": st.session_state.active_user, "customer": st.session_state.active_customer,
+                                "salesperson": st.session_state.current_user, "customer": st.session_state.active_customer,
                                 "total": cart_total, "items": st.session_state.invoice_cart
                             })
                             for item in st.session_state.invoice_cart:
@@ -539,7 +539,7 @@ def main_app():
                             st.session_state.invoice_cart = []
                             st.rerun()
 
-            if st.session_state.active_user == "abobakr":
+            if st.session_state.current_user == "abobakr":
                 st.markdown("---")
                 if st.button("🛑 إغلاق وردية الجملة (أرشيف)"):
                     save_to_sales_history({"name": shared_sales.get("name", ""), "date": shared_sales.get("date", ""), "invoices": shared_sales.get("invoices", [])})
@@ -547,11 +547,11 @@ def main_app():
                     st.rerun()
 
     # ==========================================
-    # 🌟 التبويب 4: 📖 الكاتالوج (النسخة الكاملة بالصور)
+    # 🌟 التبويب 4: 📖 الكاتالوج (تم إصلاح خطأ الواجهة)
     # ==========================================
     with main_tab_cat:
         st.markdown("### 📖 الكاتالوج الشامل للأصناف (Live Catalog)")
-        st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد.")
+        st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد والأسعار.")
 
         shared_sales_cat = load_shared_sales()
         deductions_cat = shared_sales_cat.get("deductions", {})
@@ -564,7 +564,8 @@ def main_app():
             item_price = float(p_info.get('price', 0.0))
 
             if stock_after > 0:
-                img_uri = ""
+                # 🛑 السر هنا: جعل القيمة (None) بدلاً من (نص فارغ) لمنع الانهيار
+                img_uri = None 
                 for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
                     img_path = os.path.join("compressed_images", f"{p_code}{ext}")
                     if os.path.exists(img_path):
@@ -613,12 +614,12 @@ def main_app():
                 type="primary"
             )
         else:
-            st.info("📦 لا توجد أصناف متاحة.")
+            st.info("📦 لا توجد أصناف متاحة (الأرصدة صفر).")
 
     # ==========================================
     # التبويب 5: 📈 لوحة الإدارة
     # ==========================================
-    if st.session_state.active_user == "abobakr":
+    if st.session_state.current_user == "abobakr":
         with main_tab4:
             st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
             flat_records = []
@@ -638,7 +639,3 @@ def main_app():
             else: st.info("لا توجد مبيعات.")
 
     st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
-
-# 🛡️ إغلاق الملف بأسلوب لا يسمح بتشغيل أي كود قديم في الأسفل
-if __name__ == "__main__":
-    main_app()
