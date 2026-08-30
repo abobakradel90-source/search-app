@@ -176,19 +176,25 @@ with col_out:
 if st.session_state.current_user == "abobakr":
     with st.sidebar:
         st.markdown("### ⚙️ إدارة النظام والأسعار")
-        st.markdown("ارفع شيت الإكسيل لتحديث **الأسعار والأرصدة** بشكل دائم:")
-        new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
-        if new_db:
-            if st.button("تحديث الداتا الآن 💾"):
-                try:
-                    if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
-                    else: d = pd.read_excel(new_db)
-                    d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                    st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"حدث خطأ: {e}")
+        # 🌟 استخدام Form عشان صفحة الرفع متعملش ريفريش والزرار يختفي
+        with st.form("master_db_upload_form"):
+            st.markdown("ارفع شيت الإكسيل لتحديث **الأسعار والأرصدة** بشكل دائم:")
+            new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
+            submitted_db = st.form_submit_button("تحديث الداتا الآن 💾")
+            
+            if submitted_db:
+                if new_db is not None:
+                    try:
+                        if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
+                        else: d = pd.read_excel(new_db)
+                        d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
+                        st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"حدث خطأ: {e}")
+                else:
+                    st.warning("⚠️ برجاء اختيار ملف أولاً قبل الضغط على تحديث.")
         st.markdown("---")
 
 # --- محرك الذكاء والدوال ---
@@ -325,7 +331,7 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message=""
 </div>"""
     st.markdown(html_str, unsafe_allow_html=True)
 
-# 🛑 تجهيز التبويبات الشاملة (بما فيها الكاتالوج الجديد)
+# 🛑 تجهيز التبويبات الشاملة
 if st.session_state.current_user == "abobakr":
     tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
     main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs[0], tabs[1], tabs[2], tabs[3], tabs[4]
@@ -728,10 +734,10 @@ with main_tab3:
             st.info("🔒 إغلاق الوردية متاح للإدارة فقط.")
 
 # ==========================================
-# 🌟 التبويب 4 (أو 5 للإدارة): 📖 الكاتالوج الشامل المباشر
+# 🌟 التبويب 4 (الكاتالوج الشامل) 
 # ==========================================
 with main_tab_cat:
-    st.markdown("### 📖 الكاتالوج الشامل للأصناف المتاحة (Live Catalog)")
+    st.markdown("### 📖 الكاتالوج الشامل للأصناف (Live Catalog)")
     st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع أرصدتها اللحظية بعد خصم فواتير المبيعات وأسعارها الحالية.")
     
     shared_sales_cat = load_shared_sales()
@@ -742,9 +748,9 @@ with main_tab_cat:
         stock_before = p_info['sys_stock']
         sales_qty = deductions_cat.get(p_code, 0)
         stock_after = stock_before - sales_qty
-        item_price = p_info.get('price', 0.0) # سحب السعر الذكي
+        item_price = p_info.get('price', 0.0) 
         
-        # إظهار الأصناف اللي رصيدها أكبر من صفر فقط
+        # 🌟 إظهار الأصناف اللي رصيدها أكبر من صفر فقط بناءً على طلبك 🌟
         if stock_after > 0:
             img_uri = ""
             for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
@@ -767,7 +773,6 @@ with main_tab_cat:
     if catalog_data:
         df_catalog = pd.DataFrame(catalog_data)
         
-        # عرض الجدول الذكي بالصور والتنسيقات
         st.dataframe(
             df_catalog,
             column_config={
@@ -776,15 +781,14 @@ with main_tab_cat:
                 "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
                 "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
                 "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل المبيعات"),
-                "كمية المبيعات": st.column_config.NumberColumn("كمية المبيعات", help="الكمية التي تم بيعها في الوردية النشطة"),
-                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد اللحظي المتاح", help="الرصيد المتبقي فعلياً للبيع")
+                "كمية المبيعات": st.column_config.NumberColumn("كمية المبيعات", help="الكمية المباعة"),
+                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد اللحظي المتاح", help="الرصيد المتبقي")
             },
             use_container_width=True,
             hide_index=True,
             height=600
         )
         
-        # تجهيز الشيت للتحميل (بدون عمود الصورة عشان الشيت ميهنجش)
         df_excel_cat = df_catalog.drop(columns=["صورة المنتج"])
         buf_cat = io.BytesIO()
         with pd.ExcelWriter(buf_cat, engine='openpyxl') as w: 
@@ -798,7 +802,7 @@ with main_tab_cat:
             type="primary"
         )
     else:
-        st.info("📦 لا توجد أي أصناف متاحة في المخزن حالياً.")
+        st.info("📦 لا توجد أي أصناف متاحة في المخزن حالياً (رصيدها أكبر من صفر).")
 
 # ==========================================
 # التبويب 5: 📈 لوحة تحكم الإدارة (يظهر فقط للأدمن)
