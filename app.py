@@ -36,18 +36,58 @@ if 'current_user' not in st.session_state:
 SHARED_INV_FILE = "shared_inventory.json"
 MASTER_DB_FILE = "master_database.csv"
 HISTORY_INV_FILE = "inventory_history.json"
+
 SHARED_SALES_FILE = "shared_sales.json"
 HISTORY_SALES_FILE = "sales_history.json"
 
-def load_json(file_path, default_data):
-    if os.path.exists(file_path):
+# --- استرجاع الدوال الأساسية التي تم حذفها بالخطأ ---
+def load_shared_inventory():
+    if os.path.exists(SHARED_INV_FILE):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f: return json.load(f)
+            with open(SHARED_INV_FILE, 'r', encoding='utf-8') as f: return json.load(f)
         except: pass
-    return default_data
+    return {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}}
 
-def save_json(file_path, data):
-    with open(file_path, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+def save_shared_inventory(data):
+    with open(SHARED_INV_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+
+def load_inv_history():
+    if os.path.exists(HISTORY_INV_FILE):
+        try:
+            with open(HISTORY_INV_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+        except: pass
+    return []
+
+def save_to_inv_history(record):
+    history = load_inv_history()
+    history.append(record)
+    with open(HISTORY_INV_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
+
+def load_shared_sales():
+    if os.path.exists(SHARED_SALES_FILE):
+        try:
+            with open(SHARED_SALES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if "invoices" not in data: data["invoices"] = []
+                if "deductions" not in data: data["deductions"] = {}
+                return data
+        except: pass
+    return {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}}
+
+def save_shared_sales(data):
+    with open(SHARED_SALES_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+
+def load_sales_history():
+    if os.path.exists(HISTORY_SALES_FILE):
+        try:
+            with open(HISTORY_SALES_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+        except: pass
+    return []
+
+def save_to_sales_history(record):
+    history = load_sales_history()
+    history.append(record)
+    with open(HISTORY_SALES_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
 
 def get_image_base64(img_path):
     try:
@@ -73,6 +113,7 @@ st.markdown(f"""
         .stButton > button {{ background-color: #1C65A6 !important; color: white !important; border-radius: 12px; border: none; padding: 12px 24px; font-weight: 800; font-size: 18px; width: 100%; box-shadow: 0 6px 15px rgba(28, 101, 166, 0.3); transition: all 0.3s ease; }}
         .stButton > button:hover {{ background-color: #144A7A !important; transform: translateY(-3px); }}
         .logout-btn > button {{ background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; margin-bottom: 20px; }}
+        .logout-btn > button:hover {{ background-color: #DC2626 !important; }}
         .stTabs [data-baseweb="tab-list"] {{ gap: 20px; justify-content: center; background: white; padding: 10px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; flex-wrap: wrap; }}
         .stTabs [data-baseweb="tab"] {{ font-size: 20px !important; font-weight: 900 !important; color: #5C7C99 !important; padding: 10px 20px; border-radius: 10px; }}
         .stTabs [aria-selected="true"] {{ background-color: #1C65A6 !important; color: white !important; }}
@@ -113,7 +154,7 @@ if not st.session_state.logged_in:
             st.rerun()
         else: st.error("❌ البيانات غير صحيحة.")
     st.markdown('</div>', unsafe_allow_html=True)
-    st.stop() # يمنع تشغيل أي كود تحت لو مش مسجل دخول
+    st.stop() 
 
 # ==========================================
 # ✅ محتوى الموقع والقائمة الجانبية (بعد الدخول)
@@ -337,7 +378,7 @@ with main_tab1:
 # التبويب 2: الجرد
 # ==========================================
 with main_tab2:
-    shared_inv_state = load_json(SHARED_INV_FILE, {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}})
+    shared_inv_state = load_shared_inventory()
     if not shared_inv_state.get("is_active", False):
         st.markdown("### 🆕 جلسة جرد جديدة")
         with st.form("inv_setup_form"):
@@ -347,7 +388,7 @@ with main_tab2:
             if st.form_submit_button("🚀 فتح الجرد"):
                 if not inv_name: st.error("اكتب اسم الجرد أولاً!")
                 else:
-                    save_json(SHARED_INV_FILE, {"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
+                    save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
                     st.rerun()
     else:
         st.markdown(f'<div class="inv-active-bar"><div>📌 <b>جرد نشط:</b> {shared_inv_state.get("name","")}</div></div>', unsafe_allow_html=True)
@@ -371,9 +412,10 @@ with main_tab2:
                     with st.form("confirm_add_form"):
                         add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
                         if st.form_submit_button("تأكيد 📥"):
-                            l_inv = load_json(SHARED_INV_FILE, {})
+                            l_inv = load_shared_inventory()
+                            if "scanned_items" not in l_inv: l_inv["scanned_items"] = {}
                             l_inv["scanned_items"][clean_code] = max(0, l_inv.get("scanned_items", {}).get(clean_code, 0) + add_qty)
-                            save_json(SHARED_INV_FILE, l_inv)
+                            save_shared_inventory(l_inv)
                             st.session_state.inv_clear = True
                             st.rerun()
                 else:
@@ -392,7 +434,7 @@ with main_tab2:
             if st.session_state.current_user == "abobakr":
                 if st.button("🛑 إغلاق وإنهاء الجرد"):
                     save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv_state.get('name',''), "report": report})
-                    save_json(SHARED_INV_FILE, {"is_active": False, "scanned_items": {}})
+                    save_shared_inventory({"is_active": False, "scanned_items": {}})
                     st.rerun()
 
 # ==========================================
@@ -414,7 +456,6 @@ with main_tab3:
     else:
         st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية نشطة:</b> {shared_sales.get("name","")}</div></div>', unsafe_allow_html=True)
         
-        # نظام التحميل الآمن بدون JS
         if st.session_state.get("last_invoice_b64"):
             st.success(f"🎉 تم حفظ الفاتورة بنجاح: {st.session_state.get('last_invoice_name')}")
             st.download_button(
