@@ -130,10 +130,10 @@ if not st.session_state.logged_in:
             st.rerun()
         else: st.error("❌ البيانات غير صحيحة.")
     st.markdown('</div>', unsafe_allow_html=True)
-    st.stop() # إيقاف النظام لو اليوزر مش مسجل دخول
+    st.stop() 
 
 # ==========================================
-# ✅ محتوى الموقع والقائمة الجانبية (بعد الدخول)
+# ✅ محتوى الموقع والقائمة الجانبية
 # ==========================================
 if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
@@ -548,11 +548,11 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 🌟 التبويب 4: 📖 الكاتالوج (الكامل بالصور)
+# 🌟 التبويب 4: 📖 الكاتالوج الشامل بالصور
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف (Live Catalog)")
-    st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد.")
+    st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد والأسعار.")
 
     shared_sales_cat = load_shared_sales()
     deductions_cat = shared_sales_cat.get("deductions", {})
@@ -577,10 +577,10 @@ with main_tab_cat:
                 "صورة المنتج": img_uri,
                 "كود الصنف": p_code,
                 "اسم الصنف": p_info.get('name', ''),
-                "سعر القطعة": item_price,
                 "الرصيد قبل المبيعات": stock_before,
                 "كمية المبيعات": sales_qty,
-                "الرصيد اللحظي المتاح": stock_after
+                "الرصيد المتاح": stock_after,
+                "سعر القطعة": item_price
             })
 
     if catalog_data:
@@ -592,10 +592,10 @@ with main_tab_cat:
                 "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الكوتشي"),
                 "كود الصنف": st.column_config.TextColumn("كود الصنف"),
                 "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
-                "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
-                "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل"),
-                "كمية المبيعات": st.column_config.NumberColumn("المبيعات"),
-                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("المتاح")
+                "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد الدفتري"),
+                "كمية المبيعات": st.column_config.NumberColumn("المبيعات بالوردية"),
+                "الرصيد المتاح": st.column_config.NumberColumn("الرصيد اللحظي المتاح"),
+                "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f")
             },
             use_container_width=True,
             hide_index=True,
@@ -614,7 +614,7 @@ with main_tab_cat:
             type="primary"
         )
     else:
-        st.info("📦 لا توجد أصناف متاحة.")
+        st.info("📦 لا توجد أصناف متاحة بالمخزن (جميع الأرصدة صفر).")
 
 # ==========================================
 # التبويب 5: 📈 لوحة الإدارة
@@ -638,7 +638,4 @@ if st.session_state.current_user == "abobakr":
             st.dataframe(df_all.groupby('اسم العميل').sum().sort_values(by='الإجمالي', ascending=False).reset_index(), use_container_width=True)
         else: st.info("لا توجد مبيعات.")
 
-    st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
-
-# 🛑 هذا السطر السحري يمنع تشغيل أي كود قديم موجود بالأسفل بالغلط!
-st.stop()
+st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
