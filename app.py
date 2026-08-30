@@ -130,10 +130,10 @@ if not st.session_state.logged_in:
             st.rerun()
         else: st.error("❌ البيانات غير صحيحة.")
     st.markdown('</div>', unsafe_allow_html=True)
-    st.stop() 
+    st.stop()
 
 # ==========================================
-# ✅ محتوى الموقع والقائمة الجانبية (بعد الدخول)
+# ✅ محتوى الموقع والقائمة الجانبية
 # ==========================================
 if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
@@ -148,7 +148,6 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 🌟 الإدارة: رفع ملف الداتا الدائم 🌟
 if st.session_state.current_user == "abobakr":
     with st.sidebar:
         st.markdown("### ⚙️ إدارة النظام والأسعار")
@@ -432,7 +431,6 @@ with main_tab3:
     else:
         st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية نشطة:</b> {shared_sales.get("name","")}</div></div>', unsafe_allow_html=True)
         
-        # نظام التحميل الآمن
         if st.session_state.get("last_invoice_b64"):
             st.success(f"🎉 تم حفظ الفاتورة بنجاح: {st.session_state.get('last_invoice_name')}")
             st.download_button(
@@ -643,3 +641,4 @@ if st.session_state.current_user == "abobakr":
         else: st.info("لا توجد مبيعات.")
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
+st.stop() # 🛡️ درع الحماية ضد أي كود مكرر بالغلط
