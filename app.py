@@ -325,12 +325,13 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message=""
 </div>"""
     st.markdown(html_str, unsafe_allow_html=True)
 
+# 🛑 تجهيز التبويبات الشاملة (بما فيها الكاتالوج الجديد)
 if st.session_state.current_user == "abobakr":
-    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📈 لوحة تحكم الإدارة"])
-    main_tab1, main_tab2, main_tab3, main_tab4 = tabs[0], tabs[1], tabs[2], tabs[3]
+    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
+    main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs[0], tabs[1], tabs[2], tabs[3], tabs[4]
 else:
-    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
-    main_tab1, main_tab2, main_tab3 = tabs[0], tabs[1], tabs[2]
+    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج"])
+    main_tab1, main_tab2, main_tab3, main_tab_cat = tabs[0], tabs[1], tabs[2], tabs[3]
 
 # ==========================================
 # التبويب 1: البحث
@@ -727,7 +728,80 @@ with main_tab3:
             st.info("🔒 إغلاق الوردية متاح للإدارة فقط.")
 
 # ==========================================
-# التبويب 4: 📈 لوحة تحكم الإدارة (يظهر فقط للأدمن)
+# 🌟 التبويب 4 (أو 5 للإدارة): 📖 الكاتالوج الشامل المباشر
+# ==========================================
+with main_tab_cat:
+    st.markdown("### 📖 الكاتالوج الشامل للأصناف المتاحة (Live Catalog)")
+    st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع أرصدتها اللحظية بعد خصم فواتير المبيعات وأسعارها الحالية.")
+    
+    shared_sales_cat = load_shared_sales()
+    deductions_cat = shared_sales_cat.get("deductions", {})
+    
+    catalog_data = []
+    for p_code, p_info in system_inventory.items():
+        stock_before = p_info['sys_stock']
+        sales_qty = deductions_cat.get(p_code, 0)
+        stock_after = stock_before - sales_qty
+        item_price = p_info.get('price', 0.0) # سحب السعر الذكي
+        
+        # إظهار الأصناف اللي رصيدها أكبر من صفر فقط
+        if stock_after > 0:
+            img_uri = ""
+            for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
+                img_path = os.path.join("compressed_images", f"{p_code}{ext}")
+                if os.path.exists(img_path):
+                    b64 = get_image_base64(img_path)
+                    if b64: img_uri = f"data:image/jpeg;base64,{b64}"
+                    break
+            
+            catalog_data.append({
+                "صورة المنتج": img_uri,
+                "كود الصنف": p_code,
+                "اسم الصنف": p_info['name'],
+                "سعر القطعة": item_price,
+                "الرصيد قبل المبيعات": stock_before,
+                "كمية المبيعات": sales_qty,
+                "الرصيد اللحظي المتاح": stock_after
+            })
+            
+    if catalog_data:
+        df_catalog = pd.DataFrame(catalog_data)
+        
+        # عرض الجدول الذكي بالصور والتنسيقات
+        st.dataframe(
+            df_catalog,
+            column_config={
+                "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الكوتشي المصغرة"),
+                "كود الصنف": st.column_config.TextColumn("كود الصنف"),
+                "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
+                "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
+                "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل المبيعات"),
+                "كمية المبيعات": st.column_config.NumberColumn("كمية المبيعات", help="الكمية التي تم بيعها في الوردية النشطة"),
+                "الرصيد اللحظي المتاح": st.column_config.NumberColumn("الرصيد اللحظي المتاح", help="الرصيد المتبقي فعلياً للبيع")
+            },
+            use_container_width=True,
+            hide_index=True,
+            height=600
+        )
+        
+        # تجهيز الشيت للتحميل (بدون عمود الصورة عشان الشيت ميهنجش)
+        df_excel_cat = df_catalog.drop(columns=["صورة المنتج"])
+        buf_cat = io.BytesIO()
+        with pd.ExcelWriter(buf_cat, engine='openpyxl') as w: 
+            df_excel_cat.to_excel(w, index=False, sheet_name='كاتالوج المنتجات المتاحة')
+            
+        st.download_button(
+            label="📥 تحميل الكاتالوج كملف إكسيل (Excel)",
+            data=buf_cat.getvalue(),
+            file_name=f"Live_Catalog_With_Prices_{datetime.date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+    else:
+        st.info("📦 لا توجد أي أصناف متاحة في المخزن حالياً.")
+
+# ==========================================
+# التبويب 5: 📈 لوحة تحكم الإدارة (يظهر فقط للأدمن)
 # ==========================================
 if st.session_state.current_user == "abobakr":
     with main_tab4:
@@ -799,13 +873,8 @@ if st.session_state.current_user == "abobakr":
 
             st.markdown("---")
             
-            # 🌟 إضافة تقرير العملاء المفصل 🌟
             st.markdown("#### 👥 تقرير مشتريات العملاء (كشف حساب)")
-            customer_report = df_all_sales.groupby('اسم العميل').agg({
-                'الكمية': 'sum', 
-                'الإجمالي': 'sum'
-            }).reset_index().sort_values(by='الإجمالي', ascending=False)
-            
+            customer_report = df_all_sales.groupby('اسم العميل').agg({'الكمية': 'sum', 'الإجمالي': 'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
             st.dataframe(customer_report, use_container_width=True, hide_index=True)
 
             st.markdown("---")
