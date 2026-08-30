@@ -35,7 +35,7 @@ if 'current_user' not in st.session_state:
 # 🌐 دوال إدارة قواعد البيانات (JSON & CSV)
 # ==========================================
 SHARED_INV_FILE = "shared_inventory.json"
-MASTER_DB_FILE = "master_database.csv" # الشيت الدائم الجديد اللي مش بيتمسح
+MASTER_DB_FILE = "master_database.csv"
 HISTORY_INV_FILE = "inventory_history.json"
 
 SHARED_SALES_FILE = "shared_sales.json"
@@ -235,7 +235,7 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🚀 محرك استخراج البيانات الموحد (الأساس + التحديثات)
+# 🚀 محرك استخراج البيانات الموحد
 # ==========================================
 system_inventory = {}
 
@@ -250,7 +250,6 @@ def process_df_into_inventory(df):
         elif not stock_col and any(k in low for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = orig
         elif not price_col and any(k in low for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = orig
     
-    # محاولة بديلة لو مفيش عناوين واضحة
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
     if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
@@ -282,15 +281,12 @@ def process_df_into_inventory(df):
                         p_price = float(m.group())
                         break
                         
-        # تعبئة أو تحديث القاموس
         system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
 
-# 1. تحميل الملف الأساسي (Fallback)
 try: df_products = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
 except: df_products = None
 process_df_into_inventory(df_products)
 
-# 2. تحميل الملف الدائم (Master) اللي هيفضل يكتب فوق الداتا القديمة
 if os.path.exists(MASTER_DB_FILE):
     try: df_master = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
     except: df_master = None
@@ -330,7 +326,13 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message=""
 </div>"""
     st.markdown(html_str, unsafe_allow_html=True)
 
-main_tab1, main_tab2, main_tab3 = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
+# 🛑 إخفاء تبويب لوحة التحكم عن الموظفين العاديين
+if st.session_state.current_user == "abobakr":
+    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📈 لوحة تحكم الإدارة"])
+    main_tab1, main_tab2, main_tab3, main_tab4 = tabs[0], tabs[1], tabs[2], tabs[3]
+else:
+    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
+    main_tab1, main_tab2, main_tab3 = tabs[0], tabs[1], tabs[2]
 
 # ==========================================
 # التبويب 1: البحث
@@ -395,20 +397,9 @@ with main_tab2:
             with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
             with col2: inv_reason = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "جرد نهاية العام", "أخرى"])
             with col3: inv_date = st.date_input("تاريخ الجرد", datetime.date.today())
-            
-            # تغيير الشيت من هنا بيسمع في الداتا الدائمة فوراً
-            uploaded_inv_file = st.file_uploader("📎 رفع شيت الإكسيل وتحديث الداتا (Excel/CSV) - اختياري", type=['csv', 'xlsx'])
-            
             if st.form_submit_button("🚀 فتح جلسة الجرد للجميع"):
                 if not inv_name: st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
                 else:
-                    if uploaded_inv_file is not None:
-                        try:
-                            if uploaded_inv_file.name.endswith('.csv'): df_custom = pd.read_csv(uploaded_inv_file, encoding='utf-8-sig', sep=None, engine='python')
-                            else: df_custom = pd.read_excel(uploaded_inv_file)
-                            df_custom.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                        except:
-                            st.error("خطأ في الملف، سيتم استخدام الأرصدة الأساسية.")
                     save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
                     st.rerun()
     else:
@@ -471,7 +462,6 @@ with main_tab2:
                 if st.button("🛑 إغلاق وإنهاء جلسة الجرد وحفظها بالأرشيف"):
                     save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv_state.get('name'), "date": shared_inv_state.get('date'), "report": report})
                     save_shared_inventory({"is_active": False, "scanned_items": {}})
-                    # ⚠️ الملف الدائم MASTER_DB_FILE مبقاش يتمسح عشان الأسعار متضيعش!
                     st.rerun()
             else: st.info("🔒 الإغلاق متاح للإدارة (abobakr) فقط.")
 
@@ -698,7 +688,7 @@ with main_tab3:
 
         if st.session_state.current_user == "abobakr":
             st.markdown("---")
-            if st.button("🛑 إغلاق وردية الجملة وحفظ لوحة التحكم بالأرشيف"):
+            if st.button("🛑 إغلاق وردية الجملة (لحفظها نهائياً بالأرشيف التاريخي)"):
                 if all_invoices:
                     save_to_sales_history({
                         "name": shared_sales.get("name"), "date": shared_sales.get("date"),
@@ -711,53 +701,92 @@ with main_tab3:
             st.info("🔒 إغلاق الوردية متاح للإدارة فقط.")
 
 # ==========================================
-# 📁 أرشيف الإدارة (يظهر فقط للأدمن)
+# التبويب 4: 📈 لوحة تحكم الإدارة (يظهر فقط للأدمن)
 # ==========================================
 if st.session_state.current_user == "abobakr":
-    st.markdown("<br><hr>", unsafe_allow_html=True)
-    st.markdown("### 📁 الأرشيف الإداري السري (جرد & فواتير الجملة)")
-    
-    arch_tab1, arch_tab2 = st.tabs(["📦 أرشيف الجرد", "💰 أرشيف فواتير الجملة"])
-    
-    with arch_tab1:
-        inv_hist = load_inv_history()
-        if not inv_hist: st.info("لا يوجد أرشيف جرد.")
-        for idx, rec in enumerate(reversed(inv_hist)):
-            with st.expander(f"📌 جرد: {rec['name']} | التاريخ: {rec['date']}"):
-                df_h = pd.DataFrame(rec['report'])
-                st.dataframe(df_h.style.map(lambda v: 'color:red;font-weight:bold;' if v<0 else ('color:blue;font-weight:bold;' if v>0 else 'color:green;'), subset=['الفروقات']), use_container_width=True, hide_index=True)
-                b = io.BytesIO()
-                with pd.ExcelWriter(b, engine='openpyxl') as w: df_h.to_excel(w, index=False)
-                st.download_button("📥 تحميل الإكسيل", data=b.getvalue(), file_name=f"Arch_Inv_{rec['name']}.xlsx", key=f"inv_dl_{idx}")
-
-    with arch_tab2:
+    with main_tab4:
+        st.markdown("## 📈 لوحة تحكم الإدارة الشاملة (Live Dashboard)")
+        st.markdown("تُعرض هنا تحليلات حية ومباشرة لجميع المبيعات (الوردية النشطة + الأرشيف القديم) بدون الحاجة لإغلاق أي وردية.")
+        
+        # تجميع كل بيانات المبيعات (النشطة والقديمة) في مكان واحد
+        flat_records = []
+        
+        # 1. سحب بيانات الأرشيف القديم
         sales_hist = load_sales_history()
-        if not sales_hist: st.info("لا يوجد أرشيف فواتير.")
-        for idx, rec in enumerate(reversed(sales_hist)):
-            with st.expander(f"💳 وردية: {rec['name']} | إجمالي الإيرادات: {rec['total_revenue']} ج.م"):
+        for rec in sales_hist:
+            for inv in rec.get('invoices', []):
+                for item in inv['items']:
+                    flat_records.append({
+                        "حالة الوردية": "مغلقة (أرشيف)",
+                        "رقم الفاتورة": inv.get('invoice_id', ''),
+                        "وقت الإصدار": inv.get('time', ''),
+                        "البائع": inv.get('salesperson', ''),
+                        "اسم العميل": inv.get('customer', ''),
+                        "كود الصنف": item.get('code', ''),
+                        "اسم الصنف": item.get('name', ''),
+                        "الكمية": item.get('qty', 0),
+                        "سعر الجملة": item.get('price', 0.0),
+                        "الإجمالي": item.get('total', 0.0)
+                    })
+                    
+        # 2. سحب بيانات الوردية النشطة حالياً
+        shared_sales = load_shared_sales()
+        for inv in shared_sales.get('invoices', []):
+            for item in inv['items']:
+                flat_records.append({
+                    "حالة الوردية": "نشطة حالياً",
+                    "رقم الفاتورة": inv.get('invoice_id', ''),
+                    "وقت الإصدار": inv.get('time', ''),
+                    "البائع": inv.get('salesperson', ''),
+                    "اسم العميل": inv.get('customer', ''),
+                    "كود الصنف": item.get('code', ''),
+                    "اسم الصنف": item.get('name', ''),
+                    "الكمية": item.get('qty', 0),
+                    "سعر الجملة": item.get('price', 0.0),
+                    "الإجمالي": item.get('total', 0.0)
+                })
+        
+        if not flat_records:
+            st.info("لا توجد أي مبيعات مسجلة في النظام حتى الآن لعرض التحليلات.")
+        else:
+            df_all_sales = pd.DataFrame(flat_records)
+            
+            # --- المؤشرات العلوية ---
+            total_rev_all = df_all_sales['الإجمالي'].sum()
+            total_items_all = df_all_sales['الكمية'].sum()
+            total_invoices_all = df_all_sales['رقم الفاتورة'].nunique()
+            
+            c1, c2, c3 = st.columns(3)
+            with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي إيرادات المحل</div><div class="metric-value" style="color:#10B981;">{total_rev_all} ج.م</div></div>', unsafe_allow_html=True)
+            with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{total_items_all} قطعة</div></div>', unsafe_allow_html=True)
+            with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">🧾 إجمالي الفواتير المُصدرة</div><div class="metric-value" style="color:#F59E0B;">{total_invoices_all} فاتورة</div></div>', unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # --- الرسوم البيانية والجداول ---
+            col_chart, col_table = st.columns(2)
+            
+            with col_chart:
+                st.markdown("#### 👨‍💼 أداء الموظفين (أفضل بياع)")
+                top_salesmen = df_all_sales.groupby('البائع')['الإجمالي'].sum().sort_values(ascending=False)
+                st.bar_chart(top_salesmen, color="#1C65A6")
                 
-                flat_records = []
-                for inv in rec.get('invoices', []):
-                    for item in inv['items']:
-                        flat_records.append({
-                            "رقم الفاتورة": inv.get('invoice_id', ''),
-                            "وقت الإصدار": inv.get('time', ''),
-                            "البائع": inv.get('salesperson', ''),
-                            "اسم العميل": inv.get('customer', ''),
-                            "كود الصنف": item.get('code', ''),
-                            "اسم الصنف": item.get('name', ''),
-                            "الكمية": item.get('qty', ''),
-                            "سعر الجملة": item.get('price', ''),
-                            "الإجمالي": item.get('total', '')
-                        })
-                        
-                if flat_records:
-                    df_s = pd.DataFrame(flat_records)
-                    st.dataframe(df_s, use_container_width=True, hide_index=True)
-                    b_s = io.BytesIO()
-                    with pd.ExcelWriter(b_s, engine='openpyxl') as w: df_s.to_excel(w, index=False)
-                    st.download_button("📥 تحميل كشف حساب الفواتير (Excel)", data=b_s.getvalue(), file_name=f"Arch_Invoices_{rec['name']}.xlsx", key=f"sal_dl_{idx}")
-                else:
-                    st.warning("الوردية فارغة.")
+            with col_table:
+                st.markdown("#### 👟 أكثر الكوتشيات مبيعاً (Top Sellers)")
+                top_items = df_all_sales.groupby(['كود الصنف', 'اسم الصنف'])['الكمية'].sum().reset_index().sort_values(by='الكمية', ascending=False)
+                st.dataframe(top_items.head(10), use_container_width=True, hide_index=True)
 
-st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("#### 📥 سجل المبيعات الشامل (كل الفواتير)")
+            st.dataframe(df_all_sales, use_container_width=True, hide_index=True)
+            
+            # زرار التصدير الشامل
+            buf_all = io.BytesIO()
+            with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all_sales.to_excel(w, index=False, sheet_name='كل المبيعات')
+            st.download_button(
+                label="📥 تحميل شيت إكسيل بكل مبيعات المحل (تاريخياً وحالياً)",
+                data=buf_all.getvalue(),
+                file_name=f"All_Master_Sales_{datetime.date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
