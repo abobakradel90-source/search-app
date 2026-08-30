@@ -13,10 +13,11 @@ from streamlit_cropper import st_cropper
 import io
 import datetime
 import json
+import streamlit.components.v1 as components
 import re
 import time
 
-# --- 1. إعدادات الصفحة ---
+# --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
 
 USERS = {
@@ -31,39 +32,62 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 دوال إدارة قواعد البيانات
+# 🌐 دوال إدارة قواعد البيانات (JSON & CSV)
 # ==========================================
 SHARED_INV_FILE = "shared_inventory.json"
 MASTER_DB_FILE = "master_database.csv"
 HISTORY_INV_FILE = "inventory_history.json"
+
 SHARED_SALES_FILE = "shared_sales.json"
 HISTORY_SALES_FILE = "sales_history.json"
 
-def load_json(file_path, default_data):
-    if os.path.exists(file_path):
+def load_shared_inventory():
+    if os.path.exists(SHARED_INV_FILE):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f: return json.load(f)
+            with open(SHARED_INV_FILE, 'r', encoding='utf-8') as f: return json.load(f)
         except: pass
-    return default_data
+    return {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}}
 
-def save_json(file_path, data):
-    with open(file_path, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+def save_shared_inventory(data):
+    with open(SHARED_INV_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
-def load_shared_inventory(): return load_json(SHARED_INV_FILE, {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}})
-def save_shared_inventory(data): save_json(SHARED_INV_FILE, data)
-def load_inv_history(): return load_json(HISTORY_INV_FILE, [])
+def load_inv_history():
+    if os.path.exists(HISTORY_INV_FILE):
+        try:
+            with open(HISTORY_INV_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+        except: pass
+    return []
+
 def save_to_inv_history(record):
     history = load_inv_history()
     history.append(record)
-    save_json(HISTORY_INV_FILE, history)
+    with open(HISTORY_INV_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
 
-def load_shared_sales(): return load_json(SHARED_SALES_FILE, {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}})
-def save_shared_sales(data): save_json(SHARED_SALES_FILE, data)
-def load_sales_history(): return load_json(HISTORY_SALES_FILE, [])
+def load_shared_sales():
+    if os.path.exists(SHARED_SALES_FILE):
+        try:
+            with open(SHARED_SALES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if "invoices" not in data: data["invoices"] = []
+                if "deductions" not in data: data["deductions"] = {}
+                return data
+        except: pass
+    return {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}}
+
+def save_shared_sales(data):
+    with open(SHARED_SALES_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+
+def load_sales_history():
+    if os.path.exists(HISTORY_SALES_FILE):
+        try:
+            with open(HISTORY_SALES_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+        except: pass
+    return []
+
 def save_to_sales_history(record):
     history = load_sales_history()
     history.append(record)
-    save_json(HISTORY_SALES_FILE, history)
+    with open(HISTORY_SALES_FILE, 'w', encoding='utf-8') as f: json.dump(history, f, ensure_ascii=False, indent=4)
 
 def get_image_base64(img_path):
     try:
@@ -110,7 +134,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🛑 بوابة الدخول (النظام المباشر)
+# 🛑 بوابة تسجيل الدخول
 # ==========================================
 if not st.session_state.logged_in:
     st.markdown('<div class="login-box">', unsafe_allow_html=True)
@@ -130,512 +154,667 @@ if not st.session_state.logged_in:
             st.rerun()
         else: st.error("❌ البيانات غير صحيحة.")
     st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 # ==========================================
-# ✅ محتوى الموقع الشامل
+# ✅ محتوى الموقع والقائمة الجانبية
 # ==========================================
-else:
-    if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
-    else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
+if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpeg;base64,{logo_base64}" alt="ED Store Logo"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
+else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
-    col_welc, col_out = st.columns([4, 1])
-    with col_welc: st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
-    with col_out:
-        st.markdown('<div class="logout-btn">', unsafe_allow_html=True)
-        if st.button("تسجيل خروج 🚪"):
-            st.session_state.logged_in = False
-            st.session_state.current_user = ""
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+col_welc, col_out = st.columns([4, 1])
+with col_welc: st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
+with col_out:
+    st.markdown('<div class="logout-btn">', unsafe_allow_html=True)
+    if st.button("تسجيل خروج 🚪"):
+        st.session_state.logged_in = False
+        st.session_state.current_user = ""
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.current_user == "abobakr":
-        with st.sidebar:
-            st.markdown("### ⚙️ إدارة النظام والأسعار")
-            with st.form("upload_form"):
-                new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
-                if st.form_submit_button("تحديث الداتا الآن 💾"):
-                    if new_db is not None:
-                        try:
-                            if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
-                            else: d = pd.read_excel(new_db)
-                            d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                            st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e: st.error(f"حدث خطأ: {e}")
-                    else: st.warning("⚠️ برجاء اختيار ملف أولاً.")
-            st.markdown("---")
-
-    # --- محرك الذكاء والدوال ---
-    @st.cache_resource
-    def download_new_chroma_db():
-        zip_path, extract_path, marker_file = "chroma_db.zip", "./chroma_db", "./chroma_db/fashion_clip_v3.txt"
-        download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
-        if os.path.exists(extract_path) and not os.path.exists(marker_file): shutil.rmtree(extract_path)
-        if not os.path.exists(extract_path):
-            with st.spinner('📦 جاري تهيئة مستودع البيانات الذكي...'):
+if st.session_state.current_user == "abobakr":
+    with st.sidebar:
+        st.markdown("### ⚙️ إدارة النظام والأسعار")
+        st.markdown("ارفع شيت الإكسيل لتحديث **الأسعار والأرصدة** بشكل دائم:")
+        new_db = st.file_uploader("تحديث قاعدة البيانات", type=['csv', 'xlsx'])
+        if new_db:
+            if st.button("تحديث الداتا الآن 💾"):
                 try:
-                    urllib.request.urlretrieve(download_url, zip_path)
-                    with zipfile.ZipFile(zip_path, 'r') as zip_ref: zip_ref.extractall(".")
-                    if os.path.exists(zip_path): os.remove(zip_path)
-                    with open(marker_file, 'w') as f: f.write("done")
-                except: pass
-
-    @st.cache_resource
-    def load_vision_system():
-        download_new_chroma_db()
-        model_id = "patrickjohncyh/fashion-clip"
-        return CLIPModel.from_pretrained(model_id), CLIPProcessor.from_pretrained(model_id), chromadb.PersistentClient(path="./chroma_db").get_collection(name="products_collection")
-
-    try: model, processor, collection = load_vision_system()
-    except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
-
-    def get_image_embedding(image):
-        image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
-        inputs = processor(images=image, return_tensors="pt")
-        with torch.no_grad():
-            features = model.get_image_features(**inputs)
-            if not isinstance(features, torch.Tensor): features = features.image_embeds if hasattr(features, 'image_embeds') else features[0]
-            return features.squeeze().numpy().tolist()
-
-    def get_color_histogram(image):
-        img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
-        hist = img.histogram(); total = sum(hist) / 3
-        return [x / (total if total > 0 else 1) for x in hist]
-
-    def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
-
-    # ==========================================
-    # 🚀 محرك استخراج البيانات الموحد
-    # ==========================================
-    system_inventory = {}
-
-    def parse_val(val):
-        try:
-            m = re.search(r'-?\d+(\.\d+)?', str(val).replace(',', '').strip())
-            return float(m.group()) if m else 0.0
-        except: return 0.0
-
-    def process_df_into_inventory(df):
-        if df is None or df.empty: return
-        cols = [str(c).lower().strip() for c in df.columns]
-        code_col = name_col = stock_col = price_col = None
-        
-        for orig, low in zip(df.columns, cols):
-            if not code_col and any(k in low for k in ['code', 'كود', 'باركود', 'file']): code_col = orig
-            elif not name_col and any(k in low for k in ['name', 'اسم', 'صنف', 'title']): name_col = orig
-            elif not stock_col and any(k in low for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = orig
-            elif not price_col and any(k in low for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = orig
-        
-        if not code_col and len(df.columns) > 0: code_col = df.columns[0]
-        if not name_col and len(df.columns) > 1: name_col = df.columns[1]
-        if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
-        if not price_col and len(df.columns) > 4: price_col = df.columns[4]
-
-        for _, row in df.iterrows():
-            raw_code = str(row.get(code_col, "")).strip()
-            if raw_code.lower() in ['nan', 'none', '']: continue
-            p_code = raw_code.split('.')[0].upper()
-            
-            p_name = str(row.get(name_col, "بدون اسم")).strip()
-            if p_name.lower() in ['nan', 'none']: p_name = "بدون اسم"
-            
-            p_stock = parse_val(row.get(stock_col, 0))
-            p_price = parse_val(row.get(price_col, 0))
-                
-            if p_price == 0.0:
-                for c in df.columns:
-                    if any(k in str(c).lower().strip() for k in ['price', 'سعر', 'ثمن', 'جملة']):
-                        t_price = parse_val(row[c])
-                        if t_price > 0: p_price = t_price; break
-                            
-            system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
-
-    try: df_products = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
-    except: df_products = None
-    process_df_into_inventory(df_products)
-
-    if os.path.exists(MASTER_DB_FILE):
-        try: df_master = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
-        except: df_master = None
-        process_df_into_inventory(df_master)
-
-    def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message="", details_html="", is_sales=False):
-        img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
-        for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
-            img_path = os.path.join("compressed_images", f"{p_code}{ext}")
-            if os.path.exists(img_path):
-                img_html = f'<img src="data:image/jpeg;base64,{get_image_base64(img_path)}" class="product-img">'
-                break
-                
-        is_out = float(p_stock) <= 0
-        stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
-        
-        if is_sales:
-            price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price and float(p_price) > 0 else " &nbsp;|&nbsp; ⚠️ السعر غير مسجل"
-            stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}"
-        else: stock_text = f"📦 الرصيد الدفتري: {p_stock}"
-            
-        msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
-
-        st.markdown(f"""<div class="product-card">
-    {img_html}
-    <div class="product-details" style="flex-grow: 1;">
-    <div class="code-badge">الكود: {p_code}</div>
-    <h3 class="product-title">{p_name}</h3>
-    <div class="{stock_class}">{stock_text}</div>
-    {details_html}
-    {msg_html}
-    </div></div>""", unsafe_allow_html=True)
-
-    # 🛑 تجهيز التبويبات
-    if st.session_state.current_user == "abobakr":
-        tabs = st.tabs(["🔍 البحث", "📦 الجرد", "🛒 الفواتير", "📖 الكاتالوج", "📈 الإدارة"])
-        main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
-    else:
-        tabs = st.tabs(["🔍 البحث", "📦 الجرد", "🛒 الفواتير", "📖 الكاتالوج"])
-        main_tab1, main_tab2, main_tab3, main_tab_cat = tabs
-
-    # ==========================================
-    # التبويب 1: البحث
-    # ==========================================
-    with main_tab1:
-        search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", key="search_bar", label_visibility="collapsed")
-        if search_query:
-            query = str(search_query).strip().lower()
-            matched_codes = [c for c, v in system_inventory.items() if query in c.lower() or query in v.get('name','').lower()]
-            
-            if matched_codes:
-                st.markdown("### ✨ نتائج البحث:")
-                for p_code in matched_codes[:10]:
-                    item = system_inventory[p_code]
-                    render_product_card(p_code, item.get('name',''), item.get('sys_stock',0), p_price=item.get('price',0), is_sales=True)
-            else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
-        
-        st.markdown("<br><hr><br>", unsafe_allow_html=True)
-        cam_tab, upload_tab = st.tabs(["📸 الكاميرا", "📁 رفع صورة"])
-        raw_image = None
-        with cam_tab:
-            cam_photo = st.camera_input("وجّه الكاميرا نحو المنتج")
-            if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
-        with upload_tab:
-            up_file = st.file_uploader("ارفع صورة المنتج", type=["jpg", "jpeg", "png"])
-            if up_file: raw_image = Image.open(up_file).convert("RGB")
-
-        if raw_image:
-            st.markdown("### ✂️ قص المنتج:")
-            cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#1C65A6', aspect_ratio=None)
-            if st.button("🚀 ابحث عن المنتج"):
-                with st.spinner('جاري البحث...'):
-                    try:
-                        results = collection.query(query_embeddings=[get_image_embedding(cropped_img)], n_results=8, include=['distances', 'metadatas'])
-                        if results['distances'][0]:
-                            user_color = get_color_histogram(cropped_img)
-                            refined = []
-                            for i in range(len(results['distances'][0])):
-                                meta = results['metadatas'][0][i]
-                                fn = meta.get('filename', '')
-                                img_p = os.path.join("compressed_images", fn)
-                                c_dist = compare_histograms(user_color, get_color_histogram(Image.open(img_p))) if os.path.exists(img_p) else 0
-                                refined.append({'fn': fn, 'score': results['distances'][0][i] + (c_dist * 0.5)})
-                            refined.sort(key=lambda x: x['score'])
-                            for res in refined[:3]:
-                                p_code = res['fn'].split('.')[0].upper()
-                                if p_code in system_inventory:
-                                    item = system_inventory[p_code]
-                                    render_product_card(p_code, item.get('name',''), item.get('sys_stock',0), p_price=item.get('price',0), is_sales=True)
-                    except Exception as e: st.error(f"حدث خطأ: {e}")
-
-    # ==========================================
-    # التبويب 2: الجرد
-    # ==========================================
-    with main_tab2:
-        shared_inv_state = load_shared_inventory()
-        if not shared_inv_state.get("is_active", False):
-            st.markdown("### 🆕 جلسة جرد جديدة")
-            with st.form("inv_setup_form"):
-                inv_name = st.text_input("اسم الجرد")
-                inv_reason = st.selectbox("السبب", ["دوري", "مفاجئ", "نهاية العام"])
-                inv_date = st.date_input("التاريخ")
-                if st.form_submit_button("🚀 فتح الجرد"):
-                    if not inv_name: st.error("اكتب اسم الجرد أولاً!")
-                    else:
-                        save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
-                        st.rerun()
-        else:
-            st.markdown(f'<div class="inv-active-bar"><div>📌 <b>جرد نشط:</b> {shared_inv_state.get("name","")}</div></div>', unsafe_allow_html=True)
-            inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص", "🔫 مسح الباركود", "⚖️ التقرير"])
-            
-            scanned_items = shared_inv_state.get("scanned_items", {})
-            
-            with inv_tab1:
-                st.markdown(f"### 🛒 إجمالي المجرد فعلياً: **{sum(scanned_items.values())}** قطعة")
-                if st.button("🔄 ريفرش"): st.rerun()
-
-            with inv_tab2:
-                if "inv_clear" not in st.session_state: st.session_state.inv_clear = False
-                if st.session_state.inv_clear: st.session_state.inv_scan = ""; st.session_state.inv_clear = False
-
-                scan_code = st.text_input("كود الصنف للجرد:", key="inv_scan")
-                if scan_code:
-                    clean_code = str(scan_code).strip().upper()
-                    if clean_code in system_inventory:
-                        render_product_card(clean_code, system_inventory[clean_code].get('name',''), system_inventory[clean_code].get('sys_stock',0))
-                        with st.form("confirm_add_form"):
-                            add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
-                            if st.form_submit_button("تأكيد 📥"):
-                                l_inv = load_shared_inventory()
-                                if "scanned_items" not in l_inv: l_inv["scanned_items"] = {}
-                                l_inv["scanned_items"][clean_code] = max(0, l_inv.get("scanned_items", {}).get(clean_code, 0) + add_qty)
-                                save_shared_inventory(l_inv)
-                                st.session_state.inv_clear = True
-                                st.rerun()
-                    else:
-                        st.error("❌ غير مسجل!")
-                        if st.button("حاول مرة أخرى"): st.session_state.inv_clear = True; st.rerun()
-
-            with inv_tab3:
-                report = [{"كود الصنف": c, "اسم الصنف": i.get('name',''), "الرصيد الدفتري": i.get('sys_stock',0), "الرصيد الفعلي": scanned_items.get(c, 0), "الفروقات": scanned_items.get(c, 0) - i.get('sys_stock',0)} for c, i in system_inventory.items()]
-                if report:
-                    df_report = pd.DataFrame(report)
-                    st.dataframe(df_report, use_container_width=True, hide_index=True)
-                    buf = io.BytesIO()
-                    with pd.ExcelWriter(buf, engine='openpyxl') as w: df_report.to_excel(w, index=False)
-                    st.download_button("📥 تحميل التقرير", buf.getvalue(), f"Inventory_{shared_inv_state.get('name','')}.xlsx")
-                
-                if st.session_state.current_user == "abobakr":
-                    if st.button("🛑 إغلاق وإنهاء الجرد"):
-                        save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv_state.get('name',''), "report": report})
-                        save_shared_inventory({"is_active": False, "scanned_items": {}})
-                        st.rerun()
-
-    # ==========================================
-    # التبويب 3: 🛒 الفواتير
-    # ==========================================
-    with main_tab3:
-        shared_sales = load_shared_sales()
-        
-        if not shared_sales.get("is_active", False):
-            st.markdown("### 🏬 فتح وردية مبيعات جديدة")
-            with st.form("sales_setup_form"):
-                s_name = st.text_input("اسم/رقم الوردية")
-                s_date = st.date_input("تاريخ الوردية", datetime.date.today())
-                if st.form_submit_button("🚀 فتح الوردية"):
-                    if not s_name: st.error("اكتب اسم الوردية!")
-                    else:
-                        save_shared_sales({"is_active": True, "name": s_name, "date": str(s_date), "invoices": [], "deductions": {}})
-                        st.rerun()
-        else:
-            st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية نشطة:</b> {shared_sales.get("name","")}</div></div>', unsafe_allow_html=True)
-            
-            if st.session_state.get("last_invoice_b64"):
-                st.success(f"🎉 تم حفظ الفاتورة بنجاح: {st.session_state.get('last_invoice_name')}")
-                st.download_button(
-                    label="📥 اضغط هنا لتحميل الفاتورة (Excel)",
-                    data=base64.b64decode(st.session_state.last_invoice_b64),
-                    file_name=st.session_state.last_invoice_name,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                )
-                if st.button("إخفاء رسالة التحميل والبدء من جديد"):
-                    st.session_state.last_invoice_b64 = None
+                    if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
+                    else: d = pd.read_excel(new_db)
+                    d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
+                    st.success("✅ تم تحديث جميع الأسعار والأرصدة بنجاح!")
+                    time.sleep(1)
                     st.rerun()
-                st.markdown("---")
+                except Exception as e:
+                    st.error(f"حدث خطأ: {e}")
+        st.markdown("---")
 
-            if "active_customer" not in st.session_state: st.session_state.active_customer = ""
-            if "invoice_cart" not in st.session_state: st.session_state.invoice_cart = []
-            if "pos_clear" not in st.session_state: st.session_state.pos_clear = False
+# --- محرك الذكاء والدوال ---
+@st.cache_resource
+def download_new_chroma_db():
+    zip_path, extract_path, marker_file = "chroma_db.zip", "./chroma_db", "./chroma_db/fashion_clip_v3.txt"
+    download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
+    if os.path.exists(extract_path) and not os.path.exists(marker_file): shutil.rmtree(extract_path)
+    if not os.path.exists(extract_path):
+        with st.spinner('📦 جاري تهيئة مستودع البيانات الذكي...'):
+            try:
+                urllib.request.urlretrieve(download_url, zip_path)
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref: zip_ref.extractall(".")
+                if os.path.exists(zip_path): os.remove(zip_path)
+                with open(marker_file, 'w') as f: f.write("done")
+            except: pass
+
+@st.cache_resource
+def load_vision_system():
+    download_new_chroma_db()
+    model_id = "patrickjohncyh/fashion-clip"
+    return CLIPModel.from_pretrained(model_id), CLIPProcessor.from_pretrained(model_id), chromadb.PersistentClient(path="./chroma_db").get_collection(name="products_collection")
+
+try: model, processor, collection = load_vision_system()
+except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
+
+def get_image_embedding(image):
+    image = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
+    inputs = processor(images=image, return_tensors="pt")
+    with torch.no_grad():
+        features = model.get_image_features(**inputs)
+        if not isinstance(features, torch.Tensor):
+            if hasattr(features, 'image_embeds'): features = features.image_embeds
+            elif hasattr(features, 'pooler_output'): features = features.pooler_output
+            else: features = features[0]
+        return features.squeeze().numpy().tolist()
+
+def get_color_histogram(image):
+    img = image.convert("RGB").crop((image.size[0]*0.15, image.size[1]*0.15, image.size[0]*0.85, image.size[1]*0.85))
+    hist = img.histogram(); total = sum(hist) / 3
+    return [x / (total if total > 0 else 1) for x in hist]
+
+def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
+
+# ==========================================
+# 🚀 محرك استخراج البيانات الموحد
+# ==========================================
+system_inventory = {}
+
+def process_df_into_inventory(df):
+    if df is None or df.empty: return
+    
+    cols = [str(c).lower().strip() for c in df.columns]
+    code_col, name_col, stock_col, price_col = None, None, None, None
+    for orig, low in zip(df.columns, cols):
+        if not code_col and any(k in low for k in ['code', 'كود', 'باركود', 'file']): code_col = orig
+        elif not name_col and any(k in low for k in ['name', 'اسم', 'صنف', 'title']): name_col = orig
+        elif not stock_col and any(k in low for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = orig
+        elif not price_col and any(k in low for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = orig
+    
+    if not code_col and len(df.columns) > 0: code_col = df.columns[0]
+    if not name_col and len(df.columns) > 1: name_col = df.columns[1]
+    if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
+    if not price_col and len(df.columns) > 4: price_col = df.columns[4]
+
+    for _, row in df.iterrows():
+        raw_code = str(row[code_col]).strip() if code_col else ""
+        if raw_code.lower() in ['nan', 'none', '']: continue
+        p_code = raw_code.split('.')[0].upper()
+        
+        p_name = str(row[name_col]).strip() if name_col else "بدون اسم"
+        if p_name.lower() in ['nan', 'none']: p_name = "بدون اسم"
+        
+        p_stock = 0.0
+        if stock_col:
+            m = re.search(r'-?\d+(\.\d+)?', str(row[stock_col]).replace(',', ''))
+            if m: p_stock = float(m.group())
+        
+        p_price = 0.0
+        if price_col:
+            m = re.search(r'\d+(\.\d+)?', str(row[price_col]).replace(',', ''))
+            if m: p_price = float(m.group())
             
-            if st.session_state.pos_clear:
-                st.session_state.pos_scan = ""
-                st.session_state.pos_clear = False
+        if p_price == 0.0:
+            for c in df.columns:
+                if any(k in str(c).lower().strip() for k in ['price', 'سعر', 'ثمن', 'جملة']):
+                    m = re.search(r'\d+(\.\d+)?', str(row[c]).replace(',', ''))
+                    if m and float(m.group()) > 0:
+                        p_price = float(m.group())
+                        break
+                        
+        system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
 
-            if not st.session_state.active_customer:
-                st.markdown("### 📝 فاتورة لعميل جديد")
-                with st.form("new_customer_form"):
-                    cust_name = st.text_input("اسم العميل:")
-                    if st.form_submit_button("بدء الفاتورة 🛒"):
-                        if cust_name.strip():
-                            st.session_state.active_customer = cust_name.strip()
-                            st.session_state.invoice_cart = []
-                            st.rerun()
-                        else: st.error("يرجى إدخال الاسم.")
-            else:
-                st.markdown(f"### 🧾 العميل: <span style='color:#1C65A6;'>{st.session_state.active_customer}</span>", unsafe_allow_html=True)
-                
-                scan_code = st.text_input("كود الصنف للفاتورة:", key="pos_scan")
-                if scan_code:
-                    clean_code = str(scan_code).strip().upper()
-                    if clean_code in system_inventory:
-                        p_info = system_inventory[clean_code]
-                        sys_qty = float(p_info.get('sys_stock', 0.0))
-                        auto_price = float(p_info.get('price', 0.0))
-                        global_sold = float(shared_sales.get("deductions", {}).get(clean_code, 0.0))
-                        local_cart_qty = sum(float(item.get("qty", 0)) for item in st.session_state.invoice_cart if item.get("code", "") == clean_code)
-                        live_qty = sys_qty - global_sold - local_cart_qty
+try: df_products = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
+except: df_products = None
+process_df_into_inventory(df_products)
+
+if os.path.exists(MASTER_DB_FILE):
+    try: df_master = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
+    except: df_master = None
+    process_df_into_inventory(df_master)
+
+def render_product_card(p_code, p_name, p_stock, p_price=None, custom_message="", details_html="", is_sales=False):
+    img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
+    for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
+        img_path = os.path.join("compressed_images", f"{p_code}{ext}")
+        if os.path.exists(img_path):
+            img_html = f'<img src="data:image/jpeg;base64,{get_image_base64(img_path)}" class="product-img">'
+            break
+            
+    try: s_val = float(p_stock)
+    except: s_val = 0
+    is_out = s_val <= 0
+        
+    stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
+    
+    if is_sales:
+        price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price and p_price > 0 else " &nbsp;|&nbsp; ⚠️ السعر غير مسجل"
+        stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}"
+    else:
+        stock_text = f"📦 الرصيد الدفتري: {p_stock}"
+        
+    msg_html = f'<div style="margin-top:10px; color:#1C65A6; font-weight:bold;">{custom_message}</div>' if custom_message else ""
+
+    html_str = f"""<div class="product-card">
+{img_html}
+<div class="product-details" style="flex-grow: 1;">
+<div class="code-badge">الكود: {p_code}</div>
+<h3 class="product-title">{p_name}</h3>
+<div class="{stock_class}">{stock_text}</div>
+{details_html}
+{msg_html}
+</div>
+</div>"""
+    st.markdown(html_str, unsafe_allow_html=True)
+
+# 🛑 تجهيز التبويبات بدون كاتالوج
+if st.session_state.current_user == "abobakr":
+    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📈 لوحة تحكم الإدارة"])
+    main_tab1, main_tab2, main_tab3, main_tab4 = tabs[0], tabs[1], tabs[2], tabs[3]
+else:
+    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة"])
+    main_tab1, main_tab2, main_tab3 = tabs[0], tabs[1], tabs[2]
+
+# ==========================================
+# التبويب 1: البحث
+# ==========================================
+with main_tab1:
+    search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", key="search_bar", label_visibility="collapsed")
+    if search_query:
+        query = str(search_query).strip().lower()
+        matched_codes = [c for c, v in system_inventory.items() if query in c.lower() or query in v['name'].lower()]
+        
+        if matched_codes:
+            st.markdown("### ✨ نتائج البحث:")
+            for p_code in matched_codes[:15]:
+                item = system_inventory[p_code]
+                render_product_card(p_code, item['name'], item['sys_stock'], p_price=item['price'], is_sales=True)
+        else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
+    
+    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+    cam_tab, upload_tab = st.tabs(["📸 التقاط بكاميرا الموبايل", "📁 رفع صورة من الجهاز"])
+    raw_image = None
+    with cam_tab:
+        cam_photo = st.camera_input("وجّه الكاميرا نحو المنتج")
+        if cam_photo: raw_image = Image.open(cam_photo).convert("RGB")
+    with upload_tab:
+        up_file = st.file_uploader("ارفع صورة المنتج", type=["jpg", "jpeg", "png"])
+        if up_file: raw_image = Image.open(up_file).convert("RGB")
+
+    if raw_image:
+        st.markdown("### ✂️ قص المنتج (تحديد بؤرة البحث):")
+        cropped_img = st_cropper(raw_image, realtime_update=True, box_color='#1C65A6', aspect_ratio=None)
+        if st.button("🚀 ابحث عن المنتج في المستودع الآن"):
+            with st.spinner('جاري المسح البصري...'):
+                try:
+                    results = collection.query(query_embeddings=[get_image_embedding(cropped_img)], n_results=8, include=['distances', 'metadatas'])
+                    if results['distances'][0]:
+                        user_color = get_color_histogram(cropped_img)
+                        refined = []
+                        for i in range(len(results['distances'][0])):
+                            meta = results['metadatas'][0][i]
+                            fn = meta.get('filename', '')
+                            img_p = os.path.join("compressed_images", fn)
+                            c_dist = compare_histograms(user_color, get_color_histogram(Image.open(img_p))) if os.path.exists(img_p) else 0
+                            refined.append({'fn': fn, 'score': results['distances'][0][i] + (c_dist * 0.5)})
+                        refined.sort(key=lambda x: x['score'])
+                        st.markdown("### ✨ المنتجات المطابقة:")
+                        for res in refined[:3]:
+                            p_code = res['fn'].split('.')[0].upper()
+                            if p_code in system_inventory:
+                                item = system_inventory[p_code]
+                                render_product_card(p_code, item['name'], item['sys_stock'], p_price=item['price'], is_sales=True)
+                except Exception as e: st.error(f"⚠️ خطأ في البحث البصري: {e}")
+
+# ==========================================
+# التبويب 2: الجرد التشاركي
+# ==========================================
+with main_tab2:
+    shared_inv_state = load_shared_inventory()
+    if not shared_inv_state.get("is_active", False):
+        st.markdown("### 🆕 إعداد جلسة جرد تشاركية جديدة")
+        with st.form("inv_setup_form"):
+            col1, col2, col3 = st.columns(3)
+            with col1: inv_name = st.text_input("اسم/رقم الجرد", placeholder="مثال: جرد شهر أغسطس")
+            with col2: inv_reason = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "جرد نهاية العام", "أخرى"])
+            with col3: inv_date = st.date_input("تاريخ الجرد", datetime.date.today())
+            if st.form_submit_button("🚀 فتح جلسة الجرد للجميع"):
+                if not inv_name: st.error("⚠️ برجاء كتابة اسم أو رقم الجرد أولاً!")
+                else:
+                    save_shared_inventory({"is_active": True, "name": inv_name, "reason": inv_reason, "date": str(inv_date), "scanned_items": {}})
+                    st.rerun()
+    else:
+        st.markdown(f'<div class="inv-active-bar"><div>📌 <b>جرد شبكي نشط:</b> {shared_inv_state.get("name")} &nbsp;|&nbsp; <b>السبب:</b> {shared_inv_state.get("reason")}</div></div>', unsafe_allow_html=True)
+        inv_tab1, inv_tab2, inv_tab3 = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود الفعلي", "⚖️ تقرير الفروقات (تصدير)"])
+        total_qty = sum(info['sys_stock'] for info in system_inventory.values())
+        out_of_stock = sum(1 for info in system_inventory.values() if info['sys_stock'] <= 0)
+        
+        scanned_items = shared_inv_state.get("scanned_items", {})
+        
+        with inv_tab1:
+            col1, col2, col3 = st.columns(3)
+            with col1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(system_inventory)}</div></div>', unsafe_allow_html=True)
+            with col2: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">القطع المتوفرة</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
+            with col3: st.markdown(f'<div class="metric-card" style="border-color:#DC2626;"><div class="metric-title">أصناف صفرية</div><div class="metric-value" style="color:#DC2626;">{out_of_stock}</div></div>', unsafe_allow_html=True)
+            st.markdown(f"<br>### 🛒 إجمالي المجرد فعلياً: **{sum(scanned_items.values())}** قطعة", unsafe_allow_html=True)
+            if st.button("🔄 تحديث الأرقام (ريفرش)"): st.rerun()
+
+        with inv_tab2:
+            st.markdown("### 🔫 مسح الباركود للجرد")
+            if "inv_scan" not in st.session_state: st.session_state.inv_scan = ""
+            if "inv_msg" not in st.session_state: st.session_state.inv_msg = ""
+            if "inv_clear" not in st.session_state: st.session_state.inv_clear = False
+            
+            if st.session_state.inv_clear: st.session_state.inv_scan = ""; st.session_state.inv_clear = False
+            if st.session_state.inv_msg: st.success(st.session_state.inv_msg); st.session_state.inv_msg = ""
+
+            scan_code = st.text_input("كود الصنف للجرد:", key="inv_scan")
+            if scan_code:
+                clean_code = str(scan_code).strip().upper()
+                found_code = next((c for c in system_inventory.keys() if c.upper() == clean_code), None)
+                if found_code:
+                    st.info("✅ تم العثور على الصنف. أضف/اخصم الكمية:")
+                    render_product_card(found_code, system_inventory[found_code]['name'], system_inventory[found_code]['sys_stock'])
+                    with st.form("confirm_add_form"):
+                        add_qty = st.number_input("الكمية (+ للإضافة, - للخصم):", value=1)
+                        if st.form_submit_button("تأكيد العملية 📥"):
+                            l_inv = load_shared_inventory()
+                            l_inv["scanned_items"][clean_code] = max(0, l_inv.get("scanned_items", {}).get(clean_code, 0) + add_qty)
+                            save_shared_inventory(l_inv)
+                            st.session_state.inv_msg = f"✅ نجاح ({add_qty}) للصنف: {clean_code} | الرصيد: {l_inv['scanned_items'][clean_code]}"
+                            st.session_state.inv_clear = True; st.rerun()
+                else:
+                    st.error("❌ الباركود غير مسجل!"); 
+                    if st.button("حاول مرة أخرى"): st.session_state.inv_clear = True; st.rerun()
+
+            components.html("""<script>
+            const f = () => { const i = window.parent.document.querySelector('input[aria-label="كود الصنف للجرد:"]'); if(i && "%s"==="") i.focus(); else {const n = window.parent.document.querySelector('input[type="number"]'); if(n) n.focus();}};
+            f(); setTimeout(f, 100); setTimeout(f, 500);</script>""" % st.session_state.inv_scan, height=0)
+
+        with inv_tab3:
+            report = [{"كود الصنف": c, "اسم الصنف": i['name'], "الرصيد الدفتري": i['sys_stock'], "الرصيد الفعلي": scanned_items.get(c, 0), "الفروقات": scanned_items.get(c, 0) - i['sys_stock']} for c, i in system_inventory.items()]
+            df_report = pd.DataFrame(report)
+            st.dataframe(df_report.style.map(lambda v: 'color:red;font-weight:bold;' if v<0 else ('color:blue;font-weight:bold;' if v>0 else 'color:green;'), subset=['الفروقات']), use_container_width=True, hide_index=True)
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df_report.to_excel(writer, index=False, sheet_name='تقرير الجرد')
+            st.download_button("📥 تحميل التقرير (Excel)", data=buffer.getvalue(), file_name=f"Inventory_{shared_inv_state.get('name')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            
+            if st.session_state.current_user == "abobakr":
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد وحفظها بالأرشيف"):
+                    save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv_state.get('name'), "date": shared_inv_state.get('date'), "report": report})
+                    save_shared_inventory({"is_active": False, "scanned_items": {}})
+                    st.rerun()
+            else: st.info("🔒 الإغلاق متاح للإدارة (abobakr) فقط.")
+
+# ==========================================
+# التبويب 3: 🛒 نظام فواتير الجملة
+# ==========================================
+with main_tab3:
+    if "auto_download_b64" not in st.session_state: st.session_state.auto_download_b64 = None
+    if "auto_download_filename" not in st.session_state: st.session_state.auto_download_filename = None
+    
+    if st.session_state.auto_download_b64:
+        b64_data = st.session_state.auto_download_b64
+        f_name = st.session_state.auto_download_filename
+        
+        st.success(f"🎉 تم حفظ الفاتورة بنجاح: {f_name}")
+        excel_bytes = base64.b64decode(b64_data)
+        st.download_button(
+            label="📥 اضغط هنا للتحميل المباشر للملف (إذا لم يبدأ تلقائياً)",
+            data=excel_bytes,
+            file_name=f_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+        
+        js_download = """
+        <script>
+        try {
+            const base64Data = "%s";
+            const fileName = "%s";
+            const byteCharacters = atob(base64Data);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) { byteNumbers[i] = slice.charCodeAt(i); }
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+            const blob = new Blob(byteArrays, {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+            const blobUrl = URL.createObjectURL(blob);
+            const link = window.parent.document.createElement('a');
+            link.href = blobUrl;
+            link.download = fileName;
+            window.parent.document.body.appendChild(link);
+            link.click();
+            setTimeout(() => { window.parent.document.body.removeChild(link); URL.revokeObjectURL(blobUrl); }, 1000);
+        } catch (err) { console.error("Auto download error:", err); }
+        </script>
+        """ % (b64_data, f_name)
+        components.html(js_download, height=0)
+        
+        st.session_state.auto_download_b64 = None
+        st.session_state.auto_download_filename = None
+
+    shared_sales = load_shared_sales()
+    
+    if not shared_sales.get("is_active", False):
+        st.markdown("### 🏬 فتح وردية مبيعات جملة جديدة")
+        with st.form("sales_setup_form"):
+            col1, col2 = st.columns(2)
+            with col1: s_name = st.text_input("اسم/رقم الوردية", placeholder="مثال: وردية جملة 29-8")
+            with col2: s_date = st.date_input("تاريخ الوردية", datetime.date.today())
+            
+            if st.form_submit_button("🚀 فتح وردية البيع"):
+                if not s_name: st.error("⚠️ اكتب اسم الوردية أولاً!")
+                else:
+                    save_shared_sales({"is_active": True, "name": s_name, "date": str(s_date), "invoices": [], "deductions": {}})
+                    st.rerun()
+    else:
+        st.markdown(f'<div class="sales-active-bar"><div>💳 <b>وردية الجملة النشطة:</b> {shared_sales.get("name")} &nbsp;|&nbsp; <b>التاريخ:</b> {shared_sales.get("date")}</div></div>', unsafe_allow_html=True)
+        
+        all_invoices = shared_sales.get("invoices", [])
+        total_revenue = sum(inv["total"] for inv in all_invoices)
+        total_invoices_count = len(all_invoices)
+        my_invoices = sum(inv["total"] for inv in all_invoices if inv["salesperson"] == st.session_state.current_user)
+        
+        c1, c2, c3 = st.columns(3)
+        with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي إيرادات الوردية</div><div class="metric-value" style="color:#1C65A6;">{total_revenue} ج.م</div></div>', unsafe_allow_html=True)
+        with c2: st.markdown(f'<div class="metric-card" style="border-color:#F59E0B;"><div class="metric-title">مبيعاتي (اليوم)</div><div class="metric-value" style="color:#F59E0B;">{my_invoices} ج.م</div></div>', unsafe_allow_html=True)
+        with c3: st.markdown(f'<div class="metric-card" style="border-color:#10B981;"><div class="metric-title">عدد الفواتير المُصدرة</div><div class="metric-value" style="color:#10B981;">{total_invoices_count} فاتورة</div></div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        if "active_customer" not in st.session_state: st.session_state.active_customer = ""
+        if "invoice_cart" not in st.session_state: st.session_state.invoice_cart = []
+        if "active_invoice_id" not in st.session_state: st.session_state.active_invoice_id = None
+        if "original_invoice" not in st.session_state: st.session_state.original_invoice = None
+        if "pos_scan" not in st.session_state: st.session_state.pos_scan = ""
+        if "pos_clear" not in st.session_state: st.session_state.pos_clear = False
+        
+        if st.session_state.pos_clear:
+            st.session_state.pos_scan = ""
+            st.session_state.pos_clear = False
+
+        if not st.session_state.active_customer:
+            st.markdown("### 📝 فتح فاتورة لعميل جديد")
+            with st.form("new_customer_form"):
+                cust_name = st.text_input("اسم العميل أو الشركة:")
+                if st.form_submit_button("فتح مسودة الفاتورة 🛒"):
+                    if cust_name.strip():
+                        st.session_state.active_customer = cust_name.strip()
+                        st.session_state.invoice_cart = []
+                        st.session_state.active_invoice_id = None
+                        st.rerun()
+                    else: st.error("⚠️ يرجى إدخال اسم العميل.")
+            
+            if all_invoices:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("### 📋 فواتير الوردية الحالية (للمراجعة أو التعديل)")
+                for idx, inv in enumerate(all_invoices):
+                    with st.expander(f"🧾 فاتورة #{inv['invoice_id']} | العميل: {inv['customer']} | الإجمالي: {inv['total']} ج.م"):
+                        df_v = pd.DataFrame(inv['items'])
+                        st.dataframe(df_v[['code', 'name', 'qty', 'price', 'total']], use_container_width=True)
                         
-                        render_product_card(clean_code, p_info.get('name',''), live_qty, p_price=auto_price, is_sales=True)
-                        
-                        if live_qty <= 0:
-                            st.error("❌ تحذير: رصيد هذا الصنف نفذ!")
-                            if st.button("تخطي"): st.session_state.pos_clear = True; st.rerun()
-                        else:
-                            with st.form("add_to_cart_form"):
-                                c1, c2 = st.columns(2)
-                                with c1: sell_qty = st.number_input("الكمية:", min_value=1, max_value=int(live_qty) if live_qty>0 else 1, value=1)
-                                with c2: 
-                                    st.number_input("السعر (للقراءة):", value=float(auto_price), disabled=True)
-                                    sell_price = float(auto_price)
+                        col_e, col_d = st.columns(2)
+                        with col_e:
+                            if st.button(f"✏️ تعديل ومتابعة إضافة الأصناف", key=f"edit_{inv['invoice_id']}"):
+                                l_sales = load_shared_sales()
+                                for item in inv['items']: l_sales["deductions"][item["code"]] -= item["qty"]
+                                l_sales["invoices"] = [i for i in l_sales["invoices"] if i["invoice_id"] != inv["invoice_id"]]
+                                save_shared_sales(l_sales)
                                 
-                                if st.form_submit_button("إضافة 📥"):
-                                    if sell_price <= 0: st.error("⚠️ السعر غير مسجل.")
-                                    else:
-                                        st.session_state.invoice_cart.append({
-                                            "code": clean_code, "name": p_info.get('name',''), "qty": sell_qty, "price": sell_price, "total": sell_qty * sell_price
-                                        })
-                                        st.session_state.pos_clear = True
-                                        st.rerun()
-                    else:
-                        st.error("❌ الباركود غير مسجل!")
-                        if st.button("تخطي"): st.session_state.pos_clear = True; st.rerun()
+                                st.session_state.active_customer = inv['customer']
+                                st.session_state.invoice_cart = inv['items']
+                                st.session_state.active_invoice_id = inv['invoice_id']
+                                st.session_state.original_invoice = inv
+                                st.rerun()
+                        with col_d:
+                            df_dl = df_v.rename(columns={'code':'كود الصنف', 'name':'اسم الصنف', 'qty':'الكمية', 'price':'سعر الجملة', 'total':'الإجمالي'})
+                            buf = io.BytesIO()
+                            with pd.ExcelWriter(buf, engine='openpyxl') as w: df_dl.to_excel(w, index=False)
+                            st.download_button("📥 تحميل الإكسيل مجدداً", data=buf.getvalue(), file_name=f"Invoice_{inv['invoice_id']}_{inv['customer']}.xlsx", key=f"dl_{inv['invoice_id']}")
 
-                if st.session_state.invoice_cart:
-                    st.markdown("#### 🛒 الأصناف بالفاتورة:")
-                    df_cart = pd.DataFrame(st.session_state.invoice_cart)
-                    st.dataframe(df_cart[['code', 'name', 'qty', 'price', 'total']], use_container_width=True)
+        else:
+            header_text = f"🧾 جاري تعديل فاتورة العميل: <span style='color:#1C65A6;'>{st.session_state.active_customer}</span>" if st.session_state.active_invoice_id else f"🧾 جاري تحضير فاتورة العميل: <span style='color:#1C65A6;'>{st.session_state.active_customer}</span>"
+            st.markdown(f"### {header_text}", unsafe_allow_html=True)
+            
+            scan_code = st.text_input("كود الصنف للفاتورة:", key="pos_scan")
+            
+            if scan_code:
+                clean_code = str(scan_code).strip().upper()
+                if clean_code in system_inventory:
+                    sys_qty = system_inventory[clean_code]['sys_stock']
+                    auto_price = system_inventory[clean_code]['price']
                     
-                    cart_total = sum(float(item.get("total", 0.0)) for item in st.session_state.invoice_cart)
-                    st.markdown(f"<h3 style='color: #DC2626;'>الإجمالي المطلوب: {cart_total} ج.م</h3>", unsafe_allow_html=True)
+                    global_sold = shared_sales.get("deductions", {}).get(clean_code, 0)
+                    local_cart_qty = sum(item["qty"] for item in st.session_state.invoice_cart if item["code"] == clean_code)
+                    live_qty = sys_qty - global_sold - local_cart_qty
                     
-                    c_save, c_cancel = st.columns(2)
-                    with c_save:
-                        if st.button("✅ حفظ وإصدار الفاتورة", type="primary"):
-                            l_sales = load_shared_sales()
-                            inv_id = max([i.get("invoice_id", 0) for i in l_sales.get("invoices", [])] + [0]) + 1
+                    render_product_card(clean_code, system_inventory[clean_code]['name'], live_qty, p_price=auto_price, is_sales=True)
+                    
+                    if live_qty <= 0:
+                        st.error("❌ تحذير: رصيد هذا الصنف نفذ ولا يمكنك إضافته للفاتورة!")
+                        if st.button("تخطي والمحاولة مرة أخرى"): st.session_state.pos_clear = True; st.rerun()
+                    else:
+                        with st.form("add_to_cart_form"):
+                            cc1, cc2 = st.columns(2)
+                            with cc1: sell_qty = st.number_input("الكمية المطلوبة للعميل:", min_value=1, max_value=int(live_qty) if live_qty > 0 else 1, value=1)
+                            with cc2: 
+                                st.number_input("سعر القطعة (غير قابل للتعديل):", value=float(auto_price), disabled=True)
+                                sell_price = float(auto_price)
                             
-                            l_sales["invoices"].append({
-                                "invoice_id": inv_id, "time": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
-                                "salesperson": st.session_state.current_user, "customer": st.session_state.active_customer,
-                                "total": cart_total, "items": st.session_state.invoice_cart
-                            })
-                            for item in st.session_state.invoice_cart:
-                                c_code = item.get("code", "")
-                                l_sales["deductions"][c_code] = l_sales.get("deductions", {}).get(c_code, 0) + item.get("qty", 0)
+                            if st.form_submit_button("إضافة الصنف لمسودة الفاتورة 📥"):
+                                if sell_price <= 0: 
+                                    st.error("⚠️ سعر هذا الصنف غير مسجل في السيستم! يرجى تحديث الإكسيل من القائمة الجانبية للإدارة.")
+                                else:
+                                    st.session_state.invoice_cart.append({
+                                        "code": clean_code,
+                                        "name": system_inventory[clean_code]['name'],
+                                        "qty": sell_qty,
+                                        "price": sell_price,
+                                        "total": sell_qty * sell_price
+                                    })
+                                    st.success(f"✅ تمت إضافة ({sell_qty}) دستة/قطعة للفاتورة.")
+                                    st.session_state.pos_clear = True
+                                    st.rerun()
+                else:
+                    st.error("❌ الباركود غير مسجل!")
+                    if st.button("حاول مرة أخرى"): st.session_state.pos_clear = True; st.rerun()
+            
+            components.html("""<script>
+            const f = () => { const i = window.parent.document.querySelector('input[aria-label="كود الصنف للفاتورة:"]'); if(i && "%s"==="") i.focus(); else {const n = window.parent.document.querySelectorAll('input[type="number"]:not([disabled])'); if(n.length>0) n[0].focus();}};
+            f(); setTimeout(f, 100); setTimeout(f, 500);</script>""" % st.session_state.pos_scan, height=0)
+
+            if st.session_state.invoice_cart:
+                st.markdown("#### 🛒 الأصناف الحالية في الفاتورة:")
+                df_cart = pd.DataFrame(st.session_state.invoice_cart)
+                st.dataframe(df_cart[['code', 'name', 'qty', 'price', 'total']], use_container_width=True)
+                
+                cart_total = sum(item["total"] for item in st.session_state.invoice_cart)
+                st.markdown(f"<h3 style='text-align: left; color: #DC2626;'>الإجمالي المطلوب: {cart_total} ج.م</h3>", unsafe_allow_html=True)
+                
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    if st.button("✅ حفظ الفاتورة وتنزيل ملف الإكسيل التلقائي", type="primary"):
+                        l_sales = load_shared_sales()
+                        if "invoices" not in l_sales: l_sales["invoices"] = []
+                        if "deductions" not in l_sales: l_sales["deductions"] = {}
+                            
+                        invoice_id = st.session_state.active_invoice_id if st.session_state.active_invoice_id else max([i.get("invoice_id", 0) for i in l_sales["invoices"]] + [0]) + 1
+                        
+                        new_invoice = {
+                            "invoice_id": invoice_id,
+                            "time": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
+                            "salesperson": st.session_state.current_user,
+                            "customer": st.session_state.active_customer,
+                            "total": cart_total,
+                            "items": st.session_state.invoice_cart
+                        }
+                        l_sales["invoices"].append(new_invoice)
+                        l_sales["invoices"].sort(key=lambda x: x.get("invoice_id", 0))
+                        
+                        for item in st.session_state.invoice_cart:
+                            l_sales["deductions"][item["code"]] = l_sales["deductions"].get(item["code"], 0) + item["qty"]
+                            
+                        save_shared_sales(l_sales)
+                        
+                        df_ex = pd.DataFrame(st.session_state.invoice_cart).rename(columns={'code':'كود الصنف', 'name':'اسم الصنف', 'qty':'الكمية', 'price':'سعر الجملة', 'total':'الإجمالي'})
+                        buf = io.BytesIO()
+                        with pd.ExcelWriter(buf, engine='openpyxl') as w: df_ex.to_excel(w, index=False)
+                        b64 = base64.b64encode(buf.getvalue()).decode()
+                        
+                        st.session_state.auto_download_b64 = b64
+                        st.session_state.auto_download_filename = f"Invoice_{invoice_id}_{st.session_state.active_customer}.xlsx"
+                        
+                        st.session_state.active_customer = ""
+                        st.session_state.invoice_cart = []
+                        st.session_state.active_invoice_id = None
+                        st.session_state.original_invoice = None
+                        st.rerun()
+                
+                with col_cancel:
+                    btn_text = "إلغاء التعديلات والعودة" if st.session_state.active_invoice_id else "🗑️ إلغاء الفاتورة بالكامل"
+                    if st.button(btn_text):
+                        if st.session_state.active_invoice_id and st.session_state.original_invoice:
+                            l_sales = load_shared_sales()
+                            l_sales["invoices"].append(st.session_state.original_invoice)
+                            l_sales["invoices"].sort(key=lambda x: x.get("invoice_id", 0))
+                            for item in st.session_state.original_invoice["items"]:
+                                l_sales["deductions"][item["code"]] = l_sales["deductions"].get(item["code"], 0) + item["qty"]
                             save_shared_sales(l_sales)
                             
-                            df_ex = pd.DataFrame(st.session_state.invoice_cart).rename(columns={'code':'الكود', 'name':'الاسم', 'qty':'الكمية', 'price':'السعر', 'total':'الإجمالي'})
-                            buf = io.BytesIO()
-                            with pd.ExcelWriter(buf, engine='openpyxl') as w: df_ex.to_excel(w, index=False)
-                            
-                            st.session_state.last_invoice_b64 = base64.b64encode(buf.getvalue()).decode()
-                            st.session_state.last_invoice_name = f"Invoice_{inv_id}_{st.session_state.active_customer}.xlsx"
-                            
-                            st.session_state.active_customer = ""
-                            st.session_state.invoice_cart = []
-                            st.rerun()
-                    with c_cancel:
-                        if st.button("🗑️ إلغاء الفاتورة"):
-                            st.session_state.active_customer = ""
-                            st.session_state.invoice_cart = []
-                            st.rerun()
-
-            if st.session_state.current_user == "abobakr":
-                st.markdown("---")
-                if st.button("🛑 إغلاق وردية الجملة (أرشيف)"):
-                    save_to_sales_history({"name": shared_sales.get("name", ""), "date": shared_sales.get("date", ""), "invoices": shared_sales.get("invoices", [])})
-                    save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
+                        st.session_state.active_customer = ""
+                        st.session_state.invoice_cart = []
+                        st.session_state.active_invoice_id = None
+                        st.session_state.original_invoice = None
+                        st.rerun()
+            else:
+                st.info("لم يتم إضافة أي أصناف للفاتورة حتى الآن.")
+                if st.button("إلغاء والعودة لعميل جديد"):
+                    st.session_state.active_customer = ""
                     st.rerun()
 
-    # ==========================================
-    # 🌟 التبويب 4: 📖 الكاتالوج (تم إصلاح خطأ الواجهة)
-    # ==========================================
-    with main_tab_cat:
-        st.markdown("### 📖 الكاتالوج الشامل للأصناف (Live Catalog)")
-        st.markdown("يعرض هذا الكاتالوج الأصناف المتوفرة فقط بالمخزن مع تفاصيل حركة الرصيد والأسعار.")
+        if st.session_state.current_user == "abobakr":
+            st.markdown("---")
+            if st.button("🛑 إغلاق وردية الجملة (لحفظها نهائياً بالأرشيف التاريخي)"):
+                if all_invoices:
+                    save_to_sales_history({
+                        "name": shared_sales.get("name"), "date": shared_sales.get("date"),
+                        "total_revenue": total_revenue, "invoices": all_invoices
+                    })
+                save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
+                st.rerun()
+        else:
+            st.markdown("---")
+            st.info("🔒 إغلاق الوردية متاح للإدارة فقط.")
 
-        shared_sales_cat = load_shared_sales()
-        deductions_cat = shared_sales_cat.get("deductions", {})
-
-        catalog_data = []
-        for p_code, p_info in system_inventory.items():
-            stock_before = float(p_info.get('sys_stock', 0.0))
-            sales_qty = float(deductions_cat.get(p_code, 0.0))
-            stock_after = stock_before - sales_qty
-            item_price = float(p_info.get('price', 0.0))
-
-            if stock_after > 0:
-                # 🛑 السر هنا: جعل القيمة (None) بدلاً من (نص فارغ) لمنع الانهيار
-                img_uri = None 
-                for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
-                    img_path = os.path.join("compressed_images", f"{p_code}{ext}")
-                    if os.path.exists(img_path):
-                        b64 = get_image_base64(img_path)
-                        if b64: img_uri = f"data:image/jpeg;base64,{b64}"
-                        break
-
-                catalog_data.append({
-                    "صورة المنتج": img_uri,
-                    "كود الصنف": p_code,
-                    "اسم الصنف": p_info.get('name', ''),
-                    "سعر القطعة": item_price,
-                    "الرصيد قبل المبيعات": stock_before,
-                    "كمية المبيعات": sales_qty,
-                    "الرصيد اللحظي المتاح": stock_after
+# ==========================================
+# التبويب 4: 📈 لوحة تحكم الإدارة (يظهر فقط للأدمن)
+# ==========================================
+if st.session_state.current_user == "abobakr":
+    with main_tab4:
+        st.markdown("## 📈 لوحة تحكم الإدارة الشاملة (Live Dashboard)")
+        st.markdown("تُعرض هنا تحليلات حية ومباشرة لجميع المبيعات (الوردية النشطة + الأرشيف القديم) بدون الحاجة لإغلاق أي وردية.")
+        
+        flat_records = []
+        
+        sales_hist = load_sales_history()
+        for rec in sales_hist:
+            for inv in rec.get('invoices', []):
+                for item in inv['items']:
+                    flat_records.append({
+                        "حالة الوردية": "مغلقة (أرشيف)",
+                        "رقم الفاتورة": inv.get('invoice_id', ''),
+                        "وقت الإصدار": inv.get('time', ''),
+                        "البائع": inv.get('salesperson', ''),
+                        "اسم العميل": inv.get('customer', ''),
+                        "كود الصنف": item.get('code', ''),
+                        "اسم الصنف": item.get('name', ''),
+                        "الكمية": item.get('qty', 0),
+                        "سعر الجملة": item.get('price', 0.0),
+                        "الإجمالي": item.get('total', 0.0)
+                    })
+                    
+        shared_sales = load_shared_sales()
+        for inv in shared_sales.get('invoices', []):
+            for item in inv['items']:
+                flat_records.append({
+                    "حالة الوردية": "نشطة حالياً",
+                    "رقم الفاتورة": inv.get('invoice_id', ''),
+                    "وقت الإصدار": inv.get('time', ''),
+                    "البائع": inv.get('salesperson', ''),
+                    "اسم العميل": inv.get('customer', ''),
+                    "كود الصنف": item.get('code', ''),
+                    "اسم الصنف": item.get('name', ''),
+                    "الكمية": item.get('qty', 0),
+                    "سعر الجملة": item.get('price', 0.0),
+                    "الإجمالي": item.get('total', 0.0)
                 })
+        
+        if not flat_records:
+            st.info("لا توجد أي مبيعات مسجلة في النظام حتى الآن لعرض التحليلات.")
+        else:
+            df_all_sales = pd.DataFrame(flat_records)
+            
+            total_rev_all = df_all_sales['الإجمالي'].sum()
+            total_items_all = df_all_sales['الكمية'].sum()
+            total_invoices_all = df_all_sales['رقم الفاتورة'].nunique()
+            
+            c1, c2, c3 = st.columns(3)
+            with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي إيرادات المحل</div><div class="metric-value" style="color:#10B981;">{total_rev_all} ج.م</div></div>', unsafe_allow_html=True)
+            with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{total_items_all} قطعة</div></div>', unsafe_allow_html=True)
+            with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">🧾 إجمالي الفواتير المُصدرة</div><div class="metric-value" style="color:#F59E0B;">{total_invoices_all} فاتورة</div></div>', unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            col_chart, col_table = st.columns(2)
+            
+            with col_chart:
+                st.markdown("#### 👨‍💼 أداء الموظفين (أفضل بياع)")
+                top_salesmen = df_all_sales.groupby('البائع')['الإجمالي'].sum().sort_values(ascending=False)
+                st.bar_chart(top_salesmen, color="#1C65A6")
+                
+            with col_table:
+                st.markdown("#### 👟 أكثر الكوتشيات مبيعاً (Top Sellers)")
+                top_items = df_all_sales.groupby(['كود الصنف', 'اسم الصنف'])['الكمية'].sum().reset_index().sort_values(by='الكمية', ascending=False)
+                st.dataframe(top_items.head(10), use_container_width=True, hide_index=True)
 
-        if catalog_data:
-            df_catalog = pd.DataFrame(catalog_data)
+            st.markdown("---")
+            
+            st.markdown("#### 👥 تقرير مشتريات العملاء (كشف حساب)")
+            customer_report = df_all_sales.groupby('اسم العميل').agg({'الكمية': 'sum', 'الإجمالي': 'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
+            st.dataframe(customer_report, use_container_width=True, hide_index=True)
 
-            st.dataframe(
-                df_catalog,
-                column_config={
-                    "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الكوتشي"),
-                    "كود الصنف": st.column_config.TextColumn("كود الصنف"),
-                    "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
-                    "سعر القطعة": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
-                    "الرصيد قبل المبيعات": st.column_config.NumberColumn("الرصيد قبل"),
-                    "كمية المبيعات": st.column_config.NumberColumn("المبيعات"),
-                    "الرصيد اللحظي المتاح": st.column_config.NumberColumn("المتاح")
-                },
-                use_container_width=True,
-                hide_index=True,
-                height=600
-            )
-
-            df_excel_cat = df_catalog.drop(columns=["صورة المنتج"])
-            buf_cat = io.BytesIO()
-            with pd.ExcelWriter(buf_cat, engine='openpyxl') as w:
-                df_excel_cat.to_excel(w, index=False, sheet_name='الكاتالوج')
-
+            st.markdown("---")
+            st.markdown("#### 📥 سجل المبيعات الشامل (كل الفواتير)")
+            st.dataframe(df_all_sales, use_container_width=True, hide_index=True)
+            
+            buf_all = io.BytesIO()
+            with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all_sales.to_excel(w, index=False, sheet_name='كل المبيعات')
             st.download_button(
-                label="📥 تحميل الكاتالوج (Excel)",
-                data=buf_cat.getvalue(),
-                file_name=f"Catalog_{datetime.date.today()}.xlsx",
+                label="📥 تحميل شيت إكسيل بكل مبيعات المحل (تاريخياً وحالياً)",
+                data=buf_all.getvalue(),
+                file_name=f"All_Master_Sales_{datetime.date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary"
             )
-        else:
-            st.info("📦 لا توجد أصناف متاحة (الأرصدة صفر).")
 
-    # ==========================================
-    # التبويب 5: 📈 لوحة الإدارة
-    # ==========================================
-    if st.session_state.current_user == "abobakr":
-        with main_tab4:
-            st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
-            flat_records = []
-            for rec in load_sales_history():
-                for inv in rec.get('invoices', []):
-                    for item in inv.get('items', []):
-                        flat_records.append({"اسم العميل": inv.get('customer', ''), "الكمية": float(item.get('qty', 0)), "الإجمالي": float(item.get('total', 0.0))})
-            for inv in load_shared_sales().get('invoices', []):
-                for item in inv.get('items', []):
-                    flat_records.append({"اسم العميل": inv.get('customer', ''), "الكمية": float(item.get('qty', 0)), "الإجمالي": float(item.get('total', 0.0))})
-            
-            if flat_records:
-                df_all = pd.DataFrame(flat_records)
-                st.markdown(f"### 💰 الإيرادات: {df_all['الإجمالي'].sum()} ج.م")
-                st.markdown("#### 👥 مشتريات العملاء")
-                st.dataframe(df_all.groupby('اسم العميل').sum().sort_values(by='الإجمالي', ascending=False).reset_index(), use_container_width=True)
-            else: st.info("لا توجد مبيعات.")
-
-    st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
