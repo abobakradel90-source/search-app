@@ -257,8 +257,8 @@ if st.session_state.current_user == "abobakr":
                     if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
                     else: d = pd.read_excel(new_db)
                     d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                    st.success("✅ تم تحديث الأسعار والأرصدة بنجاح!")
-                    time.sleep(1)
+                    st.success("✅ تم تحديث قاعدة البيانات بنجاح!")
+                    time.sleep(0.5)
                     st.rerun()
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء القراءة: {e}")
@@ -307,7 +307,7 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🚀 محرك استخراج البيانات الموحد
+# 🚀 محرك استخراج البيانات الموحد والذكي
 # ==========================================
 system_inventory = {}
 
@@ -319,44 +319,75 @@ def parse_val(val):
 
 def process_df(df):
     if df is None or df.empty: return
-    cols = [str(c).lower().strip() for c in df.columns]
-    code_col = name_col = stock_col = price_col = None
     
-    for orig, low in zip(df.columns, cols):
-        if not code_col and any(k in low for k in ['code', 'كود', 'باركود', 'file']): code_col = orig
-        elif not name_col and any(k in low for k in ['name', 'اسم', 'صنف', 'title']): name_col = orig
-        elif not stock_col and any(k in low for k in ['stock', 'qty', 'رصيد', 'كمية', 'عدد']): stock_col = orig
-        elif not price_col and any(k in low for k in ['price', 'سعر', 'ثمن', 'جملة', 'بيع', 'قيمة']): price_col = orig
+    cols_map = {c: str(c).lower().strip() for c in df.columns}
+    code_col, name_col, stock_col, price_col = None, None, None, None
     
+    # 1. البحث عن عمود الكود
+    for orig, low in cols_map.items():
+        if any(k in low for k in ['كود الصنف', 'كود', 'code', 'باركود', 'barcode', 'item_code', 'رمز', 'رقم الصنف']):
+            code_col = orig
+            break
+            
+    # 2. البحث عن عمود الاسم
+    for orig, low in cols_map.items():
+        if orig != code_col and any(k in low for k in ['اسم الصنف', 'اسم', 'name', 'صنف', 'item', 'title', 'موديل', 'model', 'الوصف', 'description']):
+            name_col = orig
+            break
+            
+    # 3. البحث عن عمود الرصيد
+    for orig, low in cols_map.items():
+        if orig not in [code_col, name_col] and any(k in low for k in ['الرصيد', 'رصيد', 'stock', 'الكمية', 'كمية', 'الكميه', 'كميه', 'qty', 'عدد', 'المخزون', 'المتاح']):
+            stock_col = orig
+            break
+            
+    # 4. البحث عن عمود السعر
+    for orig, low in cols_map.items():
+        if orig not in [code_col, name_col, stock_col] and any(k in low for k in ['سعر الجملة', 'سعر القطعة', 'سعر', 'price', 'ثمن', 'جملة', 'بيع', 'قيمة', 'قطاعي']):
+            price_col = orig
+            break
+            
+    # بدائل حسب ترتيب الأعمدة في حال عدم وجود أسماء واضحة
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
     if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
+    if not price_col and len(df.columns) > 3: price_col = df.columns[3]
     if not price_col and len(df.columns) > 4: price_col = df.columns[4]
 
     for _, row in df.iterrows():
-        raw_code = str(row.get(code_col, "")).strip()
-        if raw_code.lower() in ['nan', 'none', '']: continue
-        p_code = raw_code.split('.')[0].upper()
-        p_name = str(row.get(name_col, "بدون اسم")).strip()
-        p_stock = parse_val(row.get(stock_col, 0))
-        p_price = parse_val(row.get(price_col, 0))
+        raw_code = row.get(code_col, "") if code_col else ""
+        if pd.isna(raw_code) or str(raw_code).strip().lower() in ['nan', 'none', '']: continue
+        
+        p_code = str(raw_code).strip()
+        if p_code.endswith('.0'): p_code = p_code[:-2]
+        p_code = p_code.upper()
+        if not p_code: continue
+        
+        p_name = str(row.get(name_col, "بدون اسم")).strip() if name_col else "بدون اسم"
+        if pd.isna(p_name) or p_name.lower() in ['nan', 'none', '']: p_name = "بدون اسم"
+        
+        p_stock = parse_val(row.get(stock_col, 0)) if stock_col else 0.0
+        p_price = parse_val(row.get(price_col, 0)) if price_col else 0.0
         
         if p_price == 0.0:
             for c in df.columns:
-                if any(k in str(c).lower().strip() for k in ['price', 'سعر', 'ثمن', 'جملة']):
+                if c != code_col and any(k in str(c).lower().strip() for k in ['price', 'سعر', 'ثمن', 'جملة']):
                     t_p = parse_val(row[c])
                     if t_p > 0: p_price = t_p; break
                     
         system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
 
-try: df_p = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
-except: df_p = None
-process_df(df_p)
-
+# إعطاء الأولوية المطلقة للشيت المرفوع من الأدمن
 if os.path.exists(MASTER_DB_FILE):
-    try: df_m = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
-    except: df_m = None
-    process_df(df_m)
+    try:
+        df_m = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
+        process_df(df_m)
+    except: pass
+else:
+    try:
+        df_p = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
+        process_df(df_p)
+    except: pass
 
 def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
