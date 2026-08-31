@@ -92,7 +92,7 @@ def generate_catalog_excel(catalog_items):
         ws.sheet_view.rightToLeft = True
     except Exception:
         pass
-    
+        
     headers = ["صورة المنتج", "كود الصنف", "اسم الصنف", "سعر القطعة (ج.م)", "الرصيد الدفتري (قبل البيع)", "كمية المبيعات بالوردية", "الرصيد اللحظي المتاح"]
     ws.append(headers)
     
@@ -111,7 +111,8 @@ def generate_catalog_excel(catalog_items):
         cell.alignment = center_align
     ws.row_dimensions[1].height = 28
     
-    ws.column_dimensions['A'].width = 11.5
+    # 📏 ضبط عرض العمود ليطابق عرض الصورة (120px)
+    ws.column_dimensions['A'].width = 18
     ws.column_dimensions['B'].width = 18
     ws.column_dimensions['C'].width = 32
     ws.column_dimensions['D'].width = 18
@@ -120,7 +121,8 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['G'].width = 24
     
     for row_idx, item in enumerate(catalog_items, start=2):
-        ws.row_dimensions[row_idx].height = 54
+        # 📏 ضبط ارتفاع الصف ليطابق ارتفاع الصورة (120px)
+        ws.row_dimensions[row_idx].height = 92
         ws.cell(row=row_idx, column=1, value="")
         
         c_code = item.get("كود الصنف", "")
@@ -151,14 +153,23 @@ def generate_catalog_excel(catalog_items):
         if img_path and isinstance(img_path, str) and os.path.exists(img_path):
             try:
                 with Image.open(img_path) as p_img:
-                    p_img.thumbnail((65, 65))
+                    # 🖼️ تصغير/تكبير الصورة بوضوح عالي
+                    p_img.thumbnail((120, 120), getattr(Image, 'LANCZOS', Image.BICUBIC))
+                    
+                    # 🖼️ توحيد المقاس: وضع الصورة في مربع أبيض ثابت (120x120) لملء الخلية بالظبط
+                    square_img = Image.new("RGB", (120, 120), "white")
+                    offset_x = (120 - p_img.width) // 2
+                    offset_y = (120 - p_img.height) // 2
+                    square_img.paste(p_img, (offset_x, offset_y))
+                    
                     img_bytes = io.BytesIO()
-                    p_img.convert("RGB").save(img_bytes, format="JPEG", quality=75, optimize=True)
+                    square_img.save(img_bytes, format="JPEG", quality=95, optimize=True)
                     img_bytes.seek(0)
                     
                     xl_img = OpenpyxlImage(img_bytes)
-                    xl_img.width = 60
-                    xl_img.height = 60
+                    xl_img.width = 120
+                    xl_img.height = 120
+                    
                     ws.add_image(xl_img, f"A{row_idx}")
             except Exception:
                 pass
@@ -323,31 +334,26 @@ def process_df(df):
     cols_map = {c: str(c).lower().strip() for c in df.columns}
     code_col, name_col, stock_col, price_col = None, None, None, None
     
-    # 1. البحث عن عمود الكود
     for orig, low in cols_map.items():
         if any(k in low for k in ['كود الصنف', 'كود', 'code', 'باركود', 'barcode', 'item_code', 'رمز', 'رقم الصنف']):
             code_col = orig
             break
             
-    # 2. البحث عن عمود الاسم
     for orig, low in cols_map.items():
         if orig != code_col and any(k in low for k in ['اسم الصنف', 'اسم', 'name', 'صنف', 'item', 'title', 'موديل', 'model', 'الوصف', 'description']):
             name_col = orig
             break
             
-    # 3. البحث عن عمود الرصيد
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col] and any(k in low for k in ['الرصيد', 'رصيد', 'stock', 'الكمية', 'كمية', 'الكميه', 'كميه', 'qty', 'عدد', 'المخزون', 'المتاح']):
             stock_col = orig
             break
             
-    # 4. البحث عن عمود السعر
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col, stock_col] and any(k in low for k in ['سعر الجملة', 'سعر القطعة', 'سعر', 'price', 'ثمن', 'جملة', 'بيع', 'قيمة', 'قطاعي']):
             price_col = orig
             break
             
-    # بدائل حسب ترتيب الأعمدة في حال عدم وجود أسماء واضحة
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
     if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
@@ -401,15 +407,17 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     stock_class = "stock-badge out-of-stock" if is_out else "stock-badge in-stock"
     price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price and float(p_price) > 0 else " &nbsp;|&nbsp; ⚠️ السعر غير مسجل"
     stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}" if is_sales else f"📦 الرصيد الدفتري: {p_stock}"
-
-    st.markdown(f"""<div class="product-card">
+    
+    st.markdown(f"""
+    <div class="product-card">
         {img_html}
         <div style="flex-grow: 1;">
             <div class="code-badge">الكود: {p_code}</div>
             <h3 class="product-title">{p_name}</h3>
             <div class="{stock_class}">{stock_text}</div>
         </div>
-    </div>""", unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
 # 🛑 تبويبات النظام
 if st.session_state.current_user == "abobakr":
@@ -424,17 +432,20 @@ else:
 # ==========================================
 with main_tab1:
     search_query = st.text_input("", placeholder="اكتب الكود أو اسم الصنف هنا...", key="search_bar", label_visibility="collapsed")
+    
     if search_query:
         q = str(search_query).strip().lower()
         matched = [c for c, v in system_inventory.items() if q in c.lower() or q in v.get('name','').lower()]
+        
         if matched:
             st.markdown("### ✨ نتائج البحث:")
             for p_code in matched[:10]:
                 item = system_inventory[p_code]
                 render_product_card(p_code, item.get('name',''), item.get('sys_stock',0), p_price=item.get('price',0), is_sales=True)
         else: st.warning("⚠️ لم يتم العثور على أي منتج يطابق بحثك.")
-    
-    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+        
+        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+
     cam_tab, up_tab = st.tabs(["📸 التقاط بالكاميرا", "📁 رفع صورة"])
     raw_img = None
     with cam_tab:
@@ -443,10 +454,11 @@ with main_tab1:
     with up_tab:
         u_file = st.file_uploader("ارفع صورة المنتج", type=["jpg", "jpeg", "png"])
         if u_file: raw_img = Image.open(u_file).convert("RGB")
-
+        
     if raw_img:
         st.markdown("### ✂️ قص بؤرة البحث:")
         c_img = st_cropper(raw_img, realtime_update=True, box_color='#1C65A6', aspect_ratio=None)
+        
         if st.button("🚀 ابحث عن المنتج الآن"):
             with st.spinner('جاري المسح البصري...'):
                 try:
@@ -460,6 +472,7 @@ with main_tab1:
                             img_p = os.path.join("compressed_images", fn)
                             c_dist = compare_histograms(u_color, get_color_histogram(Image.open(img_p))) if os.path.exists(img_p) else 0
                             refined.append({'fn': fn, 'score': res['distances'][0][i] + (c_dist * 0.5)})
+                            
                         refined.sort(key=lambda x: x['score'])
                         for r in refined[:3]:
                             p_code = r['fn'].split('.')[0].upper()
@@ -473,6 +486,7 @@ with main_tab1:
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
+    
     if not shared_inv.get("is_active", False):
         st.markdown("### 🆕 إعداد جلسة جرد جديدة")
         inv_n = st.text_input("اسم/رقم الجرد", key="inv_n_in")
@@ -486,9 +500,10 @@ with main_tab2:
                 st.rerun()
     else:
         st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد نشطة:</b> {shared_inv.get("name")} | <b>السبب:</b> {shared_inv.get("reason")}</div>', unsafe_allow_html=True)
+        
         tab_sum, tab_scan, tab_rep = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود", "⚖️ تقرير الفروقات"])
         scanned_map = shared_inv.get("scanned_items", {})
-
+        
         with tab_sum:
             total_qty = sum(info.get('sys_stock', 0) for info in system_inventory.values())
             c1, c2, c3 = st.columns(3)
@@ -497,13 +512,14 @@ with main_tab2:
             with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي المجرد فعلياً</div><div class="metric-value" style="color:#F59E0B;">{int(sum(scanned_map.values()))}</div></div>', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
-
+            
         with tab_scan:
             code_in = st.text_input("كود الصنف للجرد:", key="inv_barcode_input")
             if code_in:
                 c_clean = str(code_in).strip().upper()
                 if c_clean in system_inventory:
                     render_product_card(c_clean, system_inventory[c_clean].get('name',''), system_inventory[c_clean].get('sys_stock',0))
+                    
                     add_q = st.number_input("الكمية الفعلية المضافة:", value=1, key="add_q_inv")
                     if st.button("تأكيد الإضافة 📥", key="btn_confirm_inv"):
                         l_inv = load_shared_inventory()
@@ -514,11 +530,12 @@ with main_tab2:
                         time.sleep(0.5)
                         st.rerun()
                 else: st.error("❌ الباركود غير مسجل في النظام.")
-
+                
         with tab_rep:
             rep_data = [{"كود الصنف": c, "اسم الصنف": i.get('name',''), "الرصيد الدفتري": i.get('sys_stock',0), "الرصيد الفعلي": scanned_map.get(c, 0), "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock',0)} for c, i in system_inventory.items()]
             df_rep = pd.DataFrame(rep_data)
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
+            
             buf = io.BytesIO()
             with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
             st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
@@ -557,11 +574,12 @@ with main_tab3:
         with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي إيراد الوردية</div><div class="metric-value" style="color:#1C65A6;">{total_rev} ج.م</div></div>', unsafe_allow_html=True)
         with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">مبيعاتي بالوردية</div><div class="metric-value" style="color:#F59E0B;">{my_rev} ج.م</div></div>', unsafe_allow_html=True)
         with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">عدد الفواتير</div><div class="metric-value" style="color:#10B981;">{len(all_invs)}</div></div>', unsafe_allow_html=True)
+        
         st.markdown("---")
-
+        
         if "active_cust" not in st.session_state: st.session_state.active_cust = ""
         if "cart" not in st.session_state: st.session_state.cart = []
-
+        
         if not st.session_state.active_cust:
             st.markdown("### 📝 فتح فاتورة لعميل جديد")
             c_name_input = st.text_input("اسم العميل / المحل:", key="cust_name_field")
@@ -573,6 +591,7 @@ with main_tab3:
                 else: st.error("⚠️ اكتب اسم العميل للمتابعة.")
         else:
             st.markdown(f"### 🧾 العميل الحالي: <span style='color:#1C65A6;'>{st.session_state.active_cust}</span>", unsafe_allow_html=True)
+            
             scan_pos = st.text_input("كود الصنف للفاتورة:", key="pos_barcode_in")
             
             if scan_pos:
@@ -581,6 +600,7 @@ with main_tab3:
                     p_data = system_inventory[p_c]
                     s_qty = float(p_data.get('sys_stock', 0.0))
                     price = float(p_data.get('price', 0.0))
+                    
                     sold_q = float(shared_sales.get("deductions", {}).get(p_c, 0.0))
                     in_cart = sum(float(it.get('qty',0)) for it in st.session_state.cart if it.get('code') == p_c)
                     avail = s_qty - sold_q - in_cart
@@ -601,11 +621,12 @@ with main_tab3:
                                 time.sleep(0.3)
                                 st.rerun()
                 else: st.error("❌ الكود غير مسجل.")
-
+                
             if st.session_state.cart:
                 st.markdown("#### 🛒 الأصناف المضافة بالفاتورة:")
                 df_c = pd.DataFrame(st.session_state.cart)
                 st.dataframe(df_c[['code', 'name', 'qty', 'price', 'total']], use_container_width=True)
+                
                 cart_tot = sum(float(it.get('total', 0.0)) for it in st.session_state.cart)
                 st.markdown(f"<h3 style='color:#DC2626;'>الإجمالي المطلوب: {cart_tot} ج.م</h3>", unsafe_allow_html=True)
                 
@@ -614,13 +635,16 @@ with main_tab3:
                     if st.button("✅ حفظ الفاتورة وإصدار الإكسيل", type="primary", key="save_inv_btn"):
                         l_sales = load_shared_sales()
                         new_id = max([i.get("invoice_id", 0) for i in l_sales.get("invoices", [])] + [0]) + 1
+                        
                         l_sales["invoices"].append({
                             "invoice_id": new_id, "time": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
                             "salesperson": st.session_state.current_user, "customer": st.session_state.active_cust,
                             "total": cart_tot, "items": st.session_state.cart
                         })
+                        
                         for it in st.session_state.cart:
                             l_sales["deductions"][it['code']] = l_sales.get("deductions", {}).get(it['code'], 0) + it['qty']
+                            
                         save_shared_sales(l_sales)
                         
                         df_ex = pd.DataFrame(st.session_state.cart).rename(columns={'code':'كود الصنف', 'name':'اسم الصنف', 'qty':'الكمية', 'price':'السعر', 'total':'الإجمالي'})
@@ -636,7 +660,7 @@ with main_tab3:
                         st.session_state.active_cust = ""
                         st.session_state.cart = []
                         st.rerun()
-
+                        
         if st.session_state.current_user == "abobakr":
             st.markdown("---")
             if st.button("🛑 إغلاق وردية البيع (أرشيف نهائي)", key="close_sales_shift_btn"):
@@ -645,7 +669,7 @@ with main_tab3:
                 st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل (مُرتب بالصور في الإكسيل والشاشة)
+# 4. تبويب الكاتالوج الشامل (مُرتب بالصور الموحدة)
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
@@ -725,11 +749,13 @@ with main_tab_cat:
 if st.session_state.current_user == "abobakr":
     with main_tab4:
         st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
+        
         master_sales = []
         for rec in load_sales_history():
             for inv in rec.get('invoices', []):
                 for it in inv.get('items', []):
                     master_sales.append({"الوردية": rec.get('name', ''), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
+                    
         for inv in load_shared_sales().get('invoices', []):
             for it in inv.get('items', []):
                 master_sales.append({"الوردية": "نشطة حالياً", "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
@@ -742,6 +768,7 @@ if st.session_state.current_user == "abobakr":
             c_a1, c_a2 = st.columns(2)
             with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات المحل</div><div class="metric-value" style="color:#10B981;">{tot_cash} ج.م</div></div>', unsafe_allow_html=True)
             with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{tot_pieces} قطعة</div></div>', unsafe_allow_html=True)
+            
             st.markdown("---")
             
             st.markdown("#### 👥 تقرير مشتريات العملاء:")
