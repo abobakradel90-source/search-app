@@ -109,9 +109,9 @@ def generate_catalog_excel(catalog_items):
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = center_align
-    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[1].height = 28
     
-    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['A'].width = 11.5
     ws.column_dimensions['B'].width = 18
     ws.column_dimensions['C'].width = 32
     ws.column_dimensions['D'].width = 18
@@ -120,7 +120,7 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['G'].width = 24
     
     for row_idx, item in enumerate(catalog_items, start=2):
-        ws.row_dimensions[row_idx].height = 65
+        ws.row_dimensions[row_idx].height = 54
         ws.cell(row=row_idx, column=1, value="")
         
         c_code = item.get("كود الصنف", "")
@@ -150,10 +150,16 @@ def generate_catalog_excel(catalog_items):
         img_path = item.get("img_path")
         if img_path and isinstance(img_path, str) and os.path.exists(img_path):
             try:
-                xl_img = OpenpyxlImage(img_path)
-                xl_img.width = 65
-                xl_img.height = 65
-                ws.add_image(xl_img, f"A{row_idx}")
+                with Image.open(img_path) as p_img:
+                    p_img.thumbnail((65, 65))
+                    img_bytes = io.BytesIO()
+                    p_img.convert("RGB").save(img_bytes, format="JPEG", quality=75, optimize=True)
+                    img_bytes.seek(0)
+                    
+                    xl_img = OpenpyxlImage(img_bytes)
+                    xl_img.width = 60
+                    xl_img.height = 60
+                    ws.add_image(xl_img, f"A{row_idx}")
             except Exception:
                 pass
                 
