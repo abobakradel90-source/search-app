@@ -80,7 +80,6 @@ def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
             w, h = img_rgb.size
             crop_box = None
             
-            # فحص قناة الشفافية إن وجدت
             if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
                 try:
                     alpha = img.convert('RGBA').split()[-1]
@@ -90,7 +89,6 @@ def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
                             crop_box = a_box
                 except: pass
             
-            # خوارزمية ذكية لعزل الفراغات البيضاء/الرمادية مهما كان لون الكوتشي
             if not crop_box:
                 corners = [
                     img_rgb.getpixel((0, 0)),
@@ -117,7 +115,6 @@ def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
                         crop_box = bbox
             
             if crop_box:
-                # ترك هامش أمان بنسبة 2% لضمان عدم قص أي جزء من الكوتشي
                 pad_x = max(2, int((crop_box[2] - crop_box[0]) * 0.02))
                 pad_y = max(2, int((crop_box[3] - crop_box[1]) * 0.02))
                 safe_box = (
@@ -130,7 +127,6 @@ def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
             else:
                 shoe_cropped = img_rgb
                 
-            # تكبير مجسم الكوتشي ليمتد على كامل المساحة الموحدة
             sw, sh = shoe_cropped.size
             scale = min((target_w - 12) / sw, (target_h - 12) / sh)
             nw = max(1, int(sw * scale))
@@ -237,7 +233,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية ---
+# --- 2. الهوية البصرية وتنسيق شاشة الدخول الاحترافية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -245,9 +241,49 @@ st.markdown(f"""
         .stApp {{ background-color: #F0F4F8; }}
         #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
         .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
-        .login-box {{ background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(28, 101, 166, 0.15); max-width: 450px; margin: 100px auto; text-align: center; border-top: 8px solid #1C65A6; }}
-        .login-title {{ color: #1C65A6; font-weight: 900; font-size: 28px; margin-bottom: 5px; }}
-        .login-subtitle {{ color: #64748B; font-size: 16px; margin-bottom: 30px; }}
+        
+        /* تصميم كارت تسجيل الدخول */
+        .login-card {{
+            background: #FFFFFF;
+            padding: 40px 35px;
+            border-radius: 24px;
+            box-shadow: 0 20px 45px rgba(28, 101, 166, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04);
+            max-width: 440px;
+            margin: 40px auto;
+            text-align: center;
+            border: 1px solid #E2E8F0;
+            border-top: 6px solid #1C65A6;
+        }}
+        .login-logo-wrap {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+        }}
+        .login-logo-img {{
+            height: 90px;
+            width: 90px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 3px solid #E8F0F8;
+            box-shadow: 0 6px 16px rgba(28, 101, 166, 0.2);
+            background: #FFFFFF;
+            padding: 3px;
+        }}
+        .login-title {{
+            color: #0F2942;
+            font-weight: 900;
+            font-size: 26px;
+            margin: 0 0 6px 0;
+            line-height: 1.2;
+        }}
+        .login-subtitle {{
+            color: #64748B;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 25px;
+        }}
+        
         .brand-navbar {{ background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -30px; margin-bottom: 20px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }}
         .brand-navbar img {{ height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }}
         .brand-navbar h1 {{ color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }}
@@ -275,16 +311,17 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🛑 بوابة تسجيل الدخول
+# 🛑 بوابة تسجيل الدخول (تصميم متناسق وأنيق)
 # ==========================================
 if not st.session_state.logged_in:
-    st.markdown('<div class="login-box">', unsafe_allow_html=True)
-    if logo_base64: st.markdown(f'<img src="data:image/jpeg;base64,{logo_base64}" style="height: 80px; border-radius:10px; margin-bottom:15px;">', unsafe_allow_html=True)
-    st.markdown('<div class="login-title">نظام إدارة ED STORE</div>', unsafe_allow_html=True)
-    st.markdown('<div class="login-subtitle">برجاء تسجيل الدخول للمتابعة</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    if logo_base64:
+        st.markdown(f'<div class="login-logo-wrap"><img src="data:image/jpeg;base64,{logo_base64}" class="login-logo-img"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">ED STORE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">نظام إدارة المخزون والمبيعات الذكي</div>', unsafe_allow_html=True)
     
-    username = st.text_input("👤 اسم المستخدم", key="login_u")
-    password = st.text_input("🔑 كلمة المرور", type="password", key="login_p")
+    username = st.text_input("👤 اسم المستخدم", placeholder="ادخل اسم المستخدم", key="login_u")
+    password = st.text_input("🔑 كلمة المرور", placeholder="ادخل كلمة المرور", type="password", key="login_p")
     
     if st.button("تسجيل الدخول 🚀", key="login_btn"):
         clean_user = str(username).strip().lower()
@@ -294,7 +331,7 @@ if not st.session_state.logged_in:
             st.session_state.current_user = clean_user
             st.rerun()
         else:
-            st.error("❌ بيانات الدخول غير صحيحة.")
+            st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة.")
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
@@ -314,23 +351,23 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-if st.session_state.current_user == "abobakr":
-    with st.sidebar:
-        st.markdown("### ⚙️ إدارة النظام والأسعار")
-        st.markdown("ارفع شيت الإكسيل لتحديث الأسعار والأرصدة:")
-        new_db = st.file_uploader("اختر ملف الشيت", type=['csv', 'xlsx'], key="admin_uploader")
-        if new_db is not None:
-            if st.button("تحديث الداتا الآن 💾", key="admin_upload_btn"):
-                try:
-                    if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
-                    else: d = pd.read_excel(new_db)
-                    d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                    st.success("✅ تم تحديث قاعدة البيانات بنجاح!")
-                    time.sleep(0.5)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"حدث خطأ أثناء القراءة: {e}")
-        st.markdown("---")
+# 🌟 القائمة الجانبية متاحة للجميع مؤقتاً للتجربة 🌟
+with st.sidebar:
+    st.markdown("### ⚙️ إدارة النظام والأسعار")
+    st.markdown("ارفع شيت الإكسيل لتحديث الأسعار والأرصدة:")
+    new_db = st.file_uploader("اختر ملف الشيت", type=['csv', 'xlsx'], key="admin_uploader")
+    if new_db is not None:
+        if st.button("تحديث الداتا الآن 💾", key="admin_upload_btn"):
+            try:
+                if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
+                else: d = pd.read_excel(new_db)
+                d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
+                st.success("✅ تم تحديث قاعدة البيانات بنجاح!")
+                time.sleep(0.5)
+                st.rerun()
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء القراءة: {e}")
+    st.markdown("---")
 
 # --- محرك البحث الذكي ---
 @st.cache_resource
@@ -473,13 +510,9 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
         </div>
     </div>""", unsafe_allow_html=True)
 
-# 🛑 تبويبات النظام
-if st.session_state.current_user == "abobakr":
-    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
-    main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
-else:
-    tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج"])
-    main_tab1, main_tab2, main_tab3, main_tab_cat = tabs
+# 🌟 جميع التبويبات الـ 5 مفتوحة لجميع المستخدمين مؤقتاً 🌟
+tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
+main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
 
 # ==========================================
 # 1. تبويب البحث
@@ -585,12 +618,15 @@ with main_tab2:
             with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
             st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
             
+            # 🔒 غلق الجرد النهائي مقتصر على الإدارة abobakr فقط
+            st.markdown("---")
             if st.session_state.current_user == "abobakr":
-                st.markdown("---")
-                if st.button("🛑 إغلاق وإنهاء جلسة الجرد (أرشيف)", key="close_inv_session"):
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد (أرشيف الإدارة)", key="close_inv_session"):
                     save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv.get('name'), "date": shared_inv.get('date'), "report": rep_data})
                     save_shared_inventory({"is_active": False, "scanned_items": {}})
                     st.rerun()
+            else:
+                st.info("🔒 خاصية إغلاق جلسة الجرد النهائي وحفظها في الأرشيف مقتصرة على الإدارة (abobakr) فقط.")
 
 # ==========================================
 # 3. تبويب فواتير الجملة
@@ -699,15 +735,14 @@ with main_tab3:
                         st.session_state.cart = []
                         st.rerun()
 
-        if st.session_state.current_user == "abobakr":
-            st.markdown("---")
-            if st.button("🛑 إغلاق وردية البيع (أرشيف نهائي)", key="close_sales_shift_btn"):
-                save_to_sales_history({"name": shared_sales.get("name"), "date": shared_sales.get("date"), "total_revenue": total_rev, "invoices": all_invs})
-                save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
-                st.rerun()
+        st.markdown("---")
+        if st.button("🛑 إغلاق وردية البيع (أرشيف)", key="close_sales_shift_btn"):
+            save_to_sales_history({"name": shared_sales.get("name"), "date": shared_sales.get("date"), "total_revenue": total_rev, "invoices": all_invs})
+            save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
+            st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل (مُرتب بالصور في الإكسيل والشاشة)
+# 4. تبويب الكاتالوج الشامل
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
@@ -782,37 +817,36 @@ with main_tab_cat:
         st.info("📦 لا توجد أي أصناف متوفرة في المستودع حالياً (الأرصدة صفر).")
 
 # ==========================================
-# 5. تبويب لوحة تحكم الإدارة
+# 5. تبويب لوحة تحكم الإدارة (مفتوحة للتجربة)
 # ==========================================
-if st.session_state.current_user == "abobakr":
-    with main_tab4:
-        st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
-        master_sales = []
-        for rec in load_sales_history():
-            for inv in rec.get('invoices', []):
-                for it in inv.get('items', []):
-                    master_sales.append({"الوردية": rec.get('name', ''), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
-        for inv in load_shared_sales().get('invoices', []):
+with main_tab4:
+    st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
+    master_sales = []
+    for rec in load_sales_history():
+        for inv in rec.get('invoices', []):
             for it in inv.get('items', []):
-                master_sales.append({"الوردية": "نشطة حالياً", "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
-                
-        if master_sales:
-            df_all = pd.DataFrame(master_sales)
-            tot_cash = df_all['الإجمالي'].sum()
-            tot_pieces = df_all['الكمية'].sum()
+                master_sales.append({"الوردية": rec.get('name', ''), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
+    for inv in load_shared_sales().get('invoices', []):
+        for it in inv.get('items', []):
+            master_sales.append({"الوردية": "نشطة حالياً", "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
             
-            c_a1, c_a2 = st.columns(2)
-            with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات المحل</div><div class="metric-value" style="color:#10B981;">{tot_cash} ج.م</div></div>', unsafe_allow_html=True)
-            with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{tot_pieces} قطعة</div></div>', unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("#### 👥 تقرير مشتريات العملاء:")
-            cust_summary = df_all.groupby('العميل').agg({'الكمية':'sum', 'الإجمالي':'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
-            st.dataframe(cust_summary, use_container_width=True, hide_index=True)
-            
-            buf_all = io.BytesIO()
-            with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all.to_excel(w, index=False)
-            st.download_button("📥 تحميل كل سجلات المبيعات (Excel)", buf_all.getvalue(), f"All_Sales_{datetime.date.today()}.xlsx")
-        else: st.info("لا توجد مبيعات مسجلة حتى الآن.")
+    if master_sales:
+        df_all = pd.DataFrame(master_sales)
+        tot_cash = df_all['الإجمالي'].sum()
+        tot_pieces = df_all['الكمية'].sum()
+        
+        c_a1, c_a2 = st.columns(2)
+        with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات المحل</div><div class="metric-value" style="color:#10B981;">{tot_cash} ج.م</div></div>', unsafe_allow_html=True)
+        with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{tot_pieces} قطعة</div></div>', unsafe_allow_html=True)
+        st.markdown("---")
+        
+        st.markdown("#### 👥 تقرير مشتريات العملاء:")
+        cust_summary = df_all.groupby('العميل').agg({'الكمية':'sum', 'الإجمالي':'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
+        st.dataframe(cust_summary, use_container_width=True, hide_index=True)
+        
+        buf_all = io.BytesIO()
+        with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all.to_excel(w, index=False)
+        st.download_button("📥 تحميل كل سجلات المبيعات (Excel)", buf_all.getvalue(), f"All_Sales_{datetime.date.today()}.xlsx")
+    else: st.info("لا توجد مبيعات مسجلة حتى الآن.")
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
