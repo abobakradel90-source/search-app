@@ -77,9 +77,18 @@ def get_thumbnail_base64(img_path):
     try:
         with Image.open(img_path) as img:
             img = img.convert("RGB")
-            img.thumbnail((140, 140), Image.Resampling.LANCZOS)
-            canvas = Image.new("RGB", (140, 140), (255, 255, 255))
-            offset = ((140 - img.width) // 2, (140 - img.height) // 2)
+            gray = img.convert('L')
+            mask = gray.point(lambda p: 255 if p < 245 else 0)
+            bbox = mask.getbbox()
+            if bbox:
+                w, h = img.size
+                pad = 4
+                img = img.crop((max(0, bbox[0]-pad), max(0, bbox[1]-pad), min(w, bbox[2]+pad), min(h, bbox[3]+pad)))
+            
+            canvas_w, canvas_h = 200, 140
+            img.thumbnail((canvas_w - 6, canvas_h - 6), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
+            offset = ((canvas_w - img.width) // 2, (canvas_h - img.height) // 2)
             canvas.paste(img, offset)
             
             buf = io.BytesIO()
@@ -114,9 +123,9 @@ def generate_catalog_excel(catalog_items):
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = center_align
-    ws.row_dimensions[1].height = 32
+    ws.row_dimensions[1].height = 30
     
-    ws.column_dimensions['A'].width = 24
+    ws.column_dimensions['A'].width = 23
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 34
     ws.column_dimensions['D'].width = 20
@@ -125,7 +134,7 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['G'].width = 25
     
     for row_idx, item in enumerate(catalog_items, start=2):
-        ws.row_dimensions[row_idx].height = 125
+        ws.row_dimensions[row_idx].height = 115
         ws.cell(row=row_idx, column=1, value="")
         
         c_code = item.get("كود الصنف", "")
@@ -158,19 +167,36 @@ def generate_catalog_excel(catalog_items):
                 with Image.open(img_path) as p_img:
                     p_img = p_img.convert("RGB")
                     
-                    # احتواء كامل للصورة بنسبتها الأصلية بدون أي قص
-                    p_img.thumbnail((260, 260), Image.Resampling.LANCZOS)
-                    canvas = Image.new("RGB", (260, 260), (255, 255, 255))
-                    offset = ((260 - p_img.width) // 2, (260 - p_img.height) // 2)
+                    # 1. إزالة الفراغات البيضاء المفرطة المحيطة بمجسم الحذاء
+                    gray = p_img.convert('L')
+                    mask = gray.point(lambda p: 255 if p < 245 else 0)
+                    bbox = mask.getbbox()
+                    if bbox:
+                        w, h = p_img.size
+                        pad = 6
+                        crop_box = (
+                            max(0, bbox[0] - pad),
+                            max(0, bbox[1] - pad),
+                            min(w, bbox[2] + pad),
+                            min(h, bbox[3] + pad)
+                        )
+                        p_img = p_img.crop(crop_box)
+                    
+                    # 2. احتواء الحذاء بالكامل وتوسيعه ليمتلك نفس الحجم الموحد
+                    canvas_w, canvas_h = 280, 200
+                    p_img.thumbnail((canvas_w - 10, canvas_h - 10), Image.Resampling.LANCZOS)
+                    
+                    canvas = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
+                    offset = ((canvas_w - p_img.width) // 2, (canvas_h - p_img.height) // 2)
                     canvas.paste(p_img, offset)
                     
                     img_bytes = io.BytesIO()
-                    canvas.save(img_bytes, format="JPEG", quality=85, optimize=True)
+                    canvas.save(img_bytes, format="JPEG", quality=88, optimize=True)
                     img_bytes.seek(0)
                     
                     xl_img = OpenpyxlImage(img_bytes)
-                    xl_img.width = 140
-                    xl_img.height = 140
+                    xl_img.width = 145
+                    xl_img.height = 105
                     ws.add_image(xl_img, f"A{row_idx}")
             except Exception:
                 pass
@@ -384,7 +410,6 @@ def process_df(df):
                     
         system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
 
-# إعطاء الأولوية المطلقة للشيت المرفوع من الأدمن
 if os.path.exists(MASTER_DB_FILE):
     try:
         df_m = pd.read_csv(MASTER_DB_FILE, encoding='utf-8-sig', sep=None, engine='python')
