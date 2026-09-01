@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
-from PIL import Image, ImageOps, ImageChops
+from PIL import Image, ImageOps
 import torch
 import os
 import zipfile
@@ -77,20 +77,13 @@ def get_thumbnail_base64(img_path):
     try:
         with Image.open(img_path) as img:
             img = img.convert("RGB")
-            # قص الفراغات البيضاء في شاشة العرض أيضاً
-            bg = Image.new(img.mode, img.size, (255, 255, 255))
-            diff = ImageChops.difference(img, bg)
-            bbox = diff.getbbox()
-            if bbox:
-                w, h = img.size
-                pad_x = int((bbox[2] - bbox[0]) * 0.02)
-                pad_y = int((bbox[3] - bbox[1]) * 0.02)
-                crop_box = (max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y), min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y))
-                img = img.crop(crop_box)
-                
-            fitted = ImageOps.fit(img, (140, 140), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+            img.thumbnail((140, 140), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGB", (140, 140), (255, 255, 255))
+            offset = ((140 - img.width) // 2, (140 - img.height) // 2)
+            canvas.paste(img, offset)
+            
             buf = io.BytesIO()
-            fitted.save(buf, format="JPEG", quality=85)
+            canvas.save(buf, format="JPEG", quality=85)
             return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
     except Exception:
         return None
@@ -123,7 +116,6 @@ def generate_catalog_excel(catalog_items):
         cell.alignment = center_align
     ws.row_dimensions[1].height = 32
     
-    # أبعاد خلايا متناسقة ومريحة لحجم الصور المضاعف
     ws.column_dimensions['A'].width = 24
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 34
@@ -166,30 +158,16 @@ def generate_catalog_excel(catalog_items):
                 with Image.open(img_path) as p_img:
                     p_img = p_img.convert("RGB")
                     
-                    # 1. قص الفراغات البيضاء المحيطة بالكوتشي نفسه لملء الصورة
-                    bg = Image.new(p_img.mode, p_img.size, (255, 255, 255))
-                    diff = ImageChops.difference(p_img, bg)
-                    bbox = diff.getbbox()
-                    if bbox:
-                        w, h = p_img.size
-                        pad_x = int((bbox[2] - bbox[0]) * 0.03)
-                        pad_y = int((bbox[3] - bbox[1]) * 0.03)
-                        crop_box = (
-                            max(0, bbox[0] - pad_x),
-                            max(0, bbox[1] - pad_y),
-                            min(w, bbox[2] + pad_x),
-                            min(h, bbox[3] + pad_y)
-                        )
-                        p_img = p_img.crop(crop_box)
-                    
-                    # 2. توحيد المقاس بدقة عالية لجميع المنتجات (Fit to square)
-                    fitted_img = ImageOps.fit(p_img, (260, 260), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+                    # احتواء كامل للصورة بنسبتها الأصلية بدون أي قص
+                    p_img.thumbnail((260, 260), Image.Resampling.LANCZOS)
+                    canvas = Image.new("RGB", (260, 260), (255, 255, 255))
+                    offset = ((260 - p_img.width) // 2, (260 - p_img.height) // 2)
+                    canvas.paste(p_img, offset)
                     
                     img_bytes = io.BytesIO()
-                    fitted_img.save(img_bytes, format="JPEG", quality=85, optimize=True)
+                    canvas.save(img_bytes, format="JPEG", quality=85, optimize=True)
                     img_bytes.seek(0)
                     
-                    # 3. تثبيت أبعاد العرض في الإكسيل بحجم مضاعف واضح
                     xl_img = OpenpyxlImage(img_bytes)
                     xl_img.width = 140
                     xl_img.height = 140
