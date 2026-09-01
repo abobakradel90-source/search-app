@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageChops
 import torch
 import os
 import zipfile
@@ -73,29 +73,87 @@ def get_image_base64(img_path):
         with open(img_path, "rb") as img_file: return base64.b64encode(img_file.read()).decode('utf-8')
     except: return ""
 
-def get_thumbnail_base64(img_path):
+def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
     try:
         with Image.open(img_path) as img:
-            img = img.convert("RGB")
-            gray = img.convert('L')
-            mask = gray.point(lambda p: 255 if p < 245 else 0)
-            bbox = mask.getbbox()
-            if bbox:
-                w, h = img.size
-                pad = 4
-                img = img.crop((max(0, bbox[0]-pad), max(0, bbox[1]-pad), min(w, bbox[2]+pad), min(h, bbox[3]+pad)))
+            img_rgb = img.convert("RGB")
+            w, h = img_rgb.size
+            crop_box = None
             
-            canvas_w, canvas_h = 200, 140
-            img.thumbnail((canvas_w - 6, canvas_h - 6), Image.Resampling.LANCZOS)
-            canvas = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
-            offset = ((canvas_w - img.width) // 2, (canvas_h - img.height) // 2)
-            canvas.paste(img, offset)
+            # فحص قناة الشفافية إن وجدت
+            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                try:
+                    alpha = img.convert('RGBA').split()[-1]
+                    a_box = alpha.point(lambda p: 255 if p > 15 else 0).getbbox()
+                    if a_box and (a_box[2] - a_box[0] > 20) and (a_box[3] - a_box[1] > 20):
+                        if a_box != (0, 0, w, h):
+                            crop_box = a_box
+                except: pass
+            
+            # خوارزمية ذكية لعزل الفراغات البيضاء/الرمادية مهما كان لون الكوتشي
+            if not crop_box:
+                corners = [
+                    img_rgb.getpixel((0, 0)),
+                    img_rgb.getpixel((w - 1, 0)),
+                    img_rgb.getpixel((0, h - 1)),
+                    img_rgb.getpixel((w - 1, h - 1))
+                ]
+                avg_bg = (
+                    int(sum(c[0] for c in corners) / 4),
+                    int(sum(c[1] for c in corners) / 4),
+                    int(sum(c[2] for c in corners) / 4)
+                )
+                
+                for tol in [12, 22, 35, 50, 65]:
+                    bg_img = Image.new('RGB', (w, h), avg_bg)
+                    diff = ImageChops.difference(img_rgb, bg_img).convert('L')
+                    mask = diff.point(lambda p: 255 if p > tol else 0)
+                    bbox = mask.getbbox()
+                    if bbox:
+                        bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                        if bw < w * 0.98 or bh < h * 0.98:
+                            crop_box = bbox
+                            break
+                        crop_box = bbox
+            
+            if crop_box:
+                # ترك هامش أمان بنسبة 2% لضمان عدم قص أي جزء من الكوتشي
+                pad_x = max(2, int((crop_box[2] - crop_box[0]) * 0.02))
+                pad_y = max(2, int((crop_box[3] - crop_box[1]) * 0.02))
+                safe_box = (
+                    max(0, crop_box[0] - pad_x),
+                    max(0, crop_box[1] - pad_y),
+                    min(w, crop_box[2] + pad_x),
+                    min(h, crop_box[3] + pad_y)
+                )
+                shoe_cropped = img_rgb.crop(safe_box)
+            else:
+                shoe_cropped = img_rgb
+                
+            # تكبير مجسم الكوتشي ليمتد على كامل المساحة الموحدة
+            sw, sh = shoe_cropped.size
+            scale = min((target_w - 12) / sw, (target_h - 12) / sh)
+            nw = max(1, int(sw * scale))
+            nh = max(1, int(sh * scale))
+            
+            resized_shoe = shoe_cropped.resize((nw, nh), Image.Resampling.LANCZOS)
+            
+            canvas = Image.new("RGB", (target_w, target_h), (255, 255, 255))
+            offset = ((target_w - nw) // 2, (target_h - nh) // 2)
+            canvas.paste(resized_shoe, offset)
             
             buf = io.BytesIO()
-            canvas.save(buf, format="JPEG", quality=85)
-            return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+            canvas.save(buf, format="JPEG", quality=quality, optimize=True)
+            buf.seek(0)
+            return buf
     except Exception:
         return None
+
+def get_thumbnail_base64(img_path):
+    buf = process_shoe_image(img_path, target_w=200, target_h=130, quality=85)
+    if buf:
+        return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+    return None
 
 def generate_catalog_excel(catalog_items):
     wb = openpyxl.Workbook()
@@ -134,7 +192,7 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['G'].width = 25
     
     for row_idx, item in enumerate(catalog_items, start=2):
-        ws.row_dimensions[row_idx].height = 115
+        ws.row_dimensions[row_idx].height = 105
         ws.cell(row=row_idx, column=1, value="")
         
         c_code = item.get("كود الصنف", "")
@@ -164,39 +222,11 @@ def generate_catalog_excel(catalog_items):
         img_path = item.get("img_path")
         if img_path and isinstance(img_path, str) and os.path.exists(img_path):
             try:
-                with Image.open(img_path) as p_img:
-                    p_img = p_img.convert("RGB")
-                    
-                    # 1. إزالة الفراغات البيضاء المفرطة المحيطة بمجسم الحذاء
-                    gray = p_img.convert('L')
-                    mask = gray.point(lambda p: 255 if p < 245 else 0)
-                    bbox = mask.getbbox()
-                    if bbox:
-                        w, h = p_img.size
-                        pad = 6
-                        crop_box = (
-                            max(0, bbox[0] - pad),
-                            max(0, bbox[1] - pad),
-                            min(w, bbox[2] + pad),
-                            min(h, bbox[3] + pad)
-                        )
-                        p_img = p_img.crop(crop_box)
-                    
-                    # 2. احتواء الحذاء بالكامل وتوسيعه ليمتلك نفس الحجم الموحد
-                    canvas_w, canvas_h = 280, 200
-                    p_img.thumbnail((canvas_w - 10, canvas_h - 10), Image.Resampling.LANCZOS)
-                    
-                    canvas = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
-                    offset = ((canvas_w - p_img.width) // 2, (canvas_h - p_img.height) // 2)
-                    canvas.paste(p_img, offset)
-                    
-                    img_bytes = io.BytesIO()
-                    canvas.save(img_bytes, format="JPEG", quality=88, optimize=True)
-                    img_bytes.seek(0)
-                    
-                    xl_img = OpenpyxlImage(img_bytes)
+                img_buf = process_shoe_image(img_path, target_w=280, target_h=180, quality=88)
+                if img_buf:
+                    xl_img = OpenpyxlImage(img_buf)
                     xl_img.width = 145
-                    xl_img.height = 105
+                    xl_img.height = 95
                     ws.add_image(xl_img, f"A{row_idx}")
             except Exception:
                 pass
