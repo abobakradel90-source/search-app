@@ -1,7 +1,7 @@
 import streamlit as st
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageChops
 import torch
 import os
 import zipfile
@@ -76,9 +76,21 @@ def get_image_base64(img_path):
 def get_thumbnail_base64(img_path):
     try:
         with Image.open(img_path) as img:
-            img.thumbnail((140, 140))
+            img = img.convert("RGB")
+            # قص الفراغات البيضاء في شاشة العرض أيضاً
+            bg = Image.new(img.mode, img.size, (255, 255, 255))
+            diff = ImageChops.difference(img, bg)
+            bbox = diff.getbbox()
+            if bbox:
+                w, h = img.size
+                pad_x = int((bbox[2] - bbox[0]) * 0.02)
+                pad_y = int((bbox[3] - bbox[1]) * 0.02)
+                crop_box = (max(0, bbox[0] - pad_x), max(0, bbox[1] - pad_y), min(w, bbox[2] + pad_x), min(h, bbox[3] + pad_y))
+                img = img.crop(crop_box)
+                
+            fitted = ImageOps.fit(img, (140, 140), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=85)
+            fitted.save(buf, format="JPEG", quality=85)
             return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
     except Exception:
         return None
@@ -109,9 +121,10 @@ def generate_catalog_excel(catalog_items):
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = center_align
-    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[1].height = 32
     
-    ws.column_dimensions['A'].width = 16
+    # أبعاد خلايا متناسقة ومريحة لحجم الصور المضاعف
+    ws.column_dimensions['A'].width = 24
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 34
     ws.column_dimensions['D'].width = 20
@@ -120,7 +133,7 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['G'].width = 25
     
     for row_idx, item in enumerate(catalog_items, start=2):
-        ws.row_dimensions[row_idx].height = 85
+        ws.row_dimensions[row_idx].height = 125
         ws.cell(row=row_idx, column=1, value="")
         
         c_code = item.get("كود الصنف", "")
@@ -152,18 +165,34 @@ def generate_catalog_excel(catalog_items):
             try:
                 with Image.open(img_path) as p_img:
                     p_img = p_img.convert("RGB")
-                    p_img.thumbnail((200, 200), Image.Resampling.LANCZOS)
-                    canvas = Image.new("RGB", (200, 200), (255, 255, 255))
-                    offset = ((200 - p_img.width) // 2, (200 - p_img.height) // 2)
-                    canvas.paste(p_img, offset)
+                    
+                    # 1. قص الفراغات البيضاء المحيطة بالكوتشي نفسه لملء الصورة
+                    bg = Image.new(p_img.mode, p_img.size, (255, 255, 255))
+                    diff = ImageChops.difference(p_img, bg)
+                    bbox = diff.getbbox()
+                    if bbox:
+                        w, h = p_img.size
+                        pad_x = int((bbox[2] - bbox[0]) * 0.03)
+                        pad_y = int((bbox[3] - bbox[1]) * 0.03)
+                        crop_box = (
+                            max(0, bbox[0] - pad_x),
+                            max(0, bbox[1] - pad_y),
+                            min(w, bbox[2] + pad_x),
+                            min(h, bbox[3] + pad_y)
+                        )
+                        p_img = p_img.crop(crop_box)
+                    
+                    # 2. توحيد المقاس بدقة عالية لجميع المنتجات (Fit to square)
+                    fitted_img = ImageOps.fit(p_img, (260, 260), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
                     
                     img_bytes = io.BytesIO()
-                    canvas.save(img_bytes, format="JPEG", quality=88, optimize=True)
+                    fitted_img.save(img_bytes, format="JPEG", quality=85, optimize=True)
                     img_bytes.seek(0)
                     
+                    # 3. تثبيت أبعاد العرض في الإكسيل بحجم مضاعف واضح
                     xl_img = OpenpyxlImage(img_bytes)
-                    xl_img.width = 100
-                    xl_img.height = 100
+                    xl_img.width = 140
+                    xl_img.height = 140
                     ws.add_image(xl_img, f"A{row_idx}")
             except Exception:
                 pass
@@ -328,31 +357,26 @@ def process_df(df):
     cols_map = {c: str(c).lower().strip() for c in df.columns}
     code_col, name_col, stock_col, price_col = None, None, None, None
     
-    # 1. البحث عن عمود الكود
     for orig, low in cols_map.items():
         if any(k in low for k in ['كود الصنف', 'كود', 'code', 'باركود', 'barcode', 'item_code', 'رمز', 'رقم الصنف']):
             code_col = orig
             break
             
-    # 2. البحث عن عمود الاسم
     for orig, low in cols_map.items():
         if orig != code_col and any(k in low for k in ['اسم الصنف', 'اسم', 'name', 'صنف', 'item', 'title', 'موديل', 'model', 'الوصف', 'description']):
             name_col = orig
             break
             
-    # 3. البحث عن عمود الرصيد
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col] and any(k in low for k in ['الرصيد', 'رصيد', 'stock', 'الكمية', 'كمية', 'الكميه', 'كميه', 'qty', 'عدد', 'المخزون', 'المتاح']):
             stock_col = orig
             break
             
-    # 4. البحث عن عمود السعر
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col, stock_col] and any(k in low for k in ['سعر الجملة', 'سعر القطعة', 'سعر', 'price', 'ثمن', 'جملة', 'بيع', 'قيمة', 'قطاعي']):
             price_col = orig
             break
             
-    # بدائل حسب ترتيب الأعمدة في حال عدم وجود أسماء واضحة
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
     if not stock_col and len(df.columns) > 2: stock_col = df.columns[2]
