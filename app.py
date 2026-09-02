@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
 from PIL import Image, ImageOps, ImageChops
@@ -24,16 +25,8 @@ st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="�
 
 USERS = {
     "abobakr": "admin2026",    
-    "gomaa": "123456",       
-    "hytham": "edstore",
-    "sawy": "123456",
-    "ahmed": "123456",
-    "zidan": "123456",
-    "sheded": "123456",
-    "ali": "123456",
-    "yahia": "123456",
-    "shymaa": "123456",
-    "abdallah": "123456",
+    "mohamed": "123456",       
+    "ahmed": "edstore"         
 }
 
 if 'logged_in' not in st.session_state:
@@ -250,7 +243,6 @@ st.markdown(f"""
         #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
         .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
-        /* تصميم كارت تسجيل الدخول */
         .login-card {{
             background: #FFFFFF;
             padding: 40px 35px;
@@ -319,7 +311,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🛑 بوابة تسجيل الدخول (تصميم متناسق وأنيق)
+# 🛑 بوابة تسجيل الدخول
 # ==========================================
 if not st.session_state.logged_in:
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
@@ -359,7 +351,6 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 🌟 القائمة الجانبية متاحة للجميع مؤقتاً للتجربة 🌟
 with st.sidebar:
     st.markdown("### ⚙️ إدارة النظام والأسعار")
     st.markdown("ارفع شيت الإكسيل لتحديث الأسعار والأرصدة:")
@@ -518,7 +509,7 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
         </div>
     </div>""", unsafe_allow_html=True)
 
-# 🌟 جميع التبويبات الـ 5 مفتوحة لجميع المستخدمين مؤقتاً 🌟
+# 🌟 التبويبات الرئيسية 🌟
 tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
 main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
 
@@ -572,7 +563,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (مُحسّن للإسكانر الفوري والحفظ بـ Enter)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -602,21 +593,91 @@ with main_tab2:
             if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
 
         with tab_scan:
-            code_in = st.text_input("كود الصنف للجرد:", key="inv_barcode_input")
-            if code_in:
-                c_clean = str(code_in).strip().upper()
+            # تهيئة متغيرات جلسة المسح اللحظي
+            if "inv_scan_counter" not in st.session_state:
+                st.session_state.inv_scan_counter = 0
+            if "current_scanned_code" not in st.session_state:
+                st.session_state.current_scanned_code = None
+
+            # 1. خانة مسح الباركود السريعة (تتفرغ تلقائياً بعد كل تسجيل)
+            barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+            scanned_raw = st.text_input(
+                "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
+                key=barcode_field_key,
+                placeholder="مرر الإسكانر هنا..."
+            )
+
+            # سكريبت لتوجيه المؤشر تلقائياً لخانة الباركود
+            components.html(
+                f"""
+                <script>
+                var input = window.parent.document.querySelector('input[aria-label*="امسح باركود الصنف"]');
+                if (input) {{
+                    input.focus();
+                }}
+                </script>
+                """,
+                height=0,
+                width=0
+            )
+
+            # معالجة الكود المدخل
+            if scanned_raw:
+                c_clean = str(scanned_raw).strip().upper()
                 if c_clean in system_inventory:
-                    render_product_card(c_clean, system_inventory[c_clean].get('name',''), system_inventory[c_clean].get('sys_stock',0))
-                    add_q = st.number_input("الكمية الفعلية المضافة:", value=1, key="add_q_inv")
-                    if st.button("تأكيد الإضافة 📥", key="btn_confirm_inv"):
+                    st.session_state.current_scanned_code = c_clean
+                else:
+                    st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
+                    st.session_state.current_scanned_code = None
+
+            # 2. عرض كارت الصنف ونموذج إدخال الكمية والحفظ بـ Enter
+            if st.session_state.current_scanned_code:
+                active_c = st.session_state.current_scanned_code
+                item_info = system_inventory[active_c]
+                
+                # إظهار الرصيد الذي تم جرده حتى الآن لهذا الصنف
+                already_counted = scanned_map.get(active_c, 0)
+                st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
+                
+                # عرض صورة وبيانات الكوتشي
+                render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
+
+                # نموذج تسجيل الكمية بمفتاح Enter
+                with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
+                    col_q, col_s = st.columns([3, 2])
+                    with col_q:
+                        add_q = st.number_input(
+                            "🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):",
+                            min_value=1,
+                            value=1,
+                            step=1,
+                            key=f"qty_field_{st.session_state.inv_scan_counter}"
+                        )
+                    with col_s:
+                        st.write("")
+                        st.write("")
+                        confirm_sub = st.form_submit_button("✅ حفظ وإضافة الصنف (Enter)", type="primary", use_container_width=True)
+
+                    if confirm_sub:
                         l_inv = load_shared_inventory()
-                        if "scanned_items" not in l_inv: l_inv["scanned_items"] = {}
-                        l_inv["scanned_items"][c_clean] = max(0, l_inv["scanned_items"].get(c_clean, 0) + add_q)
+                        if "scanned_items" not in l_inv:
+                            l_inv["scanned_items"] = {}
+                        l_inv["scanned_items"][active_c] = max(0, l_inv["scanned_items"].get(active_c, 0) + add_q)
                         save_shared_inventory(l_inv)
-                        st.success(f"✅ تمت إضافة ({add_q}) للصنف {c_clean} | الرصيد الحالي: {l_inv['scanned_items'][c_clean]}")
-                        time.sleep(0.5)
+                        
+                        # رسالة توست سريعة بالأعلى
+                        st.toast(f"✅ تم بنجاح إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
+                        
+                        # تصفير الحالة لمسح الصورة وإعادة المؤشر للباركود
+                        st.session_state.current_scanned_code = None
+                        st.session_state.inv_scan_counter += 1
                         st.rerun()
-                else: st.error("❌ الباركود غير مسجل في النظام.")
+
+                # زر لإلغاء الصنف الحالي إذا تم ضرب الكود بالخطأ
+                if st.button("❌ إلغاء وتخطي الموديل", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
+                    st.session_state.current_scanned_code = None
+                    st.session_state.inv_scan_counter += 1
+                    st.rerun()
 
         with tab_rep:
             rep_data = [{"كود الصنف": c, "اسم الصنف": i.get('name',''), "الرصيد الدفتري": i.get('sys_stock',0), "الرصيد الفعلي": scanned_map.get(c, 0), "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock',0)} for c, i in system_inventory.items()]
@@ -626,7 +687,6 @@ with main_tab2:
             with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
             st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
             
-            # 🔒 غلق الجرد النهائي مقتصر على الإدارة abobakr فقط
             st.markdown("---")
             if st.session_state.current_user == "abobakr":
                 if st.button("🛑 إغلاق وإنهاء جلسة الجرد (أرشيف الإدارة)", key="close_inv_session"):
@@ -825,7 +885,7 @@ with main_tab_cat:
         st.info("📦 لا توجد أي أصناف متوفرة في المستودع حالياً (الأرصدة صفر).")
 
 # ==========================================
-# 5. تبويب لوحة تحكم الإدارة (مفتوحة للتجربة)
+# 5. تبويب لوحة تحكم الإدارة
 # ==========================================
 with main_tab4:
     st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
@@ -834,27 +894,27 @@ with main_tab4:
         for inv in rec.get('invoices', []):
             for it in inv.get('items', []):
                 master_sales.append({"الوردية": rec.get('name', ''), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
-    for inv in load_shared_sales().get('invoices', []):
-        for it in inv.get('items', []):
-            master_sales.append({"الوردية": "نشطة حالياً", "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
+        for inv in load_shared_sales().get('invoices', []):
+            for it in inv.get('items', []):
+                master_sales.append({"الوردية": "نشطة حالياً", "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
+                
+        if master_sales:
+            df_all = pd.DataFrame(master_sales)
+            tot_cash = df_all['الإجمالي'].sum()
+            tot_pieces = df_all['الكمية'].sum()
             
-    if master_sales:
-        df_all = pd.DataFrame(master_sales)
-        tot_cash = df_all['الإجمالي'].sum()
-        tot_pieces = df_all['الكمية'].sum()
-        
-        c_a1, c_a2 = st.columns(2)
-        with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات المحل</div><div class="metric-value" style="color:#10B981;">{tot_cash} ج.م</div></div>', unsafe_allow_html=True)
-        with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{tot_pieces} قطعة</div></div>', unsafe_allow_html=True)
-        st.markdown("---")
-        
-        st.markdown("#### 👥 تقرير مشتريات العملاء:")
-        cust_summary = df_all.groupby('العميل').agg({'الكمية':'sum', 'الإجمالي':'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
-        st.dataframe(cust_summary, use_container_width=True, hide_index=True)
-        
-        buf_all = io.BytesIO()
-        with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all.to_excel(w, index=False)
-        st.download_button("📥 تحميل كل سجلات المبيعات (Excel)", buf_all.getvalue(), f"All_Sales_{datetime.date.today()}.xlsx")
-    else: st.info("لا توجد مبيعات مسجلة حتى الآن.")
+            c_a1, c_a2 = st.columns(2)
+            with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات المحل</div><div class="metric-value" style="color:#10B981;">{tot_cash} ج.م</div></div>', unsafe_allow_html=True)
+            with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{tot_pieces} قطعة</div></div>', unsafe_allow_html=True)
+            st.markdown("---")
+            
+            st.markdown("#### 👥 تقرير مشتريات العملاء:")
+            cust_summary = df_all.groupby('العميل').agg({'الكمية':'sum', 'الإجمالي':'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
+            st.dataframe(cust_summary, use_container_width=True, hide_index=True)
+            
+            buf_all = io.BytesIO()
+            with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all.to_excel(w, index=False)
+            st.download_button("📥 تحميل كل سجلات المبيعات (Excel)", buf_all.getvalue(), f"All_Sales_{datetime.date.today()}.xlsx")
+        else: st.info("لا توجد مبيعات مسجلة حتى الآن.")
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
