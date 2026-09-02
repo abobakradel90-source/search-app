@@ -234,7 +234,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية ---
+# --- 2. الهوية البصرية وضبط الإطارات ومنطقة الرفع ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -242,6 +242,77 @@ st.markdown(f"""
         .stApp {{ background-color: #F0F4F8; }}
         #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
         .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
+        
+        /* === 🛠️ إطارات احترافية وثابتة لجميع خانات الإدخال وإلغاء الأحمر والشفافية === */
+        div[data-baseweb="input"],
+        div[data-baseweb="base-input"],
+        div[data-baseweb="select"] > div {{
+            background-color: #FFFFFF !important;
+            border: 1.5px solid #CBD5E1 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+            transition: all 0.2s ease-in-out !important;
+        }}
+        
+        /* تأثير عند مرور الماوس */
+        div[data-baseweb="input"]:hover,
+        div[data-baseweb="base-input"]:hover,
+        div[data-baseweb="select"] > div:hover {{
+            border-color: #94A3B8 !important;
+            box-shadow: 0 2px 6px rgba(28, 101, 166, 0.08) !important;
+        }}
+
+        /* تأثير عند التركيز (Focus) - استبدال اللون الأحمر بالأزرق الأنيق */
+        div[data-baseweb="input"]:focus-within,
+        div[data-baseweb="base-input"]:focus-within,
+        div[data-baseweb="select"]:focus-within > div {{
+            border-color: #1C65A6 !important;
+            box-shadow: 0 0 0 3px rgba(28, 101, 166, 0.2) !important;
+            outline: none !important;
+        }}
+
+        input[type="text"], input[type="number"], input[type="password"] {{
+            color: #0F172A !important;
+            font-weight: 600 !important;
+        }}
+
+        /* === 📤 كارت رفع الملفات التفاعلي والاحترافي (File Uploader Dropzone) === */
+        [data-testid="stFileUploader"] {{
+            background: transparent !important;
+        }}
+        
+        [data-testid="stFileUploaderDropzone"] {{
+            background-color: #FFFFFF !important;
+            border: 2px dashed #94A3B8 !important;
+            border-radius: 16px !important;
+            padding: 25px 15px !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+            text-align: center !important;
+        }}
+
+        /* تفاعل حركة السهم عند الدخول إلى منطقة الرفع */
+        [data-testid="stFileUploaderDropzone"]:hover {{
+            border-color: #1C65A6 !important;
+            background-color: #F1F7FC !important;
+            box-shadow: 0 6px 18px rgba(28, 101, 166, 0.15) !important;
+            transform: translateY(-2px);
+        }}
+
+        [data-testid="stFileUploaderDropzone"] button {{
+            background-color: #1C65A6 !important;
+            color: #FFFFFF !important;
+            border-radius: 10px !important;
+            border: none !important;
+            font-weight: 700 !important;
+            padding: 6px 16px !important;
+            box-shadow: 0 2px 6px rgba(28, 101, 166, 0.2) !important;
+            width: auto !important;
+        }}
+
+        [data-testid="stFileUploaderDropzone"] button:hover {{
+            background-color: #144A7A !important;
+        }}
         
         .login-card {{
             background: #FFFFFF;
