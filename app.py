@@ -30,8 +30,16 @@ st.set_page_config(
 
 USERS = {
     "abobakr": "admin2026",    
-    "mohamed": "123456",       
-    "ahmed": "edstore"         
+    "gomaa": "123456",       
+    "hytham": "edstore",
+    "sawy": "123456",
+    "ahmed": "123456",
+    "zidan": "123456",
+    "sheded": "123456",
+    "ali": "123456",
+    "yahia": "123456",
+    "shymaa": "123456",
+    "abdallah": "123456",
 }
 
 if 'logged_in' not in st.session_state:
@@ -78,6 +86,42 @@ def get_image_base64(img_path):
     try:
         with open(img_path, "rb") as img_file: return base64.b64encode(img_file.read()).decode('utf-8')
     except: return ""
+
+# دالة فك شفرة الباركود من صور كاميرا الهاتف بذكاء ومرونة
+def decode_barcode_from_image(pil_img):
+    # 1. التجربة عبر zxing-cpp (الأدق والأسرع)
+    try:
+        import zxingcpp
+        results = zxingcpp.read_barcodes(pil_img)
+        if results:
+            return results[0].text.strip().upper()
+    except ImportError:
+        pass
+    
+    # 2. التجربة عبر pyzbar كخيار بديل
+    try:
+        from pyzbar.pyzbar import decode
+        barcodes = decode(pil_img)
+        if barcodes:
+            return barcodes[0].data.decode("utf-8").strip().upper()
+    except Exception:
+        pass
+        
+    # 3. التجربة عبر OpenCV كخيار ثالث
+    try:
+        import cv2
+        import numpy as np
+        cv_img = np.array(pil_img.convert('RGB'))[:, :, ::-1]
+        detector = cv2.barcode.BarcodeDetector()
+        ok, decoded_info, _, _ = detector.detectAndDecode(cv_img)
+        if ok and decoded_info:
+            val = decoded_info[0] if isinstance(decoded_info, (list, tuple)) else decoded_info
+            if val.strip():
+                return val.strip().upper()
+    except Exception:
+        pass
+
+    return None
 
 def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
     try:
@@ -161,11 +205,8 @@ def generate_catalog_excel(catalog_items):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "الكاتالوج"
-    
-    try:
-        ws.sheet_view.rightToLeft = True
-    except Exception:
-        pass
+    try: ws.sheet_view.rightToLeft = True
+    except: pass
     
     headers = ["صورة المنتج", "كود الصنف", "اسم الصنف", "سعر القطعة (ج.م)", "الرصيد الدفتري (قبل البيع)", "كمية المبيعات بالوردية", "الرصيد اللحظي المتاح"]
     ws.append(headers)
@@ -230,8 +271,7 @@ def generate_catalog_excel(catalog_items):
                     xl_img.width = 145
                     xl_img.height = 95
                     ws.add_image(xl_img, f"A{row_idx}")
-            except Exception:
-                pass
+            except: pass
                 
     buf = io.BytesIO()
     wb.save(buf)
@@ -239,15 +279,12 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وإصلاح الإطارات والعصا الرمادية ---
+# --- 2. الهوية البصرية وضبط الإطارات ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
         
-        :root {{
-            --primary-color: #1C65A6 !important;
-        }}
-        
+        :root {{ --primary-color: #1C65A6 !important; }}
         html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
         .stApp {{ background-color: #F0F4F8; }}
         #MainMenu {{ visibility: hidden; }}
@@ -255,15 +292,11 @@ st.markdown(f"""
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         [data-testid="stToolbar"] {{ display: none !important; }}
         
-        /* 🚫 إخفاء العصا الرمادية ومقبض تصغير القائمة الجانبية نهائياً */
         [data-testid="stSidebarResizerRoot"],
-        [data-testid="stSidebarCollapseButton"] {{
-            display: none !important;
-        }}
+        [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
         
         .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
-        /* === 🏷️ تبويبات واضحة ومحددة بإطارات حقيقية مع إلغاء الخط الأحمر === */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 12px;
             justify-content: center;
@@ -274,13 +307,9 @@ st.markdown(f"""
             flex-wrap: wrap;
         }}
         
-        /* إخفاء الخط الأحمر السفلي الافتراضي لـ Streamlit */
         .stTabs [data-baseweb="tab-highlight"],
-        .stTabs [data-baseweb="tab-border"] {{
-            display: none !important;
-        }}
+        .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
         
-        /* التبويب غير المحدد: كارت واضح بإطار رمادي صريح */
         .stTabs [data-baseweb="tab"] {{
             background-color: #FFFFFF !important;
             border: 2px solid #CBD5E1 !important;
@@ -300,7 +329,6 @@ st.markdown(f"""
             transform: translateY(-1px);
         }}
         
-        /* التبويب المحدد: خلفية زرقاء بدون أي تسطير أحمر */
         .stTabs [data-baseweb="tab"][aria-selected="true"] {{
             background-color: #1C65A6 !important;
             border: 2px solid #1C65A6 !important;
@@ -308,7 +336,6 @@ st.markdown(f"""
             box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
         }}
         
-        /* === 🛠️ إطارات صريحة وواضحة لجميع خانات الإدخال === */
         div[data-baseweb="input"],
         div[data-baseweb="base-input"],
         div[data-baseweb="select"] > div {{
@@ -327,7 +354,6 @@ st.markdown(f"""
             outline: none !important;
         }}
         
-        /* === 📤 كارت رفع الملفات الاحترافي === */
         [data-testid="stFileUploaderDropzone"] {{
             background-color: #FFFFFF !important;
             border: 2px dashed #1C65A6 !important;
@@ -336,8 +362,13 @@ st.markdown(f"""
             text-align: center !important;
         }}
         
-        [data-testid="stFileUploaderDropzone"]:hover {{
-            background-color: #F1F7FC !important;
+        .mode-selector {{
+            background: #FFFFFF;
+            padding: 12px 20px;
+            border-radius: 14px;
+            border: 2px solid #CBD5E1;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }}
         
         .login-card {{
@@ -420,7 +451,7 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 📤 كارت رفع وتحديث قاعدة البيانات (متاح في الصفحة مباشرة لحساب الإدارة)
+# 📤 كارت رفع وتحديث قاعدة البيانات للإدارة
 if st.session_state.current_user == "abobakr":
     with st.expander("⚙️ لوحة الإدارة: رفع وتحديث شيت الأسعار والأرصدة (Excel / CSV)", expanded=False):
         c_up1, c_up2 = st.columns([3, 1])
@@ -498,29 +529,24 @@ def parse_val(val):
 
 def process_df(df):
     if df is None or df.empty: return
-    
     cols_map = {c: str(c).lower().strip() for c in df.columns}
     code_col, name_col, stock_col, price_col = None, None, None, None
     
     for orig, low in cols_map.items():
         if any(k in low for k in ['كود الصنف', 'كود', 'code', 'باركود', 'barcode', 'item_code', 'رمز', 'رقم الصنف']):
-            code_col = orig
-            break
+            code_col = orig; break
             
     for orig, low in cols_map.items():
         if orig != code_col and any(k in low for k in ['اسم الصنف', 'اسم', 'name', 'صنف', 'item', 'title', 'موديل', 'model', 'الوصف', 'description']):
-            name_col = orig
-            break
+            name_col = orig; break
             
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col] and any(k in low for k in ['الرصيد', 'رصيد', 'stock', 'الكمية', 'كمية', 'الكميه', 'كميه', 'qty', 'عدد', 'المخزون', 'المتاح']):
-            stock_col = orig
-            break
+            stock_col = orig; break
             
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col, stock_col] and any(k in low for k in ['سعر الجملة', 'سعر القطعة', 'سعر', 'price', 'ثمن', 'جملة', 'بيع', 'قيمة', 'قطاعي']):
-            price_col = orig
-            break
+            price_col = orig; break
             
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
@@ -638,7 +664,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (مع ميزة مسح كاميرا الهاتف)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -673,48 +699,87 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # خانة مسح الباركود
-            barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
-            scanned_raw = st.text_input(
-                "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
-                key=barcode_field_key,
-                placeholder="مرر الإسكانر هنا..."
+            # 🔘 شريط اختيار طريقة الجرد (إسكانر عادي أو كاميرا الموبايل)
+            st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
+            scan_method = st.radio(
+                "🎯 اختر طريقة مسح الصنف:",
+                ["🔫 جهاز الإسكانر (سريع / كيبورد)", "📱 كاميرا الهاتف (التقاط الباركود)"],
+                horizontal=True,
+                key="scan_method_choice"
             )
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            # نقل المؤشر لخانة الباركود
-            if not st.session_state.current_scanned_code:
-                focus_barcode_js = """
-                <script>
-                (function() {
-                    var tries = 0;
-                    var interval = setInterval(function() {
-                        tries++;
-                        try {
-                            var doc = window.parent.document;
-                            var el = doc.querySelector('input[placeholder*="مرر الإسكانر"]');
-                            if (el) {
-                                el.focus();
-                                el.select();
-                                clearInterval(interval);
-                            }
-                        } catch(e) {}
-                        if (tries > 35) clearInterval(interval);
-                    }, 40);
-                })();
-                </script>
-                """
-                components.html(focus_barcode_js, height=0, width=0)
+            # === الطريقة الأولى: جهاز الإسكانر الخارجي ===
+            if scan_method == "🔫 جهاز الإسكانر (سريع / كيبورد)":
+                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+                scanned_raw = st.text_input(
+                    "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
+                    key=barcode_field_key,
+                    placeholder="مرر الإسكانر هنا..."
+                )
 
-            # معالجة قراءة الباركود
-            if scanned_raw:
-                c_clean = str(scanned_raw).strip().upper()
-                if c_clean in system_inventory:
-                    st.session_state.current_scanned_code = c_clean
-                else:
-                    st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
-                    st.session_state.current_scanned_code = None
+                if not st.session_state.current_scanned_code:
+                    focus_barcode_js = """
+                    <script>
+                    (function() {
+                        var tries = 0;
+                        var interval = setInterval(function() {
+                            tries++;
+                            try {
+                                var doc = window.parent.document;
+                                var el = doc.querySelector('input[placeholder*="مرر الإسكانر"]');
+                                if (el) {
+                                    el.focus();
+                                    el.select();
+                                    clearInterval(interval);
+                                }
+                            } catch(e) {}
+                            if (tries > 35) clearInterval(interval);
+                        }, 40);
+                    })();
+                    </script>
+                    """
+                    components.html(focus_barcode_js, height=0, width=0)
 
-            # عرض الصنف وإدخال الكمية
+                if scanned_raw:
+                    c_clean = str(scanned_raw).strip().upper()
+                    if c_clean in system_inventory:
+                        st.session_state.current_scanned_code = c_clean
+                    else:
+                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
+                        st.session_state.current_scanned_code = None
+
+            # === الطريقة الثانية: كاميرا الهاتف الذكي ===
+            else:
+                st.markdown("##### 📸 وجّه كاميرا الموبايل نحو باركود الصنف والتقط الصورة:")
+                phone_cam = st.camera_input(
+                    "التقط صورة الباركود",
+                    key=f"inv_phone_cam_{st.session_state.inv_scan_counter}",
+                    label_visibility="collapsed"
+                )
+
+                if phone_cam is not None:
+                    with st.spinner("🔍 جاري قراءة الباركود من الصورة..."):
+                        img_cam = Image.open(phone_cam)
+                        detected_code = decode_barcode_from_image(img_cam)
+                        
+                        if detected_code:
+                            if detected_code in system_inventory:
+                                st.session_state.current_scanned_code = detected_code
+                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{detected_code}]")
+                            else:
+                                st.error(f"⚠️ الباركود المقروء [{detected_code}] غير مسجل في قاعدة البيانات.")
+                                st.session_state.current_scanned_code = None
+                        else:
+                            st.warning("⚠️ تعذر التعرف التلقائي على الباركود من الصورة. تأكد من ثبات اليد ووضوح الإضاءة، أو اكتب الكود في الأسفل مباشرة:")
+                            manual_c = st.text_input("كتابة الكود يدوياً:", key=f"manual_fallback_{st.session_state.inv_scan_counter}")
+                            if manual_c:
+                                m_clean = str(manual_c).strip().upper()
+                                if m_clean in system_inventory:
+                                    st.session_state.current_scanned_code = m_clean
+                                    st.rerun()
+
+            # === عرض كارت الصنف وإدخال الكمية والحفظ بـ Enter ===
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -748,11 +813,12 @@ with main_tab2:
                         
                         st.toast(f"✅ تم إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
                         
+                        # تصفير المتغيرات لترجع الكاميرا أو الإسكانر جاهزاً للقطعة التالية فوراً
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
-                # نقل المؤشر لخانة الكمية
+                # تركيز فوري على خانة الكمية
                 focus_qty_js = """
                 <script>
                 (function() {
