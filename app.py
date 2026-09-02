@@ -563,7 +563,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (التركيز التلقائي السلس والخالي من الأخطاء)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -598,7 +598,7 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # 1. خانة مسح الباركود السريعة
+            # خانة مسح الباركود
             barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
             scanned_raw = st.text_input(
                 "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
@@ -606,26 +606,26 @@ with main_tab2:
                 placeholder="مرر الإسكانر هنا..."
             )
 
-            # 2. نقل المؤشر تلقائياً لخانة الباركود بنقاء تام
+            # نقل المؤشر لخانة الباركود
             if not st.session_state.current_scanned_code:
-                focus_barcode_js = f"""
+                focus_barcode_js = """
                 <script>
-                (function() {{
+                (function() {
                     var tries = 0;
-                    var interval = setInterval(function() {{
+                    var interval = setInterval(function() {
                         tries++;
-                        try {{
+                        try {
                             var doc = window.parent.document;
                             var el = doc.querySelector('input[placeholder*="مرر الإسكانر"]');
-                            if (el) {{
+                            if (el) {
                                 el.focus();
                                 el.select();
                                 clearInterval(interval);
-                            }}
-                        }} catch(e) {{}}
+                            }
+                        } catch(e) {}
                         if (tries > 35) clearInterval(interval);
-                    }}, 40);
-                }})();
+                    }, 40);
+                })();
                 </script>
                 """
                 components.html(focus_barcode_js, height=0, width=0)
@@ -639,7 +639,7 @@ with main_tab2:
                     st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                     st.session_state.current_scanned_code = None
 
-            # 3. عرض الصنف وإدخال الكمية والحفظ بـ Enter
+            # عرض الصنف وإدخال الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -673,30 +673,29 @@ with main_tab2:
                         
                         st.toast(f"✅ تم إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
                         
-                        # تصفير الحالة لترجع الشاشة وتخفي الصنف ويعود المؤشر لخانة الباركود
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
-                # نقل المؤشر تلقائياً لخانة الكمية
-                focus_qty_js = f"""
+                # نقل المؤشر لخانة الكمية
+                focus_qty_js = """
                 <script>
-                (function() {{
+                (function() {
                     var tries = 0;
-                    var interval = setInterval(function() {{
+                    var interval = setInterval(function() {
                         tries++;
-                        try {{
+                        try {
                             var doc = window.parent.document;
                             var qInp = doc.querySelector('input[type="number"]');
-                            if (qInp) {{
+                            if (qInp) {
                                 qInp.focus();
                                 qInp.select();
                                 clearInterval(interval);
-                            }}
-                        }} catch(e) {{}}
+                            }
+                        } catch(e) {}
                         if (tries > 35) clearInterval(interval);
-                    }}, 40);
-                }})();
+                    }, 40);
+                })();
                 </script>
                 """
                 components.html(focus_qty_js, height=0, width=0)
@@ -706,18 +705,55 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
+        # 🔍 تقرير الفروقات مع ميزة التصفية والبحث السريع
         with tab_rep:
-            rep_data = [{"كود الصنف": c, "اسم الصنف": i.get('name',''), "الرصيد الدفتري": i.get('sys_stock',0), "الرصيد الفعلي": scanned_map.get(c, 0), "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock',0)} for c, i in system_inventory.items()]
-            df_rep = pd.DataFrame(rep_data)
+            rep_data = [
+                {
+                    "كود الصنف": c,
+                    "اسم الصنف": i.get('name', ''),
+                    "الرصيد الدفتري": i.get('sys_stock', 0),
+                    "الرصيد الفعلي": scanned_map.get(c, 0),
+                    "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock', 0)
+                }
+                for c, i in system_inventory.items()
+            ]
+            
+            # خانة البحث والتصفية السريعة
+            filter_rep = st.text_input(
+                "🔍 تصفية سريعة بتقرير الفروقات:",
+                placeholder="ابحث بكود أو اسم الموديل...",
+                key="rep_filter_input"
+            )
+            
+            filtered_rep = rep_data
+            if filter_rep:
+                fr = filter_rep.strip().lower()
+                filtered_rep = [
+                    r for r in rep_data
+                    if fr in str(r.get("كود الصنف", "")).lower() or fr in str(r.get("اسم الصنف", "")).lower()
+                ]
+            
+            df_rep = pd.DataFrame(filtered_rep)
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
+            
             buf = io.BytesIO()
-            with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
-            st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
+            with pd.ExcelWriter(buf, engine='openpyxl') as w:
+                df_rep.to_excel(w, index=False)
+            st.download_button(
+                "📥 تحميل تقرير الجرد (Excel)",
+                buf.getvalue(),
+                f"Inventory_{shared_inv.get('name')}.xlsx"
+            )
             
             st.markdown("---")
             if st.session_state.current_user == "abobakr":
                 if st.button("🛑 إغلاق وإنهاء جلسة الجرد (أرشيف الإدارة)", key="close_inv_session"):
-                    save_to_inv_history({"timestamp": str(datetime.datetime.now()), "name": shared_inv.get('name'), "date": shared_inv.get('date'), "report": rep_data})
+                    save_to_inv_history({
+                        "timestamp": str(datetime.datetime.now()),
+                        "name": shared_inv.get('name'),
+                        "date": shared_inv.get('date'),
+                        "report": rep_data
+                    })
                     save_shared_inventory({"is_active": False, "scanned_items": {}})
                     st.rerun()
             else:
