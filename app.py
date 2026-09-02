@@ -21,7 +21,12 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
-st.set_page_config(page_title="ED STORE | بوابة النظام", page_icon="🔒", layout="wide")
+st.set_page_config(
+    page_title="ED STORE | بوابة النظام",
+    page_icon="🔒",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 USERS = {
     "abobakr": "admin2026",    
@@ -234,35 +239,86 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وضبط الإطارات ومنطقة الرفع ---
+# --- 2. الهوية البصرية وإصلاح الإطارات والعصا الرمادية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+        
+        :root {{
+            --primary-color: #1C65A6 !important;
+        }}
+        
         html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
         .stApp {{ background-color: #F0F4F8; }}
-        #MainMenu {{visibility: hidden;}} header {{visibility: hidden;}}
-        .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
+        #MainMenu {{ visibility: hidden; }}
+        footer {{ visibility: hidden; }}
+        header[data-testid="stHeader"] {{ background: transparent !important; }}
+        [data-testid="stToolbar"] {{ display: none !important; }}
         
-        /* === 🛠️ إطارات احترافية وثابتة لجميع خانات الإدخال وإلغاء الأحمر والشفافية === */
+        /* 🚫 إخفاء العصا الرمادية ومقبض تصغير القائمة الجانبية نهائياً */
+        [data-testid="stSidebarResizerRoot"],
+        [data-testid="stSidebarCollapseButton"] {{
+            display: none !important;
+        }}
+        
+        .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
+        
+        /* === 🏷️ تبويبات واضحة ومحددة بإطارات حقيقية مع إلغاء الخط الأحمر === */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 12px;
+            justify-content: center;
+            background: transparent !important;
+            padding: 5px;
+            margin-bottom: 25px;
+            border-bottom: none !important;
+            flex-wrap: wrap;
+        }}
+        
+        /* إخفاء الخط الأحمر السفلي الافتراضي لـ Streamlit */
+        .stTabs [data-baseweb="tab-highlight"],
+        .stTabs [data-baseweb="tab-border"] {{
+            display: none !important;
+        }}
+        
+        /* التبويب غير المحدد: كارت واضح بإطار رمادي صريح */
+        .stTabs [data-baseweb="tab"] {{
+            background-color: #FFFFFF !important;
+            border: 2px solid #CBD5E1 !important;
+            border-radius: 12px !important;
+            padding: 9px 20px !important;
+            font-size: 16px !important;
+            font-weight: 800 !important;
+            color: #475569 !important;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04) !important;
+            transition: all 0.2s ease !important;
+        }}
+        
+        .stTabs [data-baseweb="tab"]:hover {{
+            border-color: #1C65A6 !important;
+            color: #1C65A6 !important;
+            background-color: #F8FAFC !important;
+            transform: translateY(-1px);
+        }}
+        
+        /* التبويب المحدد: خلفية زرقاء بدون أي تسطير أحمر */
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+            background-color: #1C65A6 !important;
+            border: 2px solid #1C65A6 !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
+        }}
+        
+        /* === 🛠️ إطارات صريحة وواضحة لجميع خانات الإدخال === */
         div[data-baseweb="input"],
         div[data-baseweb="base-input"],
         div[data-baseweb="select"] > div {{
             background-color: #FFFFFF !important;
-            border: 1.5px solid #CBD5E1 !important;
-            border-radius: 12px !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
-            transition: all 0.2s ease-in-out !important;
+            border: 2px solid #94A3B8 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+            transition: border-color 0.2s ease !important;
         }}
         
-        /* تأثير عند مرور الماوس */
-        div[data-baseweb="input"]:hover,
-        div[data-baseweb="base-input"]:hover,
-        div[data-baseweb="select"] > div:hover {{
-            border-color: #94A3B8 !important;
-            box-shadow: 0 2px 6px rgba(28, 101, 166, 0.08) !important;
-        }}
-
-        /* تأثير عند التركيز (Focus) - استبدال اللون الأحمر بالأزرق الأنيق */
         div[data-baseweb="input"]:focus-within,
         div[data-baseweb="base-input"]:focus-within,
         div[data-baseweb="select"]:focus-within > div {{
@@ -270,101 +326,43 @@ st.markdown(f"""
             box-shadow: 0 0 0 3px rgba(28, 101, 166, 0.2) !important;
             outline: none !important;
         }}
-
-        input[type="text"], input[type="number"], input[type="password"] {{
-            color: #0F172A !important;
-            font-weight: 600 !important;
-        }}
-
-        /* === 📤 كارت رفع الملفات التفاعلي والاحترافي (File Uploader Dropzone) === */
-        [data-testid="stFileUploader"] {{
-            background: transparent !important;
-        }}
         
+        /* === 📤 كارت رفع الملفات الاحترافي === */
         [data-testid="stFileUploaderDropzone"] {{
             background-color: #FFFFFF !important;
-            border: 2px dashed #94A3B8 !important;
-            border-radius: 16px !important;
-            padding: 25px 15px !important;
-            transition: all 0.3s ease !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+            border: 2px dashed #1C65A6 !important;
+            border-radius: 14px !important;
+            padding: 20px !important;
             text-align: center !important;
         }}
-
-        /* تفاعل حركة السهم عند الدخول إلى منطقة الرفع */
+        
         [data-testid="stFileUploaderDropzone"]:hover {{
-            border-color: #1C65A6 !important;
             background-color: #F1F7FC !important;
-            box-shadow: 0 6px 18px rgba(28, 101, 166, 0.15) !important;
-            transform: translateY(-2px);
-        }}
-
-        [data-testid="stFileUploaderDropzone"] button {{
-            background-color: #1C65A6 !important;
-            color: #FFFFFF !important;
-            border-radius: 10px !important;
-            border: none !important;
-            font-weight: 700 !important;
-            padding: 6px 16px !important;
-            box-shadow: 0 2px 6px rgba(28, 101, 166, 0.2) !important;
-            width: auto !important;
-        }}
-
-        [data-testid="stFileUploaderDropzone"] button:hover {{
-            background-color: #144A7A !important;
         }}
         
         .login-card {{
             background: #FFFFFF;
             padding: 40px 35px;
             border-radius: 24px;
-            box-shadow: 0 20px 45px rgba(28, 101, 166, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 20px 45px rgba(28, 101, 166, 0.12);
             max-width: 440px;
             margin: 40px auto;
             text-align: center;
             border: 1px solid #E2E8F0;
             border-top: 6px solid #1C65A6;
         }}
-        .login-logo-wrap {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 15px;
-        }}
-        .login-logo-img {{
-            height: 90px;
-            width: 90px;
-            object-fit: cover;
-            border-radius: 50%;
-            border: 3px solid #E8F0F8;
-            box-shadow: 0 6px 16px rgba(28, 101, 166, 0.2);
-            background: #FFFFFF;
-            padding: 3px;
-        }}
-        .login-title {{
-            color: #0F2942;
-            font-weight: 900;
-            font-size: 26px;
-            margin: 0 0 6px 0;
-            line-height: 1.2;
-        }}
-        .login-subtitle {{
-            color: #64748B;
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 25px;
-        }}
+        .login-logo-wrap {{ display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }}
+        .login-logo-img {{ height: 90px; width: 90px; object-fit: cover; border-radius: 50%; border: 3px solid #E8F0F8; background: #FFFFFF; padding: 3px; }}
+        .login-title {{ color: #0F2942; font-weight: 900; font-size: 26px; margin-bottom: 6px; }}
+        .login-subtitle {{ color: #64748B; font-size: 14px; margin-bottom: 25px; }}
         
-        .brand-navbar {{ background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -30px; margin-bottom: 20px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }}
+        .brand-navbar {{ background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -20px; margin-bottom: 15px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }}
         .brand-navbar img {{ height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }}
         .brand-navbar h1 {{ color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }}
-        .stButton > button {{ background-color: #1C65A6 !important; color: white !important; border-radius: 12px; border: none; padding: 10px 20px; font-weight: 800; font-size: 16px; width: 100%; box-shadow: 0 4px 10px rgba(28, 101, 166, 0.2); transition: all 0.3s ease; }}
-        .stButton > button:hover {{ background-color: #144A7A !important; transform: translateY(-2px); }}
-        .logout-btn > button {{ background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; margin-bottom: 20px; }}
-        .logout-btn > button:hover {{ background-color: #DC2626 !important; }}
-        .stTabs [data-baseweb="tab-list"] {{ gap: 15px; justify-content: center; background: white; padding: 10px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; flex-wrap: wrap; }}
-        .stTabs [data-baseweb="tab"] {{ font-size: 18px !important; font-weight: 800 !important; color: #5C7C99 !important; padding: 8px 16px; border-radius: 10px; }}
-        .stTabs [aria-selected="true"] {{ background-color: #1C65A6 !important; color: white !important; }}
+        .stButton > button {{ background-color: #1C65A6 !important; color: white !important; border-radius: 10px; border: none; padding: 9px 18px; font-weight: 800; font-size: 15px; width: 100%; box-shadow: 0 4px 10px rgba(28, 101, 166, 0.2); }}
+        .stButton > button:hover {{ background-color: #144A7A !important; }}
+        .logout-btn > button {{ background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; }}
+        
         .product-card {{ background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; }}
         .product-img {{ width: 120px; height: 120px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }}
         .code-badge {{ background-color: #E8F0F8; color: #1C65A6; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 800; display: inline-block; margin-bottom: 8px; }}
@@ -413,7 +411,7 @@ if logo_base64: st.markdown(f'<div class="brand-navbar"><img src="data:image/jpe
 else: st.markdown('<div class="brand-navbar"><h1>ED STORE</h1></div>', unsafe_allow_html=True)
 
 col_welc, col_out = st.columns([4, 1])
-with col_welc: st.markdown(f"<h4 style='color:#1C65A6;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
+with col_welc: st.markdown(f"<h4 style='color:#1C65A6; margin:0;'>👤 مرحباً بك: <b>{st.session_state.current_user}</b></h4>", unsafe_allow_html=True)
 with col_out:
     st.markdown('<div class="logout-btn">', unsafe_allow_html=True)
     if st.button("تسجيل خروج 🚪", key="logout_btn"):
@@ -422,22 +420,28 @@ with col_out:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-with st.sidebar:
-    st.markdown("### ⚙️ إدارة النظام والأسعار")
-    st.markdown("ارفع شيت الإكسيل لتحديث الأسعار والأرصدة:")
-    new_db = st.file_uploader("اختر ملف الشيت", type=['csv', 'xlsx'], key="admin_uploader")
-    if new_db is not None:
-        if st.button("تحديث الداتا الآن 💾", key="admin_upload_btn"):
-            try:
-                if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
-                else: d = pd.read_excel(new_db)
-                d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
-                st.success("✅ تم تحديث قاعدة البيانات بنجاح!")
-                time.sleep(0.5)
-                st.rerun()
-            except Exception as e:
-                st.error(f"حدث خطأ أثناء القراءة: {e}")
-    st.markdown("---")
+# 📤 كارت رفع وتحديث قاعدة البيانات (متاح في الصفحة مباشرة لحساب الإدارة)
+if st.session_state.current_user == "abobakr":
+    with st.expander("⚙️ لوحة الإدارة: رفع وتحديث شيت الأسعار والأرصدة (Excel / CSV)", expanded=False):
+        c_up1, c_up2 = st.columns([3, 1])
+        with c_up1:
+            new_db = st.file_uploader("اختر شيت الإكسيل المحدّث:", type=['csv', 'xlsx'], key="admin_main_uploader")
+        with c_up2:
+            st.write("")
+            st.write("")
+            if new_db is not None:
+                if st.button("💾 تطبيق وتحديث الداتا", key="apply_db_btn"):
+                    try:
+                        if new_db.name.endswith('.csv'): d = pd.read_csv(new_db, encoding='utf-8-sig', sep=None, engine='python')
+                        else: d = pd.read_excel(new_db)
+                        d.to_csv(MASTER_DB_FILE, index=False, encoding='utf-8-sig')
+                        st.success("✅ تم تحديث قاعدة البيانات بنجاح!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"حدث خطأ أثناء القراءة: {e}")
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # --- محرك البحث الذكي ---
 @st.cache_resource
@@ -789,7 +793,6 @@ with main_tab2:
                 for c, i in system_inventory.items()
             ]
             
-            # خانة البحث والتصفية السريعة
             filter_rep = st.text_input(
                 "🔍 تصفية سريعة بتقرير الفروقات:",
                 placeholder="ابحث بكود أو اسم الموديل...",
