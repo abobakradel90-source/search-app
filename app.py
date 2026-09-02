@@ -234,7 +234,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وتنسيق شاشة الدخول الاحترافية ---
+# --- 2. الهوية البصرية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -563,7 +563,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مُحسّن للإسكانر الفوري والحفظ بـ Enter)
+# 2. تبويب الجرد التشاركي (مع معالجة التركيز الدقيق التلقائي)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -593,13 +593,12 @@ with main_tab2:
             if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
 
         with tab_scan:
-            # تهيئة متغيرات جلسة المسح اللحظي
             if "inv_scan_counter" not in st.session_state:
                 st.session_state.inv_scan_counter = 0
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # 1. خانة مسح الباركود السريعة (تتفرغ تلقائياً بعد كل تسجيل)
+            # 1. خانة مسح الباركود
             barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
             scanned_raw = st.text_input(
                 "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
@@ -607,21 +606,59 @@ with main_tab2:
                 placeholder="مرر الإسكانر هنا..."
             )
 
-            # سكريبت لتوجيه المؤشر تلقائياً لخانة الباركود
-            components.html(
-                f"""
-                <script>
-                var input = window.parent.document.querySelector('input[aria-label*="امسح باركود الصنف"]');
-                if (input) {{
-                    input.focus();
-                }}
-                </script>
-                """,
-                height=0,
-                width=0
-            )
+            # 2. حقن إعادة التركيز الفوري للباركود عندما لا يكون هناك صنف معروض
+            if not st.session_state.current_scanned_code:
+                unique_token = f"scan_{st.session_state.inv_scan_counter}_{int(time.time() * 1000)}"
+                st.markdown(
+                    f"""
+                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>" 
+                         style="display:none;" 
+                         onerror="
+                            (function() {{
+                                var attempts = 0;
+                                var t = setInterval(function() {{
+                                    attempts++;
+                                    var el = document.querySelector('input[placeholder*=\\'مرر الإسكانر\\']');
+                                    if (el) {{
+                                        el.focus();
+                                        el.select();
+                                        clearInterval(t);
+                                    }}
+                                    if (attempts > 50) clearInterval(t);
+                                }}, 40);
+                            }})();
+                         "
+                    >
+                    """,
+                    unsafe_allow_html=True
+                )
+                components.html(
+                    f"""
+                    <script>
+                    (function() {{
+                        var attempts = 0;
+                        var t = setInterval(function() {{
+                            attempts++;
+                            try {{
+                                var pDoc = window.parent.document;
+                                var el = pDoc.querySelector('input[placeholder*="مرر الإسكانر"]');
+                                if (el) {{
+                                    el.focus();
+                                    el.select();
+                                    clearInterval(t);
+                                }}
+                            }} catch(e) {{}}
+                            if (attempts > 50) clearInterval(t);
+                        }}, 40);
+                    }})();
+                    </script>
+                    <!-- token: {unique_token} -->
+                    """,
+                    height=0,
+                    width=0
+                )
 
-            # معالجة الكود المدخل
+            # معالجة قراءة الباركود
             if scanned_raw:
                 c_clean = str(scanned_raw).strip().upper()
                 if c_clean in system_inventory:
@@ -630,19 +667,16 @@ with main_tab2:
                     st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                     st.session_state.current_scanned_code = None
 
-            # 2. عرض كارت الصنف ونموذج إدخال الكمية والحفظ بـ Enter
+            # 3. عرض الصنف ونموذج إدخال الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
                 
-                # إظهار الرصيد الذي تم جرده حتى الآن لهذا الصنف
                 already_counted = scanned_map.get(active_c, 0)
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
-                # عرض صورة وبيانات الكوتشي
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
-                # نموذج تسجيل الكمية بمفتاح Enter
                 with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
                     col_q, col_s = st.columns([3, 2])
                     with col_q:
@@ -665,15 +699,38 @@ with main_tab2:
                         l_inv["scanned_items"][active_c] = max(0, l_inv["scanned_items"].get(active_c, 0) + add_q)
                         save_shared_inventory(l_inv)
                         
-                        # رسالة توست سريعة بالأعلى
-                        st.toast(f"✅ تم بنجاح إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
+                        st.toast(f"✅ تم إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
                         
-                        # تصفير الحالة لمسح الصورة وإعادة المؤشر للباركود
+                        # تصفير الحالة لترجع الشاشة فوراً للباركود
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
-                # زر لإلغاء الصنف الحالي إذا تم ضرب الكود بالخطأ
+                # تركيز فوري على خانة الكمية لتسهيل الإدخال بمفتاح Enter
+                st.markdown(
+                    """
+                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>" 
+                         style="display:none;" 
+                         onerror="
+                            (function() {
+                                var attempts = 0;
+                                var t = setInterval(function() {
+                                    attempts++;
+                                    var qInp = document.querySelector('input[type=\\'number\\']');
+                                    if (qInp) {
+                                        qInp.focus();
+                                        qInp.select();
+                                        clearInterval(t);
+                                    }
+                                    if (attempts > 40) clearInterval(t);
+                                }, 40);
+                            })();
+                         "
+                    >
+                    """,
+                    unsafe_allow_html=True
+                )
+
                 if st.button("❌ إلغاء وتخطي الموديل", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
                     st.session_state.current_scanned_code = None
                     st.session_state.inv_scan_counter += 1
