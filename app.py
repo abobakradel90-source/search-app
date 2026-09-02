@@ -563,7 +563,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع معالجة التركيز الدقيق التلقائي)
+# 2. تبويب الجرد التشاركي (التركيز التلقائي السلس والخالي من الأخطاء)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -598,7 +598,7 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # 1. خانة مسح الباركود
+            # 1. خانة مسح الباركود السريعة
             barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
             scanned_raw = st.text_input(
                 "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
@@ -606,57 +606,29 @@ with main_tab2:
                 placeholder="مرر الإسكانر هنا..."
             )
 
-            # 2. حقن إعادة التركيز الفوري للباركود عندما لا يكون هناك صنف معروض
+            # 2. نقل المؤشر تلقائياً لخانة الباركود بنقاء تام
             if not st.session_state.current_scanned_code:
-                unique_token = f"scan_{st.session_state.inv_scan_counter}_{int(time.time() * 1000)}"
-                st.markdown(
-                    f"""
-                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>" 
-                         style="display:none;" 
-                         onerror="
-                            (function() {{
-                                var attempts = 0;
-                                var t = setInterval(function() {{
-                                    attempts++;
-                                    var el = document.querySelector('input[placeholder*=\\'مرر الإسكانر\\']');
-                                    if (el) {{
-                                        el.focus();
-                                        el.select();
-                                        clearInterval(t);
-                                    }}
-                                    if (attempts > 50) clearInterval(t);
-                                }}, 40);
-                            }})();
-                         "
-                    >
-                    """,
-                    unsafe_allow_html=True
-                )
-                components.html(
-                    f"""
-                    <script>
-                    (function() {{
-                        var attempts = 0;
-                        var t = setInterval(function() {{
-                            attempts++;
-                            try {{
-                                var pDoc = window.parent.document;
-                                var el = pDoc.querySelector('input[placeholder*="مرر الإسكانر"]');
-                                if (el) {{
-                                    el.focus();
-                                    el.select();
-                                    clearInterval(t);
-                                }}
-                            }} catch(e) {{}}
-                            if (attempts > 50) clearInterval(t);
-                        }}, 40);
-                    }})();
-                    </script>
-                    <!-- token: {unique_token} -->
-                    """,
-                    height=0,
-                    width=0
-                )
+                focus_barcode_js = f"""
+                <script>
+                (function() {{
+                    var tries = 0;
+                    var interval = setInterval(function() {{
+                        tries++;
+                        try {{
+                            var doc = window.parent.document;
+                            var el = doc.querySelector('input[placeholder*="مرر الإسكانر"]');
+                            if (el) {{
+                                el.focus();
+                                el.select();
+                                clearInterval(interval);
+                            }}
+                        }} catch(e) {{}}
+                        if (tries > 35) clearInterval(interval);
+                    }}, 40);
+                }})();
+                </script>
+                """
+                components.html(focus_barcode_js, height=0, width=0)
 
             # معالجة قراءة الباركود
             if scanned_raw:
@@ -667,7 +639,7 @@ with main_tab2:
                     st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                     st.session_state.current_scanned_code = None
 
-            # 3. عرض الصنف ونموذج إدخال الكمية
+            # 3. عرض الصنف وإدخال الكمية والحفظ بـ Enter
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -701,35 +673,33 @@ with main_tab2:
                         
                         st.toast(f"✅ تم إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
                         
-                        # تصفير الحالة لترجع الشاشة فوراً للباركود
+                        # تصفير الحالة لترجع الشاشة وتخفي الصنف ويعود المؤشر لخانة الباركود
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
-                # تركيز فوري على خانة الكمية لتسهيل الإدخال بمفتاح Enter
-                st.markdown(
-                    """
-                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>" 
-                         style="display:none;" 
-                         onerror="
-                            (function() {
-                                var attempts = 0;
-                                var t = setInterval(function() {
-                                    attempts++;
-                                    var qInp = document.querySelector('input[type=\\'number\\']');
-                                    if (qInp) {
-                                        qInp.focus();
-                                        qInp.select();
-                                        clearInterval(t);
-                                    }
-                                    if (attempts > 40) clearInterval(t);
-                                }, 40);
-                            })();
-                         "
-                    >
-                    """,
-                    unsafe_allow_html=True
-                )
+                # نقل المؤشر تلقائياً لخانة الكمية
+                focus_qty_js = f"""
+                <script>
+                (function() {{
+                    var tries = 0;
+                    var interval = setInterval(function() {{
+                        tries++;
+                        try {{
+                            var doc = window.parent.document;
+                            var qInp = doc.querySelector('input[type="number"]');
+                            if (qInp) {{
+                                qInp.focus();
+                                qInp.select();
+                                clearInterval(interval);
+                            }}
+                        }} catch(e) {{}}
+                        if (tries > 35) clearInterval(interval);
+                    }}, 40);
+                }})();
+                </script>
+                """
+                components.html(focus_qty_js, height=0, width=0)
 
                 if st.button("❌ إلغاء وتخطي الموديل", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
                     st.session_state.current_scanned_code = None
