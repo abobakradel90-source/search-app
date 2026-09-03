@@ -91,7 +91,7 @@ def load_sales_history():
 def save_to_sales_history(record):
     history = load_sales_history()
     history.append(record)
-    save_json(HISTORY_SALES_FILE, history)
+    save_json(SHARED_SALES_FILE, history)
 
 def get_image_base64(img_path):
     try:
@@ -661,7 +661,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع محرك اكتشاف معرفات العدسات الحقيقية - Device ID Scanner)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -735,7 +735,7 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # ⚡ استقبال الكود وإعادة التوجيه لفتح كارت الصنف فوراً
+            # ⚡ التقاط الكود وإعادة التوجيه لفتح كارت الصنف فوراً
             if "scanned_code" in st.query_params:
                 detected_param = st.query_params.get("scanned_code", "")
                 st.query_params.clear()
@@ -751,7 +751,7 @@ with main_tab2:
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📱 كاميرا الموبايل الاحترافية (اختيار مباشر للعدسة الخلفية كالإسكانر)"],
+                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📱 كاميرا الموبايل الاحترافية (قائمة العدسات المباشرة)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
@@ -796,7 +796,6 @@ with main_tab2:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
             else:
-                # محرك كاميرا احترافي يعرض قائمة بجميع عدسات هاتفك لاختيار العدسة الخلفية بدقة مطلقة
                 if not st.session_state.current_scanned_code:
                     pro_scanner_html = """
                     <!DOCTYPE html>
@@ -860,7 +859,7 @@ with main_tab2:
                             .cam-select {
                                 width: 100%;
                                 padding: 10px 14px;
-                                border: 2px solid #1C65A6;
+                                border: 2.5px solid #1C65A6;
                                 border-radius: 10px;
                                 font-size: 14px;
                                 font-weight: bold;
@@ -869,20 +868,6 @@ with main_tab2:
                                 margin-top: 10px;
                                 outline: none;
                             }
-                            .ctrl-btn {
-                                background-color: #1C65A6 !important;
-                                color: white !important;
-                                border: none !important;
-                                padding: 11px 18px !important;
-                                border-radius: 10px !important;
-                                font-weight: 800 !important;
-                                font-size: 14px !important;
-                                cursor: pointer !important;
-                                width: 100% !important;
-                                margin-top: 10px;
-                                box-shadow: 0 3px 8px rgba(28,101,166,0.2) !important;
-                            }
-                            .ctrl-btn:hover { background-color: #144A7A !important; }
                             #status {
                                 margin-top: 8px;
                                 font-size: 13.5px;
@@ -901,9 +886,9 @@ with main_tab2:
                                 </div>
                             </div>
                             <select id="camera-select" class="cam-select" onchange="onCameraChange(this.value)">
-                                <option value="">🔍 جاري فحص عدسات هاتفك...</option>
+                                <option value="">🔍 جاري فحص عدسات هاتفك الفعليّة...</option>
                             </select>
-                            <div id="status">📷 يرجى السماح بإذن الكاميرا...</div>
+                            <div id="status">📷 يرجى السماح للمتصفح بالوصول إلى الكاميرا...</div>
                         </div>
 
                         <script>
@@ -985,7 +970,7 @@ with main_tab2:
                                 stopStream();
                                 isScanning = true;
                                 var statusEl = document.getElementById("status");
-                                statusEl.innerHTML = "⏳ جاري تشغيل العدسة المحددة...";
+                                statusEl.innerHTML = "⏳ جاري تشغيل العدسة المختارة...";
 
                                 navigator.mediaDevices.getUserMedia({
                                     audio: false,
@@ -995,7 +980,7 @@ with main_tab2:
                                     var videoEl = document.getElementById("scanner-video");
                                     videoEl.srcObject = stream;
                                     videoEl.play().then(function() {
-                                        statusEl.innerHTML = "🟢 العدسة تعمل - وجّه الباركود داخل الإطار";
+                                        statusEl.innerHTML = "🟢 العدسة تعمل بنجاح - وجّه الباركود داخل الإطار";
                                         startLoop(videoEl);
                                     });
                                 }).catch(function(err) {
@@ -1010,7 +995,6 @@ with main_tab2:
                             function initDeviceList() {
                                 setupDetector();
                                 navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(function(stream) {
-                                    # إيقاف ستريم الإذن المؤقت لتبدأ العدسة الحقيقية بالعمل
                                     stream.getTracks().forEach(function(t) { t.stop(); });
 
                                     navigator.mediaDevices.enumerateDevices().then(function(devices) {
@@ -1026,11 +1010,11 @@ with main_tab2:
                                         var bestIndex = 0;
                                         videoDevices.forEach(function(dev, idx) {
                                             var opt = document.createElement("option");
-                                            opt.value = dev.id;
+                                            opt.value = dev.deviceId;
                                             var lbl = (dev.label || ("عدسة رقم " + (idx + 1))).toLowerCase();
                                             var isBack = lbl.includes("back") || lbl.includes("rear") || lbl.includes("environment") || lbl.includes("خلف");
                                             
-                                            opt.text = (isBack ? "📸 خلفية: " : "🤳 أمامية: ") + (dev.label || ("عدسة " + (idx + 1)));
+                                            opt.text = (isBack ? "📸 خلفية أساسية: " : "🤳 أمامية: ") + (dev.label || ("عدسة " + (idx + 1)));
                                             selectEl.appendChild(opt);
 
                                             if (isBack) {
@@ -1038,13 +1022,12 @@ with main_tab2:
                                             }
                                         });
 
-                                        # تشغيل العدسة الخلفية تلقائياً
                                         selectEl.selectedIndex = bestIndex;
-                                        startCameraWithId(videoDevices[bestIndex].id);
+                                        startCameraWithId(videoDevices[bestIndex].deviceId);
 
                                     });
                                 }).catch(function(err) {
-                                    document.getElementById("status").innerHTML = "❌ يرجى السماح للمتصفح بالوصول إلى الكاميرا.";
+                                    document.getElementById("status").innerHTML = "❌ يرجى السماح للمتصفح بالوصول إلى الكاميرا من إعدادات الموقع.";
                                 });
                             }
 
@@ -1058,9 +1041,9 @@ with main_tab2:
                     </body>
                     </html>
                     """
-                    components.html(pro_scanner_html, height=420)
+                    components.html(pro_scanner_html, height=430)
 
-            # 📦 كارت الصنف وصورته وخانة إدخال الكمية تظهر فوراً بمجرد المسح
+            # 📦 كارت الصنف وصورته وخانة إضافة الكمية تظهر فوراً بمجرد المسح
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -1068,10 +1051,8 @@ with main_tab2:
                 
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
-                # عرض كارت الصنف وصورته واسمه ورصيده
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
-                # نموذج إدخال الكمية والحفظ بـ Enter
                 with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
                     col_q, col_s = st.columns([3, 2])
                     with col_q:
