@@ -122,11 +122,23 @@ def decode_barcode_from_image(pil_img):
         import numpy as np
         cv_img = np.array(pil_img.convert('RGB'))[:, :, ::-1]
         detector = cv2.barcode.BarcodeDetector()
+        
         ok, decoded_info, _, _ = detector.detectAndDecode(cv_img)
         if ok and decoded_info:
             val = decoded_info[0] if isinstance(decoded_info, (list, tuple)) else decoded_info
-            if val.strip():
-                return val.strip().upper()
+            if str(val).strip():
+                return str(val).strip().upper()
+                
+        h, w = cv_img.shape[:2]
+        center_crop = cv_img[int(h*0.2):int(h*0.8), int(w*0.1):int(w*0.9)]
+        scale = 800.0 / max(center_crop.shape[1], 1)
+        resized = cv2.resize(center_crop, (int(center_crop.shape[1]*scale), int(center_crop.shape[0]*scale)))
+        
+        ok, decoded_info, _, _ = detector.detectAndDecode(resized)
+        if ok and decoded_info:
+            val = decoded_info[0] if isinstance(decoded_info, (list, tuple)) else decoded_info
+            if str(val).strip():
+                return str(val).strip().upper()
     except Exception:
         pass
 
@@ -661,7 +673,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (الحل النهائي للإسكانر عبر الزر الأصلي الآمن)
+# 2. تبويب الجرد التشاركي (إسكانر لايف مثل أودو Odoo + كارت الصنف وإدخال الكمية)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -735,16 +747,259 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
+            # ⚡ التقاط الكود من الإسكانر فوراً وتحديث الصفحة
+            if "scanned_code" in st.query_params:
+                detected_param = st.query_params.get("scanned_code", "")
+                st.query_params.clear()
+                if detected_param:
+                    c_clean = str(detected_param).strip().upper()
+                    if c_clean in system_inventory:
+                        st.session_state.current_scanned_code = c_clean
+                        st.toast(f"🎯 تم مسح الباركود بنجاح: [{c_clean}]", icon="📦")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في قاعدة البيانات.")
+
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 إسكانر الكاميرا الفوري (زر آمن 100% بدون أخطاء)"],
+                [
+                    "📹 إسكانر الكاميرا المباشر (تلقائي لايف مثل أودو Odoo)",
+                    "📸 تصوير الباركود (بديل بالكاميرا)",
+                    "🔫 جهاز الإسكانر (كيبورد / سريع)"
+                ],
                 horizontal=True,
                 key="scan_method_choice"
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-            if scan_method == "🔫 جهاز الإسكانر (كيبورد / سريع)":
+            if scan_method == "📹 إسكانر الكاميرا المباشر (تلقائي لايف مثل أودو Odoo)":
+                if not st.session_state.current_scanned_code:
+                    live_scanner_html = """
+                    <!DOCTYPE html>
+                    <html lang="ar" dir="rtl">
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                        <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+                        <style>
+                            body { margin: 0; padding: 5px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }
+                            #scanner-box {
+                                background: #ffffff;
+                                border: 2.5px solid #1C65A6;
+                                border-radius: 14px;
+                                padding: 12px;
+                                max-width: 480px;
+                                margin: 0 auto;
+                                box-shadow: 0 4px 14px rgba(28, 101, 166, 0.15);
+                            }
+                            #reader {
+                                width: 100%;
+                                border-radius: 10px;
+                                overflow: hidden;
+                                background: #111111;
+                            }
+                            #reader video {
+                                border-radius: 10px;
+                                object-fit: cover;
+                            }
+                            .cam-dropdown {
+                                width: 100%;
+                                padding: 9px 12px;
+                                margin-top: 10px;
+                                border: 2px solid #1C65A6;
+                                border-radius: 8px;
+                                font-size: 14px;
+                                font-weight: bold;
+                                color: #0F2942;
+                                background: #F8FAFC;
+                                outline: none;
+                            }
+                            #status-msg {
+                                margin-top: 8px;
+                                font-size: 13.5px;
+                                font-weight: 800;
+                                color: #1C65A6;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="scanner-box">
+                            <div id="reader"></div>
+                            <select id="cam-select" class="cam-dropdown" onchange="switchCamera(this.value)">
+                                <option value="">🔍 جاري فحص الكاميرات المتاحة...</option>
+                            </select>
+                            <div id="status-msg">📷 وجّه الكاميرا الخلفية نحو باركود الصنف ليتم لقطه تلقائياً...</div>
+                        </div>
+
+                        <script>
+                            var html5QrCode = null;
+                            var currentCameraId = null;
+                            var isScanned = false;
+
+                            function playBeepSound() {
+                                try {
+                                    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                                    var osc = audioCtx.createOscillator();
+                                    var gain = audioCtx.createGain();
+                                    osc.type = "sine";
+                                    osc.frequency.setValueAtTime(1900, audioCtx.currentTime);
+                                    gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                                    osc.connect(gain);
+                                    gain.connect(audioCtx.destination);
+                                    osc.start();
+                                    osc.stop(audioCtx.currentTime + 0.14);
+                                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                                } catch(e) {}
+                            }
+
+                            function onCodeScanned(decodedText, decodedResult) {
+                                if (isScanned) return;
+                                isScanned = true;
+                                playBeepSound();
+                                document.getElementById('status-msg').innerHTML = "🎯 تم مسح الكود: <b>" + decodedText + "</b> (جاري فتح الصنف...)";
+
+                                if (html5QrCode) {
+                                    html5QrCode.stop().then(function() {
+                                        sendCode(decodedText);
+                                    }).catch(function() {
+                                        sendCode(decodedText);
+                                    });
+                                } else {
+                                    sendCode(decodedText);
+                                }
+                            }
+
+                            function sendCode(code) {
+                                try {
+                                    var url = new URL(window.parent.location.href);
+                                    url.searchParams.set("scanned_code", code.trim());
+                                    window.parent.location.href = url.href;
+                                } catch(e) {
+                                    console.error(e);
+                                }
+                            }
+
+                            function startScanning(cameraId) {
+                                if (html5QrCode) {
+                                    html5QrCode.stop().then(function() {
+                                        startWithId(cameraId);
+                                    }).catch(function() {
+                                        startWithId(cameraId);
+                                    });
+                                } else {
+                                    html5QrCode = new Html5Qrcode("reader");
+                                    startWithId(cameraId);
+                                }
+                            }
+
+                            function startWithId(cameraId) {
+                                currentCameraId = cameraId;
+                                isScanned = false;
+                                document.getElementById('status-msg').innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود داخل المربع ليتم لقطه تلقائياً";
+
+                                html5QrCode.start(
+                                    cameraId,
+                                    {
+                                        fps: 15,
+                                        qrbox: { width: 270, height: 160 },
+                                        aspectRatio: 1.333
+                                    },
+                                    onCodeScanned,
+                                    function(error) {}
+                                ).catch(function(err) {
+                                    document.getElementById('status-msg').innerHTML = "❌ تعذر تشغيل هذه العدسة، اختر عدسة أخرى من القائمة.";
+                                });
+                            }
+
+                            function switchCamera(val) {
+                                if (val && val !== currentCameraId) {
+                                    startScanning(val);
+                                }
+                            }
+
+                            function initScanner() {
+                                try {
+                                    var iframes = window.parent.document.querySelectorAll('iframe');
+                                    iframes.forEach(function(f) { f.setAttribute('allow', 'camera; microphone'); });
+                                } catch(e) {}
+
+                                Html5Qrcode.getCameras().then(function(cameras) {
+                                    var selectEl = document.getElementById('cam-select');
+                                    selectEl.innerHTML = "";
+
+                                    if (!cameras || cameras.length === 0) {
+                                        document.getElementById('status-msg').innerHTML = "❌ لم يتم العثور على أي كاميرا.";
+                                        return;
+                                    }
+
+                                    var defaultIndex = 0;
+                                    cameras.forEach(function(cam, idx) {
+                                        var opt = document.createElement("option");
+                                        opt.value = cam.id;
+                                        var label = (cam.label || ("عدسة " + (idx + 1))).toLowerCase();
+                                        var isBack = label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('خلف');
+                                        
+                                        opt.text = (isBack ? "📸 كاميرا خلفية أساسية: " : "🤳 كاميرا أمامية: ") + (cam.label || ("عدسة " + (idx + 1)));
+                                        selectEl.appendChild(opt);
+
+                                        if (isBack) {
+                                            defaultIndex = idx;
+                                        }
+                                    });
+
+                                    selectEl.selectedIndex = defaultIndex;
+                                    startScanning(cameras[defaultIndex].id);
+                                }).catch(function(err) {
+                                    html5QrCode = new Html5Qrcode("reader");
+                                    html5QrCode.start(
+                                        { facingMode: "environment" },
+                                        { fps: 15, qrbox: { width: 270, height: 160 } },
+                                        onCodeScanned,
+                                        function(err) {}
+                                    ).catch(function(e) {
+                                        document.getElementById('status-msg').innerHTML = "⚠️ يرجى السماح بصلاحية الكاميرا، أو استخدم خيار 'تصوير الباركود'.";
+                                    });
+                                });
+                            }
+
+                            window.addEventListener('load', function() {
+                                setTimeout(initScanner, 250);
+                            });
+                        </script>
+                    </body>
+                    </html>
+                    """
+                    components.html(live_scanner_html, height=430)
+
+            elif scan_method == "📸 تصوير الباركود (بديل بالكاميرا)":
+                st.markdown("##### 📸 التقط صورة واضحة للباركود بالكاميرا:")
+                safe_photo = st.camera_input("وجّه الكاميرا نحو الباركود", key=f"inv_safe_cam_input_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
+
+                if safe_photo is not None:
+                    with st.spinner("🔍 جاري قراءة الكود من الصورة..."):
+                        pil_img_obj = Image.open(safe_photo)
+                        code_found = decode_barcode_from_image(pil_img_obj)
+                        
+                        if code_found:
+                            clean_code = str(code_found).strip().upper()
+                            if clean_code in system_inventory:
+                                st.session_state.current_scanned_code = clean_code
+                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{clean_code}]")
+                                time.sleep(0.3)
+                                st.rerun()
+                            else:
+                                st.error(f"⚠️ الكود [{clean_code}] غير مسجل في النظام.")
+                        else:
+                            st.warning("⚠️ تعذر قراءة الباركود تلقائياً من الصورة، يمكنك إدخاله يدوياً أدناه:")
+                            manual_txt = st.text_input("كتابة الكود يدوياً:", key=f"manual_input_box_{st.session_state.inv_scan_counter}")
+                            if manual_txt:
+                                mt_clean = str(manual_txt).strip().upper()
+                                if mt_clean in system_inventory:
+                                    st.session_state.current_scanned_code = mt_clean
+                                    st.rerun()
+
+            else:  # جهاز الإسكانر (كيبورد)
                 barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
                 scanned_raw = st.text_input(
                     "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
@@ -782,32 +1037,6 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
-            else:
-                st.markdown("##### 📸 التقاط صورة الباركود بالإسكانر الآمن:")
-                captured_img = st.camera_input("التقط الباركود", key=f"inv_ultimate_camera_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
-
-                if captured_img is not None:
-                    with st.spinner("🔍 جاري قراءة الكود..."):
-                        pil_img = Image.open(captured_img)
-                        barcode_result = decode_barcode_from_image(pil_img)
-                        
-                        if barcode_result:
-                            clean_res = str(barcode_result).strip().upper()
-                            if clean_res in system_inventory:
-                                st.session_state.current_scanned_code = clean_res
-                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{clean_res}]")
-                                time.sleep(0.2)
-                                st.rerun()
-                            else:
-                                st.error(f"⚠️ الكود [{clean_res}] غير مسجل في النظام.")
-                        else:
-                            st.warning("⚠️ لم يتم قراءة الباركود تلقائياً من الصورة، يمكنك كتابته يدوياً أدناه:")
-                            manual_code_in = st.text_input("كتابة الكود يدوياً:", key=f"manual_code_box_{st.session_state.inv_scan_counter}")
-                            if manual_code_in:
-                                mc_val = str(manual_code_in).strip().upper()
-                                if mc_val in system_inventory:
-                                    st.session_state.current_scanned_code = mc_val
-                                    st.rerun()
 
             # 📦 كارت الصنف وصورته وخانة إضافة الكمية تظهر فوراً بمجرد المسح
             if st.session_state.current_scanned_code:
