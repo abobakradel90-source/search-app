@@ -629,7 +629,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع الإسكانر المباشر والتحكم الدقيق بالعدسات)
+# 2. تبويب الجرد التشاركي (مع الربط اللحظي بين الكاميرا والإسكانر وكارت الصنف)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -703,19 +703,23 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # فحص إذا تم إرسال باركود عبر معلمات الرابط من كاميرا الهاتف
+            # ⚡ 1. استلام الباركود الملتقط تلقائياً من كاميرا الهاتف
             if "scanned_code" in st.query_params:
                 detected_param = st.query_params.get("scanned_code", "")
-                try: del st.query_params["scanned_code"]
-                except Exception: pass
+                try:
+                    del st.query_params["scanned_code"]
+                except Exception:
+                    pass
                 if detected_param:
                     c_clean = str(detected_param).strip().upper()
                     if c_clean in system_inventory:
                         st.session_state.current_scanned_code = c_clean
-                        st.toast(f"🎯 تم لقط الباركود: {c_clean}", icon="⚡")
+                        st.toast(f"🎯 تم التعرف على الكود: {c_clean}", icon="⚡")
+                        st.rerun()
                     else:
-                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
+                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في قاعدة البيانات.")
 
+            # اختيار وسيلة المسح
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
@@ -725,6 +729,7 @@ with main_tab2:
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
+            # خانة الباركود المركزية
             barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
             scanned_raw = st.text_input(
                 "🔫 خانة الباركود النشطة:",
@@ -732,7 +737,16 @@ with main_tab2:
                 placeholder="مرر الإسكانر هنا..."
             )
 
-            # وضع الإسكانر الخارجي
+            # ⚡ 2. معالجة الإدخال من جهاز الإسكانر أو الكتابة اليدوية لكافة الأوضاع
+            if scanned_raw:
+                c_clean = str(scanned_raw).strip().upper()
+                if c_clean in system_inventory:
+                    st.session_state.current_scanned_code = c_clean
+                else:
+                    st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
+                    st.session_state.current_scanned_code = None
+
+            # تركيز المؤشر لخانة الإسكانر الخارجي
             if scan_method == "🔫 جهاز الإسكانر الخارجي (كيبورد / سريع)":
                 if not st.session_state.current_scanned_code:
                     focus_barcode_js = """
@@ -757,15 +771,7 @@ with main_tab2:
                     """
                     components.html(focus_barcode_js, height=0, width=0)
 
-                if scanned_raw:
-                    c_clean = str(scanned_raw).strip().upper()
-                    if c_clean in system_inventory:
-                        st.session_state.current_scanned_code = c_clean
-                    else:
-                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
-                        st.session_state.current_scanned_code = None
-
-            # وضع كاميرا الموبايل المباشرة مع الإجبار العتادي للعدسة الخلفية
+            # 📱 3. كاميرا الموبايل اللايف (تُعرض فقط في حالة عدم وجود صنف قيد الإدخال حالياً)
             else:
                 if not st.session_state.current_scanned_code:
                     live_scanner_html = """
@@ -834,7 +840,7 @@ with main_tab2:
                             .ctrl-btn:hover { background-color: #144A7A; }
                             #status {
                                 margin-top: 10px;
-                                font-size: 13.5px;
+                                font-size: 14px;
                                 font-weight: 800;
                                 color: #1C65A6;
                                 min-height: 22px;
@@ -853,12 +859,12 @@ with main_tab2:
                                     <button class="ctrl-btn" id="torch-btn" onclick="toggleTorch()" style="flex:0.6; display:none; background-color:#F59E0B;">💡 فلاش</button>
                                 </div>
                             </div>
-                            <div id="status">📷 جاري إجبار المتصفح على تشغيل الكاميرا الخلفية...</div>
+                            <div id="status">📷 جاري تشغيل الكاميرا الخلفية تلقائياً...</div>
                         </div>
 
                         <script>
                             var html5QrCode = null;
-                            var currentConstraint = { exact: "environment" }; // إجبار الكاميرا الخلفية فوراً
+                            var currentConstraint = { exact: "environment" };
                             var isTorchOn = false;
                             var isRunning = false;
 
@@ -878,33 +884,21 @@ with main_tab2:
                                 } catch(e) {}
                             }
 
+                            // ⚡ إرسال الكود فوراً للنظام لفتح كارت الصنف وصورته
                             function sendCodeToSystem(code) {
-                                var sent = false;
+                                playBeep();
+                                document.getElementById("status").innerHTML = "🎯 تم التقاط: " + code + " - جاري فتح بيانات الصنف...";
+                                
                                 try {
-                                    var pDoc = window.parent.document;
-                                    var input = pDoc.querySelector('input[placeholder*="مرر الإسكانر"]');
-                                    if (input) {
-                                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                                        nativeSetter.call(input, code);
-                                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                                        input.dispatchEvent(new Event('change', { bubbles: true }));
-                                        input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', keyCode: 13 }));
-                                        sent = true;
-                                    }
-                                } catch(e) {}
-
-                                if (!sent) {
-                                    try {
-                                        var url = new URL(window.parent.location);
-                                        url.searchParams.set("scanned_code", code);
-                                        window.parent.location.replace(url.href);
-                                    } catch(e) {}
+                                    var url = new URL(window.parent.location.href);
+                                    url.searchParams.set("scanned_code", code);
+                                    window.parent.location.href = url.href;
+                                } catch(e) {
+                                    window.parent.location.search = "?scanned_code=" + encodeURIComponent(code);
                                 }
                             }
 
                             function onScanSuccess(decodedText) {
-                                playBeep();
-                                document.getElementById("status").innerHTML = "🎯 تم التقاط: " + decodedText;
                                 if (html5QrCode && isRunning) {
                                     html5QrCode.stop().then(function() {
                                         isRunning = false;
@@ -938,9 +932,7 @@ with main_tab2:
                                     if (videoEl && videoEl.srcObject) {
                                         var track = videoEl.srcObject.getVideoTracks()[0];
                                         isTorchOn = !isTorchOn;
-                                        track.applyConstraints({
-                                            advanced: [{ torch: isTorchOn }]
-                                        });
+                                        track.applyConstraints({ advanced: [{ torch: isTorchOn }] });
                                         document.getElementById("torch-btn").innerHTML = isTorchOn ? "🔦 إطفاء" : "💡 فلاش";
                                     }
                                 } catch(e) {
@@ -1000,14 +992,12 @@ with main_tab2:
                                     function(err) {}
                                 ).then(function() {
                                     isRunning = true;
-                                    statusEl.innerHTML = "🟢 الكاميرا تعمل الآن بنجاح! وجّه الباركود داخل الإطار";
+                                    statusEl.innerHTML = "🟢 الكاميرا تعمل الآن! وجّه الباركود داخل الإطار";
                                     updateCameraDropdown();
                                     setTimeout(checkTorchSupport, 700);
                                 }).catch(function(err) {
-                                    console.warn("Exact camera constraint failed:", err);
-                                    // إذا كان الجهاز لابتوب أو متصفح قديم يرفض exact، نتدرج للوضع العادي
                                     if (camConfig.facingMode && camConfig.facingMode.exact === "environment") {
-                                        statusEl.innerHTML = "⚠️ جاري التبديل التلقائي للعدسة المتوافقة...";
+                                        statusEl.innerHTML = "⚠️ جاري فتح الكاميرا بالوضع التلقائي...";
                                         html5QrCode.start(
                                             { facingMode: "environment" },
                                             scannerConfig,
@@ -1015,11 +1005,10 @@ with main_tab2:
                                             function(e) {}
                                         ).then(function() {
                                             isRunning = true;
-                                            statusEl.innerHTML = "🟢 الكاميرا تعمل بنجاح! وجّه الباركود داخل الإطار";
+                                            statusEl.innerHTML = "🟢 الكاميرا الخلفية تعمل بنجاح!";
                                             updateCameraDropdown();
                                             setTimeout(checkTorchSupport, 700);
                                         }).catch(function(err2) {
-                                            // الخيار الأخير (أمامية أو كاميرا لابتوب)
                                             html5QrCode.start(
                                                 { facingMode: "user" },
                                                 scannerConfig,
@@ -1030,7 +1019,7 @@ with main_tab2:
                                                 statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
                                                 updateCameraDropdown();
                                             }).catch(function(err3) {
-                                                statusEl.innerHTML = "❌ تعذر تشغيل الكاميرا، يرجى التأكد من السماح بالصلاحية في المتصفح.";
+                                                statusEl.innerHTML = "❌ تعذر تشغيل الكاميرا، يرجى التأكد من السماح بالصلاحية.";
                                             });
                                         });
                                     } else {
@@ -1079,19 +1068,28 @@ with main_tab2:
                     """
                     components.html(live_scanner_html, height=480)
 
-            # عرض كارت الصنف وتسجيل الكمية
+            # 📦 4. كارت الصنف وصورته وخانة إدخال الكمية (يظهر سواء تم المسح بالكاميرا أو الإسكانر)
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
                 already_counted = scanned_map.get(active_c, 0)
                 
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
+                
+                # عرض صورة الكوتشي وبياناته ورصيده
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
+                # نموذج كتابة الكمية والحفظ بمفتاح Enter
                 with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
                     col_q, col_s = st.columns([3, 2])
                     with col_q:
-                        add_q = st.number_input("🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):", min_value=1, value=1, step=1, key=f"qty_field_{st.session_state.inv_scan_counter}")
+                        add_q = st.number_input(
+                            "🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):",
+                            min_value=1,
+                            value=1,
+                            step=1,
+                            key=f"qty_field_{st.session_state.inv_scan_counter}"
+                        )
                     with col_s:
                         st.write("")
                         st.write("")
@@ -1105,10 +1103,12 @@ with main_tab2:
                         save_shared_inventory(l_inv)
                         
                         st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}] في الجلسة", icon="📦")
+                        # تصفير الحالة لإخفاء الكارت وإعادة فتح الكاميرا فوراً للصنف التالي
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
+                # تركيز فوري للمؤشر داخل خانة العدد
                 focus_qty_js = """
                 <script>
                 (function() {
