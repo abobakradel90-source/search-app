@@ -40,7 +40,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 دوال إدارة قواعد البيانات وحفظ الجلسات بالمسار المطلق
+# 🌐 إدارة قواعد البيانات والجلسات بالمسار المطلق
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
@@ -99,38 +99,6 @@ def get_image_base64(img_path):
             return base64.b64encode(img_file.read()).decode('utf-8')
     except Exception:
         return ""
-
-def decode_barcode_from_image(pil_img):
-    try:
-        import zxingcpp
-        results = zxingcpp.read_barcodes(pil_img)
-        if results:
-            return results[0].text.strip().upper()
-    except Exception:
-        pass
-    
-    try:
-        from pyzbar.pyzbar import decode
-        barcodes = decode(pil_img)
-        if barcodes:
-            return barcodes[0].data.decode("utf-8").strip().upper()
-    except Exception:
-        pass
-        
-    try:
-        import cv2
-        import numpy as np
-        cv_img = np.array(pil_img.convert('RGB'))[:, :, ::-1]
-        detector = cv2.barcode.BarcodeDetector()
-        ok, decoded_info, _, _ = detector.detectAndDecode(cv_img)
-        if ok and decoded_info:
-            val = decoded_info[0] if isinstance(decoded_info, (list, tuple)) else decoded_info
-            if val.strip():
-                return val.strip().upper()
-    except Exception:
-        pass
-
-    return None
 
 def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
     try:
@@ -280,8 +248,7 @@ def generate_catalog_excel(catalog_items):
                     xl_img.width = 145
                     xl_img.height = 95
                     ws.add_image(xl_img, f"A{row_idx}")
-            except Exception:
-                pass
+            except: pass
                 
     buf = io.BytesIO()
     wb.save(buf)
@@ -662,7 +629,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع بقاء الجلسة مفتوحة وخاصية المراجعة والتعديل)
+# 2. تبويب الجرد التشاركي (مع الإسكانر المباشر واللقط التلقائي)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -692,8 +659,7 @@ with main_tab2:
                     time.sleep(0.3)
                     st.rerun()
 
-        # أمان: خيار استعادة جلسة سابقة من ملف خارجي إن وجد
-        with st.expander("📥 استعادة جلسة جرد محفوظة مسبقاً (Backup)", expanded=False):
+        with st.expander("📥 استعادة جلسة جرد سابقة (Backup)", expanded=False):
             backup_file = st.file_uploader("ارفع ملف الجلسة (.json):", type=['json'], key="restore_inv_uploader")
             if backup_file and st.button("استعادة هذه الجلسة فوراً 🔄", key="restore_inv_btn"):
                 try:
@@ -706,7 +672,6 @@ with main_tab2:
                 except Exception as e:
                     st.error(f"ملف غير صالح: {e}")
     else:
-        # شريط رأس الجلسة النشطة
         st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد نشطة ومحفوظة:</b> {shared_inv.get("name")} | <b>السبب:</b> {shared_inv.get("reason")} | <b>التاريخ:</b> {shared_inv.get("date")}</div>', unsafe_allow_html=True)
         
         tab_sum, tab_scan, tab_edit, tab_rep = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود", "📝 مراجعة وتعديل المجرد", "⚖️ تقرير الفروقات"])
@@ -724,7 +689,6 @@ with main_tab2:
             with col_rf:
                 if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
             with col_bk:
-                # زر تصدير الجلسة الحالية كملف JSON لضمان عدم ضياعها
                 json_bytes = json.dumps(shared_inv, ensure_ascii=False, indent=4).encode('utf-8')
                 st.download_button(
                     "💾 تحميل نسخة احتياطية للجلسة الحالية (JSON)",
@@ -739,23 +703,39 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
+            # فحص الباركود القادم من كاميرا الهاتف
+            if "scanned_code" in st.query_params:
+                detected_param = st.query_params.get("scanned_code", "")
+                try: del st.query_params["scanned_code"]
+                except: pass
+                if detected_param:
+                    c_clean = str(detected_param).strip().upper()
+                    if c_clean in system_inventory:
+                        st.session_state.current_scanned_code = c_clean
+                        st.toast(f"🎯 تم لقط الباركود: {c_clean}", icon="⚡")
+                    else:
+                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
+
+            # اختيار وضع المسح
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
-                "🎯 اختر طريقة مسح الصنف:",
-                ["🔫 جهاز الإسكانر (سريع / كيبورد)", "📱 كاميرا الهاتف (التقاط الباركود)"],
+                "🎯 اختر وسيلة الإسكان:",
+                ["🔫 جهاز الإسكانر الخارجي (كيبورد / سريع)", "📱 كاميرا الهاتف (إسكانر لايف وتلقائي بدون ضغط)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-            if scan_method == "🔫 جهاز الإسكانر (سريع / كيبورد)":
-                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
-                scanned_raw = st.text_input(
-                    "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
-                    key=barcode_field_key,
-                    placeholder="مرر الإسكانر هنا..."
-                )
+            # خانة إدخال الباركود المركزية
+            barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+            scanned_raw = st.text_input(
+                "🔫 امسح باركود الصنف (أو اكتبه):",
+                key=barcode_field_key,
+                placeholder="مرر الإسكانر هنا..."
+            )
 
+            # --- وضع الإسكانر الخارجي ---
+            if scan_method == "🔫 جهاز الإسكانر الخارجي (كيبورد / سريع)":
                 if not st.session_state.current_scanned_code:
                     focus_barcode_js = """
                     <script>
@@ -786,30 +766,143 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
-            else:
-                st.markdown("##### 📸 وجّه كاميرا الموبايل نحو باركود الصنف:")
-                phone_cam = st.camera_input("التقط صورة الباركود", key=f"inv_phone_cam_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
 
-                if phone_cam is not None:
-                    with st.spinner("🔍 جاري قراءة الباركود من الصورة..."):
-                        img_cam = Image.open(phone_cam)
-                        detected_code = decode_barcode_from_image(img_cam)
-                        
-                        if detected_code:
-                            if detected_code in system_inventory:
-                                st.session_state.current_scanned_code = detected_code
-                                st.success(f"🎯 تم قراءة الكود: [{detected_code}]")
-                            else:
-                                st.error(f"⚠️ الباركود [{detected_code}] غير مسجل في قاعدة البيانات.")
-                                st.session_state.current_scanned_code = None
-                        else:
-                            st.warning("⚠️ تعذر قراءة الباركود، يمكنك كتابته يدوياً أدناه:")
-                            manual_c = st.text_input("كتابة الكود يدوياً:", key=f"manual_fallback_{st.session_state.inv_scan_counter}")
-                            if manual_c:
-                                m_clean = str(manual_c).strip().upper()
-                                if m_clean in system_inventory:
-                                    st.session_state.current_scanned_code = m_clean
-                                    st.rerun()
+            # --- وضع كاميرا الهاتف المباشرة (Live Scanner) ---
+            else:
+                if not st.session_state.current_scanned_code:
+                    live_scanner_html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+                        <style>
+                            body {{ margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; background: transparent; text-align: center; direction: rtl; }}
+                            #scanner-card {{ background: #FFFFFF; border: 2px solid #1C65A6; border-radius: 16px; padding: 12px; max-width: 480px; margin: 0 auto; box-shadow: 0 4px 15px rgba(28,101,166,0.1); }}
+                            #reader {{ width: 100%; border-radius: 12px; overflow: hidden; background: #000; }}
+                            .ctrl-btn {{ background-color: #1C65A6; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 800; font-size: 14px; margin-top: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }}
+                            .ctrl-btn:hover {{ background-color: #144A7A; }}
+                            #status {{ margin-top: 8px; font-size: 13px; font-weight: 800; color: #1C65A6; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div id="scanner-card">
+                            <div id="reader"></div>
+                            <div style="display:flex; justify-content:center; gap:10px;">
+                                <button class="ctrl-btn" id="flip-btn" onclick="toggleCamera()">🔄 تبديل الكاميرا (خلفية / أمامية)</button>
+                            </div>
+                            <div id="status">⚡ وجّه الكاميرا نحو الباركود، وسيلقطه فوراً بدون ضغط...</div>
+                        </div>
+
+                        <script>
+                            var html5QrCode = null;
+                            var currentFacingMode = "environment"; // الكاميرا الخلفية افتراضياً
+                            var isScanning = false;
+
+                            function playBeep() {{
+                                try {{
+                                    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                    var osc = ctx.createOscillator();
+                                    var gain = ctx.createGain();
+                                    osc.type = "sine";
+                                    osc.frequency.setValueAtTime(1900, ctx.currentTime);
+                                    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+                                    osc.connect(gain);
+                                    gain.connect(ctx.destination);
+                                    osc.start();
+                                    osc.stop(ctx.currentTime + 0.12);
+                                    if (navigator.vibrate) navigator.vibrate([70, 40, 70]);
+                                }} catch(e) {{}}
+                            }}
+
+                            function startCamera(facingMode) {{
+                                if (html5QrCode && isScanning) {{
+                                    html5QrCode.stop().then(function() {{
+                                        initCamera(facingMode);
+                                    }}).catch(function() {{
+                                        initCamera(facingMode);
+                                    }});
+                                }} else {{
+                                    initCamera(facingMode);
+                                }}
+                            }}
+
+                            function initCamera(facingMode) {{
+                                html5QrCode = new Html5Qrcode("reader");
+                                var config = {{
+                                    fps: 15,
+                                    qrbox: {{ width: 280, height: 160 }},
+                                    aspectRatio: 1.333
+                                }};
+
+                                html5QrCode.start(
+                                    {{ facingMode: facingMode }},
+                                    config,
+                                    function(decodedText, decodedResult) {{
+                                        // التقاط ناجح وفوري
+                                        playBeep();
+                                        document.getElementById("status").innerHTML = "🎯 تم التقاط: " + decodedText;
+                                        html5QrCode.stop().then(function() {{
+                                            sendCodeToSystem(decodedText);
+                                        }}).catch(function() {{
+                                            sendCodeToSystem(decodedText);
+                                        }});
+                                    }},
+                                    function(errorMessage) {{
+                                        // فحص مستمر
+                                    }}
+                                ).then(function() {{
+                                    isScanning = true;
+                                    document.getElementById("status").innerHTML = "🟢 الكاميرا تعمل (لايف)... وجّه الباركود داخل الإطار";
+                                }}).catch(function(err) {{
+                                    isScanning = false;
+                                    document.getElementById("status").innerHTML = "⚠️ تنبيه: يرجى السماح للمتصفح بالوصول للكاميرا.";
+                                }});
+                            }}
+
+                            function toggleCamera() {{
+                                currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+                                startCamera(currentFacingMode);
+                            }}
+
+                            function sendCodeToSystem(code) {{
+                                var sent = false;
+                                try {{
+                                    var pDoc = window.parent.document;
+                                    var input = pDoc.querySelector('input[placeholder*="مرر الإسكانر"]');
+                                    if (input) {{
+                                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                        nativeSetter.call(input, code);
+                                        input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                        input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                        input.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, key: 'Enter', keyCode: 13 }}));
+                                        sent = true;
+                                    }}
+                                }} catch(e) {{}}
+
+                                if (!sent) {{
+                                    try {{
+                                        var url = new URL(window.parent.location);
+                                        url.searchParams.set("scanned_code", code);
+                                        window.parent.location.replace(url.href);
+                                    }} catch(e) {{}}
+                                }}
+                            }}
+
+                            // بدء الكاميرا الخلفية تلقائياً فور فتح الصفحة
+                            window.addEventListener('load', function() {{
+                                try {{
+                                    if (window.frameElement) {{
+                                        window.frameElement.setAttribute("allow", "camera; microphone; autoplay");
+                                    }}
+                                }} catch(e) {{}}
+                                startCamera(currentFacingMode);
+                            }});
+                        </script>
+                    </body>
+                    </html>
+                    """
+                    components.html(live_scanner_html, height=390)
 
             # عرض كارت الصنف وتسجيل الكمية
             if st.session_state.current_scanned_code:
@@ -868,7 +961,7 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-        # 📝 تبويب مراجعة وتعديل محتويات الجلسة النشطة
+        # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
             st.markdown("### 📝 قائمة الأصناف المجرودة بالجلسة الحالية (تعديل وحذف مباشر)")
             st.info("💡 يمكنك تعديل كمية أي صنف مباشرة من الجدول، أو حذف أي صنف مسحته بالخطأ، ثم الضغط على زر الحفظ.")
@@ -883,8 +976,6 @@ with main_tab2:
                     })
                 
                 df_active = pd.DataFrame(active_list)
-                
-                # جدول تفاعلي للتعديل والحذف
                 edited_df = st.data_editor(
                     df_active,
                     column_config={
@@ -897,26 +988,24 @@ with main_tab2:
                     key="active_session_data_editor"
                 )
                 
-                col_sv_ed, col_cl_ed = st.columns(2)
-                with col_sv_ed:
-                    if st.button("💾 تطبيق وحفظ تعديلات الجلسة", type="primary", key="save_edited_session_btn"):
-                        new_scanned_map = {}
-                        for _, r in edited_df.iterrows():
-                            c_k = str(r["كود الصنف"]).strip().upper()
-                            q_v = int(r["الكمية المجردة"])
-                            if c_k and q_v > 0:
-                                new_scanned_map[c_k] = q_v
-                        
-                        l_inv = load_shared_inventory()
-                        l_inv["scanned_items"] = new_scanned_map
-                        save_shared_inventory(l_inv)
-                        st.success("🎉 تم تحديث وحفظ بيانات الجلسة بنجاح!")
-                        time.sleep(0.4)
-                        st.rerun()
+                if st.button("💾 تطبيق وحفظ تعديلات الجلسة", type="primary", key="save_edited_session_btn"):
+                    new_scanned_map = {}
+                    for _, r in edited_df.iterrows():
+                        c_k = str(r["كود الصنف"]).strip().upper()
+                        q_v = int(r["الكمية المجردة"])
+                        if c_k and q_v > 0:
+                            new_scanned_map[c_k] = q_v
+                    
+                    l_inv = load_shared_inventory()
+                    l_inv["scanned_items"] = new_scanned_map
+                    save_shared_inventory(l_inv)
+                    st.success("🎉 تم تحديث وحفظ بيانات الجلسة بنجاح!")
+                    time.sleep(0.4)
+                    st.rerun()
             else:
                 st.warning("⚠️ لم يتم مسح أي صنف في هذه الجلسة حتى الآن.")
 
-        # 🔍 تقرير الفروقات وإنهاء الجلسة النهائي
+        # ⚖️ تقرير الفروقات
         with tab_rep:
             rep_data = [
                 {
@@ -953,7 +1042,6 @@ with main_tab2:
                         "date": shared_inv.get('date'),
                         "report": rep_data
                     })
-                    # تصفير الجلسة بعد الترحيل
                     save_shared_inventory({"is_active": False, "scanned_items": {}})
                     st.success("✅ تم إنهاء الجلسة وحفظها في الأرشيف بنجاح!")
                     time.sleep(0.5)
@@ -962,7 +1050,7 @@ with main_tab2:
                 st.info("🔒 خاصية إغلاق جلسة الجرد مقتصرة على الإدارة (abobakr) فقط.")
 
 # ==========================================
-# 3. تبويب فواتير الجملة (مثبتة بالجلسة أيضاً)
+# 3. تبويب فواتير الجملة
 # ==========================================
 with main_tab3:
     shared_sales = load_shared_sales()
