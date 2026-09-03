@@ -91,7 +91,7 @@ def load_sales_history():
 def save_to_sales_history(record):
     history = load_sales_history()
     history.append(record)
-    save_json(SHARED_SALES_FILE, history)
+    save_json(HISTORY_SALES_FILE, history)
 
 def get_image_base64(img_path):
     try:
@@ -735,7 +735,7 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # ⚡ التقاط الكود وإعادة التوجيه لفتح كارت الصنف فوراً
+            # ⚡ استقبال الكود من الـ URL
             if "scanned_code" in st.query_params:
                 detected_param = st.query_params.get("scanned_code", "")
                 st.query_params.clear()
@@ -751,7 +751,7 @@ with main_tab2:
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📱 كاميرا الموبايل الاحترافية (قائمة العدسات المباشرة)"],
+                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📱 كاميرا الهاتف الاحترافية (قائمة اختيار العدسات بدقة)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
