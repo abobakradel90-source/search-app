@@ -629,7 +629,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع الإسكانر النظيف والمباشر)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -767,7 +767,7 @@ with main_tab2:
                     """
                     components.html(focus_barcode_js, height=0, width=0)
 
-            # 📱 كاميرا الموبايل: نظام مسح نقي ومباشر مدمج في أندرويد لا يعتمد على مكاتب خارجية
+            # 📱 كاميرا الموبايل مع زرين منفصلين صريحين (📸 الكاميرا الخلفية | 🤳 الكاميرا الأمامية)
             else:
                 if not st.session_state.current_scanned_code:
                     live_scanner_html = """
@@ -790,7 +790,7 @@ with main_tab2:
                             .video-container {
                                 position: relative;
                                 width: 100%;
-                                height: 280px;
+                                height: 270px;
                                 border-radius: 12px;
                                 overflow: hidden;
                                 background: #000000;
@@ -806,7 +806,7 @@ with main_tab2:
                                 left: 50%;
                                 transform: translate(-50%, -50%);
                                 width: 85%;
-                                height: 50%;
+                                height: 48%;
                                 border: 2px solid rgba(28, 101, 166, 0.85);
                                 border-radius: 10px;
                                 box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
@@ -826,27 +826,31 @@ with main_tab2:
                                 50% { top: 90%; }
                                 100% { top: 5%; }
                             }
+                            .btn-row {
+                                display: flex;
+                                gap: 8px;
+                                margin-top: 10px;
+                            }
                             .ctrl-btn {
                                 background-color: #1C65A6 !important;
                                 color: white !important;
                                 border: none !important;
-                                padding: 12px 20px !important;
-                                border-radius: 12px !important;
+                                padding: 11px 14px !important;
+                                border-radius: 10px !important;
                                 font-weight: 800 !important;
-                                font-size: 15px !important;
+                                font-size: 14px !important;
                                 cursor: pointer !important;
-                                margin-top: 12px !important;
-                                width: 100% !important;
-                                display: block !important;
-                                box-shadow: 0 4px 10px rgba(28,101,166,0.2) !important;
+                                flex: 1 !important;
+                                box-shadow: 0 3px 8px rgba(28,101,166,0.2) !important;
                             }
                             .ctrl-btn:hover { background-color: #144A7A !important; }
+                            .ctrl-btn.active { background-color: #059669 !important; }
                             #status {
-                                margin-top: 10px;
-                                font-size: 14px;
+                                margin-top: 8px;
+                                font-size: 13.5px;
                                 font-weight: 800;
                                 color: #1C65A6;
-                                min-height: 22px;
+                                min-height: 20px;
                             }
                         </style>
                     </head>
@@ -858,14 +862,16 @@ with main_tab2:
                                     <div class="laser"></div>
                                 </div>
                             </div>
-                            <!-- زر التبديل ظاهر وثابت دائماً -->
-                            <button id="toggle-cam-btn" class="ctrl-btn" onclick="toggleCamera()">🔄 تبديل الكاميرا (خلفية / أمامية)</button>
-                            <div id="status">📷 جاري فتح الكاميرا الخلفية تلقائياً...</div>
+                            <!-- زرين منفصلين صريحين لضمان فتح الخلفية أو الأمامية دون تداخل -->
+                            <div class="btn-row">
+                                <button id="btn-back" class="ctrl-btn active" onclick="switchCamera('environment')">📸 الكاميرا الخلفية</button>
+                                <button id="btn-front" class="ctrl-btn" onclick="switchCamera('user')">🤳 الكاميرا الأمامية</button>
+                            </div>
+                            <div id="status">📷 جاري فتح الكاميرا الخلفية...</div>
                         </div>
 
                         <script>
                             var currentStream = null;
-                            var currentFacing = "environment"; // الكاميرا الخلفية قياسياً
                             var isScanning = true;
                             var isSwitching = false;
                             var barcodeDetector = null;
@@ -901,7 +907,6 @@ with main_tab2:
                                 stopTracks();
                                 document.getElementById("status").innerHTML = "🎯 تم التقاط: " + code + " (جاري فتح كارت الصنف...)";
 
-                                // التحديث الفوري المباشر لـ Streamlit
                                 try {
                                     var url = new URL(window.parent.location.href);
                                     url.searchParams.set("scanned_code", code);
@@ -954,20 +959,24 @@ with main_tab2:
                                 requestAnimationFrame(scanFrame);
                             }
 
-                            function startCamera(facing) {
+                            function switchCamera(facing) {
                                 if (isSwitching) return;
                                 isSwitching = true;
                                 stopTracks();
 
                                 var statusEl = document.getElementById("status");
-                                statusEl.innerHTML = "⏳ جاري فتح " + (facing === "environment" ? "الكاميرا الخلفية..." : "الكاميرا الأمامية...");
+                                statusEl.innerHTML = "⏳ جاري تشغيل " + (facing === 'environment' ? "الكاميرا الخلفية" : "الكاميرا الأمامية") + "...";
 
-                                // إعطاء مهلة عتادية لمنع قفل الهاردوير بالأندرويد
+                                // تلوين الزر النشط
+                                document.getElementById("btn-back").classList.toggle("active", facing === 'environment');
+                                document.getElementById("btn-front").classList.toggle("active", facing === 'user');
+
+                                # مهلة تفريغ عتادية 300 ملي ثانية لتحرير حساس أندرويد تماماً
                                 setTimeout(function() {
                                     var constraints = {
                                         audio: false,
                                         video: {
-                                            facingMode: { ideal: facing },
+                                            facingMode: { exact: facing },
                                             width: { ideal: 1280 },
                                             height: { ideal: 720 }
                                         }
@@ -977,42 +986,40 @@ with main_tab2:
                                         currentStream = stream;
                                         isSwitching = false;
                                         isScanning = true;
-                                        currentFacing = facing;
 
                                         var videoEl = document.getElementById("scanner-video");
                                         videoEl.srcObject = stream;
                                         videoEl.play().then(function() {
-                                            statusEl.innerHTML = "🟢 " + (facing === "environment" ? "الكاميرا الخلفية تعمل" : "الكاميرا الأمامية تعمل") + " - وجّه الباركود داخل المربع";
-                                            document.getElementById("toggle-cam-btn").innerHTML = (facing === "environment" ? "🤳 التبديل للكاميرا الأمامية" : "📸 التبديل للكاميرا الخلفية");
+                                            statusEl.innerHTML = "🟢 " + (facing === 'environment' ? "الكاميرا الخلفية تعمل" : "الكاميرا الأمامية تعمل") + " - وجّه الباركود داخل الإطار";
                                             startDetectionLoop(videoEl);
                                         });
 
                                     }).catch(function(err) {
-                                        console.warn("Camera failed:", err);
-                                        if (facing === "environment") {
-                                            statusEl.innerHTML = "⚠️ جاري محاولة فتح العدسة المتاحة...";
-                                            setTimeout(function() {
-                                                isSwitching = false;
-                                                startCamera("user");
-                                            }, 200);
-                                        } else {
+                                        console.warn("Exact constraint failed, trying ideal:", err);
+                                        // محاولة ثانية بـ ideal إن رفض الهاز exact
+                                        navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: facing } }).then(function(stream) {
+                                            currentStream = stream;
                                             isSwitching = false;
-                                            statusEl.innerHTML = "❌ تعذر تشغيل الكاميرا، يرجى التأكد من إعطاء الصلاحية في المتصفح.";
-                                        }
-                                    });
-                                }, 250);
-                            }
+                                            isScanning = true;
 
-                            function toggleCamera() {
-                                if (isSwitching) return;
-                                var nextFacing = (currentFacing === "environment") ? "user" : "environment";
-                                startCamera(nextFacing);
+                                            var videoEl = document.getElementById("scanner-video");
+                                            videoEl.srcObject = stream;
+                                            videoEl.play().then(function() {
+                                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
+                                                startDetectionLoop(videoEl);
+                                            });
+                                        }).catch(function(err2) {
+                                            isSwitching = false;
+                                            statusEl.innerHTML = "❌ تعذر تشغيل العدسة. تأكد من إعطاء إذن الكاميرا.";
+                                        });
+                                    });
+                                }, 300);
                             }
 
                             window.addEventListener('load', function() {
                                 setupDetector();
                                 setTimeout(function() {
-                                    startCamera("environment");
+                                    switchCamera('environment');
                                 }, 200);
                             });
 
@@ -1022,7 +1029,7 @@ with main_tab2:
                     </body>
                     </html>
                     """
-                    components.html(live_scanner_html, height=420)
+                    components.html(live_scanner_html, height=410)
 
             # 📦 كارت الصنف وصورته وخانة إدخال الكمية (يظهر فور لقط الباركود)
             if st.session_state.current_scanned_code:
@@ -1059,7 +1066,7 @@ with main_tab2:
                         save_shared_inventory(l_inv)
                         
                         st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}] في الجلسة", icon="📦")
-                        # تصفير الحالة لترجع الكاميرا الخلفية تعمل تلقائياً للقطعة التالية
+                        # تصفير الحالة لإخفاء الكارت وإعادة فتح الكاميرا الخلفية تلقائياً للقطعة التالية
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
