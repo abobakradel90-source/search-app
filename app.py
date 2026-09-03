@@ -661,7 +661,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (باستخدام camera_input الأصلي الآمن لضمان فتح الكاميرا الخلفية عبر أزرار الموبايل)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -738,7 +738,7 @@ with main_tab2:
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 كاميرا الهاتف (التقاط الباركود المضمون 100%)"],
+                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 كاميرا الموبايل الآمنة (تدعم الكاميرا الخلفية والأمامية بضغطة زر)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
@@ -783,31 +783,31 @@ with main_tab2:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
             else:
-                st.markdown("##### 📸 التقاط صورة الباركود بكاميرا الموبايل (تعمل بدون أي أخطاء شاشة سوداء):")
-                cam_img_input = st.camera_input("التقط الباركود", key=f"safe_cam_input_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
+                st.markdown("##### 📸 اضغط على زر الكاميرا أدناه (يمكنك اختيار الكاميرا الخلفية مباشرة من زر التبديل داخل نافذة التصوير):")
+                phone_img = st.camera_input("التقط الباركود", key=f"native_cam_input_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
 
-                if cam_img_input is not None:
-                    with st.spinner("🔍 جاري قراءة الكود..."):
-                        pil_c = Image.open(cam_img_input)
-                        decoded_c = decode_barcode_from_image(pil_c)
-                        if decoded_c:
-                            if decoded_c in system_inventory:
-                                st.session_state.current_scanned_code = decoded_c
-                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{decoded_c}]")
+                if phone_img is not None:
+                    with st.spinner("🔍 جاري قراءة الكود من الصورة..."):
+                        p_img = Image.open(phone_img)
+                        code_res = decode_barcode_from_image(p_img)
+                        if code_res:
+                            if code_res in system_inventory:
+                                st.session_state.current_scanned_code = code_res
+                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{code_res}]")
                                 time.sleep(0.3)
                                 st.rerun()
                             else:
-                                st.error(f"⚠️ الكود [{decoded_c}] غير مسجل في النظام.")
+                                st.error(f"⚠️ الكود [{code_res}] غير مسجل في النظام.")
                         else:
                             st.warning("⚠️ لم يتم لقط الباركود بوضوح، يمكنك كتابته يدوياً أدناه:")
-                            m_code = st.text_input("كتابة الكود يدوياً:", key=f"fallback_manual_{st.session_state.inv_scan_counter}")
-                            if m_code:
-                                mc_clean = str(m_code).strip().upper()
-                                if mc_clean in system_inventory:
-                                    st.session_state.current_scanned_code = mc_clean
+                            m_val = st.text_input("كتابة الكود يدوياً:", key=f"manual_box_{st.session_state.inv_scan_counter}")
+                            if m_val:
+                                mv_clean = str(m_val).strip().upper()
+                                if mv_clean in system_inventory:
+                                    st.session_state.current_scanned_code = mv_clean
                                     st.rerun()
 
-            # 📦 عرض كارت الصنف وصورته وخانة إضافة الكمية فوراً
+            # 📦 كارت الصنف وصورته وخانة إدخال الكمية يظهران فوراً
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -815,7 +815,7 @@ with main_tab2:
                 
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
-                # عرض كارت الصنف وصورته الأصلية
+                # عرض كارت الصنف وصورته الأصلية واسمه
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
                 # نموذج إدخال الكمية والحفظ بـ Enter
