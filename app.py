@@ -629,7 +629,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (التقنية الناجحة الأصلية + كارت الصنف وخانة العدد)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -703,47 +703,24 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # ⚡ التقاط الكود وإعادة التوجيه الفوري لفتح كارت الصنف
-            if "scanned_code" in st.query_params:
-                detected_param = st.query_params.get("scanned_code", "")
-                st.query_params.clear()
-                if detected_param:
-                    c_clean = str(detected_param).strip().upper()
-                    if c_clean in system_inventory:
-                        st.session_state.current_scanned_code = c_clean
-                        st.toast(f"🎯 تم مسح الكود بنجاح: {c_clean}", icon="📦")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في قاعدة البيانات.")
-
+            # التقنية الأصلية السريعة والناجحة لمدخلات الكاميرا والإسكانر
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر الخارجي (كيبورد / سريع)", "📱 كاميرا الهاتف (مسح لايف وتلقائي بدون ضغط)"],
+                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📱 كاميرا الهاتف (التقاط الباركود)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-            barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
-            scanned_raw = st.text_input(
-                "🔫 خانة الباركود النشطة:",
-                key=barcode_field_key,
-                placeholder="مرر الإسكانر هنا..."
-            )
+            if scan_method == "🔫 جهاز الإسكانر (كيبورد / سريع)":
+                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+                scanned_raw = st.text_input(
+                    "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
+                    key=barcode_field_key,
+                    placeholder="مرر الإسكانر هنا..."
+                )
 
-            # معالجة القراءة من جهاز الإسكانر الخارجي
-            if scanned_raw:
-                c_clean = str(scanned_raw).strip().upper()
-                if c_clean in system_inventory:
-                    st.session_state.current_scanned_code = c_clean
-                    st.rerun()
-                else:
-                    st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
-                    st.session_state.current_scanned_code = None
-
-            # وضع الإسكانر الخارجي
-            if scan_method == "🔫 جهاز الإسكانر الخارجي (كيبورد / سريع)":
                 if not st.session_state.current_scanned_code:
                     focus_barcode_js = """
                     <script>
@@ -767,223 +744,41 @@ with main_tab2:
                     """
                     components.html(focus_barcode_js, height=0, width=0)
 
-            # 📱 كاميرا الموبايل النظيفة مع خيار رفع صورة كبديل احتياطي فورى فائق السرعة
+                if scanned_raw:
+                    c_clean = str(scanned_raw).strip().upper()
+                    if c_clean in system_inventory:
+                        st.session_state.current_scanned_code = c_clean
+                    else:
+                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
+                        st.session_state.current_scanned_code = None
             else:
-                if not st.session_state.current_scanned_code:
-                    st.info("💡 لضمان عمل الكاميرا المباشرة بسلاسة، استخدم الزر أدناه، أو قم برفع **صورة الباركود** مباشرة كبديل فوري وسريع في حال قيود المتصفح.")
-                    
-                    live_scanner_html = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="utf-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                        <style>
-                            body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; text-align: center; direction: rtl; }
-                            #scanner-card {
-                                background: #FFFFFF;
-                                border: 2.5px solid #1C65A6;
-                                border-radius: 16px;
-                                padding: 14px;
-                                max-width: 480px;
-                                margin: 0 auto;
-                                box-shadow: 0 6px 18px rgba(28,101,166,0.12);
-                            }
-                            .video-container {
-                                position: relative;
-                                width: 100%;
-                                height: 260px;
-                                border-radius: 12px;
-                                overflow: hidden;
-                                background: #111111;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                            }
-                            video {
-                                width: 100%;
-                                height: 100%;
-                                object-fit: cover;
-                            }
-                            .placeholder-text {
-                                color: #FFFFFF;
-                                font-weight: bold;
-                                font-size: 14px;
-                                padding: 20px;
-                            }
-                            .ctrl-btn {
-                                background-color: #1C65A6 !important;
-                                color: white !important;
-                                border: none !important;
-                                padding: 12px 18px !important;
-                                border-radius: 10px !important;
-                                font-weight: 800 !important;
-                                font-size: 14px !important;
-                                cursor: pointer !important;
-                                width: 100% !important;
-                                box-shadow: 0 3px 8px rgba(28,101,166,0.2) !important;
-                                margin-top: 10px;
-                            }
-                            .ctrl-btn:hover { background-color: #144A7A !important; }
-                            .ctrl-btn.start { background-color: #10B981 !important; }
-                            #status {
-                                margin-top: 8px;
-                                font-size: 13.5px;
-                                font-weight: 800;
-                                color: #1C65A6;
-                                min-height: 20px;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div id="scanner-card">
-                            <div class="video-container" id="vid-container">
-                                <div class="placeholder-text" id="ph-text">اضغط على زر (تشغيل الكاميرا الخلفية) بالأسفل للبدء</div>
-                                <video id="scanner-video" autoplay playsinline muted style="display:none;"></video>
-                            </div>
-                            <button class="ctrl-btn start" onclick="launchCamera('environment')">▶️ تشغيل الكاميرا الخلفية الآن</button>
-                            <div id="status">جاهز للتشغيل...</div>
-                        </div>
+                st.markdown("##### 📸 وجّه كاميرا الموبايل نحو باركود الصنف:")
+                phone_cam = st.camera_input("التقط صورة الباركود", key=f"inv_phone_cam_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
 
-                        <script>
-                            var currentStream = null;
-                            var isScanning = false;
-                            var barcodeDetector = null;
-
-                            function playBeep() {
-                                try {
-                                    var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                    var osc = ctx.createOscillator();
-                                    var gain = ctx.createGain();
-                                    osc.type = "sine";
-                                    osc.frequency.setValueAtTime(1900, ctx.currentTime);
-                                    gain.gain.setValueAtTime(0.4, ctx.currentTime);
-                                    osc.connect(gain);
-                                    gain.connect(ctx.destination);
-                                    osc.start();
-                                    osc.stop(ctx.currentTime + 0.12);
-                                    if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
-                                } catch(e) {}
-                            }
-
-                            function stopStream() {
-                                isScanning = false;
-                                if (currentStream) {
-                                    currentStream.getTracks().forEach(function(t) { t.stop(); });
-                                    currentStream = null;
-                                }
-                            }
-
-                            function sendCodeToSystem(code) {
-                                playBeep();
-                                stopStream();
-                                document.getElementById("status").innerHTML = "🎯 تم التقاط: " + code + " (جاري فتح الصنف...)";
-
-                                try {
-                                    var url = new URL(window.parent.location.href);
-                                    url.searchParams.set("scanned_code", code);
-                                    window.parent.location.href = url.href;
-                                    return;
-                                } catch(e) {}
-                            }
-
-                            function setupDetector() {
-                                if ('BarcodeDetector' in window) {
-                                    try {
-                                        barcodeDetector = new BarcodeDetector({
-                                            formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code']
-                                        });
-                                    } catch(e) {
-                                        barcodeDetector = null;
-                                    }
-                                }
-                            }
-
-                            function startLoop(videoEl) {
-                                if (!barcodeDetector) return;
-                                function frame() {
-                                    if (!isScanning) return;
-                                    if (videoEl.readyState >= 2) {
-                                        barcodeDetector.detect(videoEl).then(function(barcodes) {
-                                            if (barcodes.length > 0 && barcodes[0].rawValue) {
-                                                sendCodeToSystem(barcodes[0].rawValue.trim());
-                                                return;
-                                            }
-                                            if (isScanning) requestAnimationFrame(frame);
-                                        }).catch(function() {
-                                            if (isScanning) requestAnimationFrame(frame);
-                                        });
-                                    } else {
-                                        if (isScanning) requestAnimationFrame(frame);
-                                    }
-                                }
-                                requestAnimationFrame(frame);
-                            }
-
-                            function launchCamera(facing) {
-                                stopStream();
-                                setupDetector();
-                                var statusEl = document.getElementById("status");
-                                statusEl.innerHTML = "⏳ جاري تشغيل الكاميرا الخلفية...";
-
-                                navigator.mediaDevices.getUserMedia({
-                                    audio: false,
-                                    video: { facingMode: { exact: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }
-                                }).then(function(stream) {
-                                    handleSuccess(stream);
-                                }).catch(function(err) {
-                                    navigator.mediaDevices.getUserMedia({
-                                        audio: false,
-                                        video: { facingMode: facing }
-                                    }).then(function(stream) {
-                                        handleSuccess(stream);
-                                    }).catch(function(err2) {
-                                        statusEl.innerHTML = "❌ تعذر تشغيل الكاميرا. تأكد من إعطاء إذن الكاميرا في المتصفح.";
-                                    });
-                                });
-                            }
-
-                            function handleSuccess(stream) {
-                                currentStream = stream;
-                                isScanning = true;
-                                var videoEl = document.getElementById("scanner-video");
-                                var phEl = document.getElementById("ph-text");
-                                
-                                videoEl.srcObject = stream;
-                                videoEl.style.display = "block";
-                                phEl.style.display = "none";
-
-                                videoEl.play().then(function() {
-                                    document.getElementById("status").innerHTML = "🟢 الكاميرا الخلفية تعمل - وجّه الباركود داخل الإطار";
-                                    startLoop(videoEl);
-                                });
-                            }
-
-                            window.addEventListener('pagehide', stopStream);
-                            window.addEventListener('beforeunload', stopStream);
-                        </script>
-                    </body>
-                    </html>
-                    """
-                    components.html(live_scanner_html, height=380)
-
-                    # خيار رفع صورة الباركود كبديل فوري وسريع
-                    st.markdown("---")
-                    st.markdown("##### 📁 أو التقط صورة الباركود وارفعها مباشرة (بديل فوري):")
-                    barcode_img_file = st.file_uploader("اختر صورة الباركود من الهاتف", type=["jpg", "jpeg", "png"], key="barcode_img_upload_fallback")
-                    if barcode_img_file is not None:
-                        with st.spinner("🔍 جاري قراءة الباركود من الصورة المرفوعة..."):
-                            img_b = Image.open(barcode_img_file)
-                            dec_c = decode_barcode_from_image(img_b)
-                            if dec_c and dec_c in system_inventory:
-                                st.session_state.current_scanned_code = dec_c
-                                st.success(f"✅ تم التعرف على الكود بنجاح: [{dec_c}]")
+                if phone_cam is not None:
+                    with st.spinner("🔍 جاري قراءة الباركود من الصورة..."):
+                        img_cam = Image.open(phone_cam)
+                        detected_code = decode_barcode_from_image(img_cam)
+                        
+                        if detected_code:
+                            if detected_code in system_inventory:
+                                st.session_state.current_scanned_code = detected_code
+                                st.success(f"🎯 تم قراءة الكود بنجاح: [{detected_code}]")
                                 time.sleep(0.3)
                                 st.rerun()
                             else:
-                                st.error("⚠️ لم يتم العثور على باركود صالح في الصورة أو الكود غير مسجل في النظام.")
+                                st.error(f"⚠️ الباركود [{detected_code}] غير مسجل في قاعدة البيانات.")
+                                st.session_state.current_scanned_code = None
+                        else:
+                            st.warning("⚠️ تعذر قراءة الباركود تلقائياً، يمكنك كتابته يدوياً أدناه:")
+                            manual_c = st.text_input("كتابة الكود يدوياً:", key=f"manual_fallback_{st.session_state.inv_scan_counter}")
+                            if manual_c:
+                                m_clean = str(manual_c).strip().upper()
+                                if m_clean in system_inventory:
+                                    st.session_state.current_scanned_code = m_clean
+                                    st.rerun()
 
-            # 📦 كارت الصنف وصورته وخانة إدخال الكمية (يظهر فور لقط الباركود أو رفعه)
+            # 📦 عرض كارت الصنف بصورته ورصيده وخانة إضافة الكمية فور التقاط الكود
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -991,8 +786,10 @@ with main_tab2:
                 
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
+                # عرض كارت الصنف وصورته
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
+                # نموذج إدخال الكمية والحفظ بـ Enter
                 with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
                     col_q, col_s = st.columns([3, 2])
                     with col_q:
@@ -1020,6 +817,7 @@ with main_tab2:
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
+                # تركيز المؤشر داخل خانة العدد تلقائياً
                 focus_qty_js = """
                 <script>
                 (function() {
@@ -1260,7 +1058,7 @@ with main_tab3:
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
-    st.markdown("يعرس الأصناف المتوفرة بالمستودع مرتبة تصاعدياً مع حركة الرصيد والأسعار والصور:")
+    st.markdown("يعرض الأصناف المتوفرة بالمستودع مرتبة تصاعدياً مع حركة الرصيد والأسعار والصور:")
     
     shared_s_cat = load_shared_sales()
     deductions = shared_s_cat.get("deductions", {})
