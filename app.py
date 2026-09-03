@@ -661,7 +661,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (باستخدام st.camera_input المضمون والآمن)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -738,7 +738,7 @@ with main_tab2:
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 التقاط بالكاميرا (نفس كاميرا تبويب البحث المضمونة تماماً)"],
+                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 التقاط بالكاميرا (نفس كاميرا تبويب البحث الآمنة 100%)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
@@ -783,30 +783,30 @@ with main_tab2:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
             else:
-                st.markdown("##### 📸 التقاط صورة الباركود بالكاميرا الطبيعية للآيفون أو الأندرويد:")
-                cam_file = st.camera_input("وجّه الكاميرا نحو الباركود", key=f"inv_native_camera_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
+                st.markdown("##### 📸 التقاط صورة الباركود:")
+                safe_photo = st.camera_input("وجّه الكاميرا نحو الباركود", key=f"inv_safe_cam_input_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
 
-                if cam_file is not None:
+                if safe_photo is not None:
                     with st.spinner("🔍 جاري قراءة الكود من الصورة..."):
-                        img_obj = Image.open(cam_file)
-                        decoded_val = decode_barcode_from_image(img_obj)
+                        pil_img_obj = Image.open(safe_photo)
+                        code_found = decode_barcode_from_image(pil_img_obj)
                         
-                        if decoded_val:
-                            code_clean = str(decoded_val).strip().upper()
-                            if code_clean in system_inventory:
-                                st.session_state.current_scanned_code = code_clean
-                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{code_clean}]")
+                        if code_found:
+                            clean_code = str(code_found).strip().upper()
+                            if clean_code in system_inventory:
+                                st.session_state.current_scanned_code = clean_code
+                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{clean_code}]")
                                 time.sleep(0.3)
                                 st.rerun()
                             else:
-                                st.error(f"⚠️ الكود [{code_clean}] غير مسجل في النظام.")
+                                st.error(f"⚠️ الكود [{clean_code}] غير مسجل في النظام.")
                         else:
-                            st.warning("⚠️ لم يتم قراءة الباركود تلقائياً من الصورة، يمكنك كتابته يدوياً أدناه:")
-                            manual_input = st.text_input("كتابة الكود يدوياً:", key=f"manual_box_{st.session_state.inv_scan_counter}")
-                            if manual_input:
-                                m_clean = str(manual_input).strip().upper()
-                                if m_clean in system_inventory:
-                                    st.session_state.current_scanned_code = m_clean
+                            st.warning("⚠️ لم يتم لقط الباركود تلقائياً من الصورة، يرجى كتابته يدوياً أدناه:")
+                            manual_txt = st.text_input("كتابة الكود يدوياً:", key=f"manual_input_box_{st.session_state.inv_scan_counter}")
+                            if manual_txt:
+                                mt_clean = str(manual_txt).strip().upper()
+                                if mt_clean in system_inventory:
+                                    st.session_state.current_scanned_code = mt_clean
                                     st.rerun()
 
             # 📦 كارت الصنف وصورته وخانة إضافة الكمية تظهر فوراً بمجرد المسح
@@ -817,7 +817,7 @@ with main_tab2:
                 
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
-                # عرض كارت الصنف وصورته الأصلية واسمه ورصيده
+                # عرض كارت الصنف وصورته واسمه ورصيده
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
                 # نموذج إدخال الكمية والحفظ بـ Enter
