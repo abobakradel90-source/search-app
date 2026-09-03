@@ -100,38 +100,6 @@ def get_image_base64(img_path):
     except Exception:
         return ""
 
-def decode_barcode_from_image(pil_img):
-    try:
-        import zxingcpp
-        results = zxingcpp.read_barcodes(pil_img)
-        if results:
-            return results[0].text.strip().upper()
-    except Exception:
-        pass
-    
-    try:
-        from pyzbar.pyzbar import decode
-        barcodes = decode(pil_img)
-        if barcodes:
-            return barcodes[0].data.decode("utf-8").strip().upper()
-    except Exception:
-        pass
-        
-    try:
-        import cv2
-        import numpy as np
-        cv_img = np.array(pil_img.convert('RGB'))[:, :, ::-1]
-        detector = cv2.barcode.BarcodeDetector()
-        ok, decoded_info, _, _ = detector.detectAndDecode(cv_img)
-        if ok and decoded_info:
-            val = decoded_info[0] if isinstance(decoded_info, (list, tuple)) else decoded_info
-            if str(val).strip():
-                return str(val).strip().upper()
-    except Exception:
-        pass
-
-    return None
-
 def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
     try:
         with Image.open(img_path) as img:
@@ -577,6 +545,20 @@ else:
         process_df(df_p)
     except: pass
 
+def match_product_code(raw_code):
+    if not raw_code:
+        return None
+    code_clean = str(raw_code).strip().upper()
+    if code_clean in system_inventory:
+        return code_clean
+    
+    # محاولة المطابقة بتجاهل الأصفار البادئة أو الزوائد
+    stripped = code_clean.lstrip('0')
+    for k in system_inventory.keys():
+        if k == code_clean or k.lstrip('0') == stripped:
+            return k
+    return None
+
 def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
     for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
@@ -598,6 +580,14 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
             <div class="{stock_class}">{stock_text}</div>
         </div>
     </div>""", unsafe_allow_html=True)
+
+# 🌟 فحص الرابط لاستقبال الباركود تلقائياً في حال وجوده بالـ Query Params 🌟
+if "scanned_code" in st.query_params:
+    param_val = st.query_params.get("scanned_code", "")
+    st.query_params.clear()
+    matched_k = match_product_code(param_val)
+    if matched_k:
+        st.session_state.current_scanned_code = matched_k
 
 # 🌟 التبويبات الرئيسية 🌟
 tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
@@ -653,7 +643,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (مع الربط التلقائي الفوري لكارت الصنف وخانة العدد)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -727,372 +717,21 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # ⚡ استقبال الكود من الإسكانر فوراً
-            if "scanned_code" in st.query_params:
-                detected_param = st.query_params.get("scanned_code", "")
-                st.query_params.clear()
-                if detected_param:
-                    c_clean = str(detected_param).strip().upper()
-                    if c_clean in system_inventory:
-                        st.session_state.current_scanned_code = c_clean
-                        st.toast(f"🎯 تم مسح الباركود بنجاح: [{c_clean}]", icon="📦")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في قاعدة البيانات.")
-
-            st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
-            scan_method = st.radio(
-                "🎯 اختر وسيلة الإسكان:",
-                [
-                    "📹 إسكانر الكاميرا المباشر (تلقائي لايف - أودو Odoo)",
-                    "🔫 جهاز الإسكانر اللاسلكي (كيبورد / سريع)"
-                ],
-                horizontal=True,
-                key="scan_method_choice"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            if scan_method == "📹 إسكانر الكاميرا المباشر (تلقائي لايف - أودو Odoo)":
-                if not st.session_state.current_scanned_code:
-                    pro_live_scanner_html = """
-                    <!DOCTYPE html>
-                    <html lang="ar" dir="rtl">
-                    <head>
-                        <meta charset="utf-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                        <script src="https://unpkg.com/@zxing/library@latest"></script>
-                        <style>
-                            body { margin: 0; padding: 5px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }
-                            .scanner-box {
-                                background: #FFFFFF;
-                                border: 2.5px solid #1C65A6;
-                                border-radius: 14px;
-                                padding: 12px;
-                                max-width: 460px;
-                                margin: 0 auto;
-                                box-shadow: 0 4px 15px rgba(28, 101, 166, 0.15);
-                            }
-                            /* لا يوجد overflow: hidden أو border-radius هنا لمنع الشاشة السوداء في أندرويد */
-                            .video-container {
-                                width: 100%;
-                                height: 260px;
-                                background: #111111;
-                                position: relative;
-                            }
-                            video {
-                                width: 100%;
-                                height: 100%;
-                                object-fit: cover;
-                            }
-                            .laser-line {
-                                position: absolute;
-                                top: 50%;
-                                left: 5%;
-                                width: 90%;
-                                height: 2px;
-                                background: #EF4444;
-                                box-shadow: 0 0 8px #EF4444;
-                                pointer-events: none;
-                            }
-                            .lens-bar {
-                                display: flex;
-                                gap: 6px;
-                                justify-content: center;
-                                flex-wrap: wrap;
-                                margin-top: 10px;
-                            }
-                            .lens-btn {
-                                background: #F1F5F9;
-                                color: #1E293B;
-                                border: 1.5px solid #CBD5E1;
-                                border-radius: 8px;
-                                padding: 6px 12px;
-                                font-size: 13px;
-                                font-weight: 700;
-                                cursor: pointer;
-                            }
-                            .lens-btn.active {
-                                background: #1C65A6;
-                                color: #FFFFFF;
-                                border-color: #1C65A6;
-                            }
-                            #status-bar {
-                                margin-top: 8px;
-                                font-size: 13.5px;
-                                font-weight: 800;
-                                color: #1C65A6;
-                                min-height: 20px;
-                            }
-                            .fallback-file-btn {
-                                display: block;
-                                background: #059669;
-                                color: #FFFFFF;
-                                border-radius: 10px;
-                                padding: 11px 16px;
-                                font-size: 14px;
-                                font-weight: 800;
-                                margin-top: 10px;
-                                cursor: pointer;
-                                text-decoration: none;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="scanner-box">
-                            <div class="video-container">
-                                <video id="scanner-feed" autoplay playsinline webkit-playsinline muted></video>
-                                <div class="laser-line"></div>
-                            </div>
-                            
-                            <div id="lens-buttons" class="lens-bar">
-                                <span style="font-size:12px; color:#64748B;">🔍 جاري تهيئة عدسات الهاتف...</span>
-                            </div>
-
-                            <div id="status-bar">⏳ جاري الاتصال بالكاميرا الخلفية...</div>
-
-                            <!-- زر احتياطي مؤكد يفتح كاميرا الهاتف الأصلية فوراً في حال القيود الأمنية -->
-                            <label class="fallback-file-btn">
-                                📷 فتح كاميرا الهاتف الخلفية مباشرة
-                                <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="readBarcodeFromImage(this)">
-                            </label>
-                        </div>
-
-                        <script>
-                            var activeStream = null;
-                            var codeReader = null;
-                            var isLocked = false;
-                            var detector = null;
-
-                            function playBeep() {
-                                try {
-                                    var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                    var osc = ctx.createOscillator();
-                                    var gain = ctx.createGain();
-                                    osc.type = "sine";
-                                    osc.frequency.setValueAtTime(1900, ctx.currentTime);
-                                    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                                    osc.connect(gain);
-                                    gain.connect(ctx.destination);
-                                    osc.start();
-                                    osc.stop(ctx.currentTime + 0.12);
-                                    if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
-                                } catch(e) {}
-                            }
-
-                            function sendCode(code) {
-                                if (isLocked) return;
-                                isLocked = true;
-                                playBeep();
-                                document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + code + "</b>";
-
-                                if (codeReader) { try { codeReader.reset(); } catch(e) {} }
-                                if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
-
-                                setTimeout(function() {
-                                    try {
-                                        var url = new URL(window.parent.location.href);
-                                        url.searchParams.set("scanned_code", code.trim());
-                                        window.parent.location.href = url.href;
-                                    } catch(e) {}
-                                }, 120);
-                            }
-
-                            async function initDetector() {
-                                if ('BarcodeDetector' in window) {
-                                    try {
-                                        detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
-                                    } catch(e) { detector = null; }
-                                }
-                            }
-
-                            function scanLoop(videoEl) {
-                                if (isLocked) return;
-                                if (detector && videoEl.readyState >= 2) {
-                                    detector.detect(videoEl).then(barcodes => {
-                                        if (barcodes.length > 0 && barcodes[0].rawValue) {
-                                            sendCode(barcodes[0].rawValue.trim());
-                                            return;
-                                        }
-                                        if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                    }).catch(() => {
-                                        if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                    });
-                                } else {
-                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                }
-                            }
-
-                            async function startLens(deviceId, btnElement) {
-                                var statusEl = document.getElementById("status-bar");
-                                statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
-
-                                document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
-                                if (btnElement) btnElement.classList.add('active');
-
-                                if (activeStream) {
-                                    activeStream.getTracks().forEach(t => t.stop());
-                                    activeStream = null;
-                                }
-                                if (codeReader) {
-                                    try { codeReader.reset(); } catch(e) {}
-                                }
-
-                                var videoConstraints = {
-                                    width: { ideal: 1280 },
-                                    height: { ideal: 720 }
-                                };
-                                if (deviceId) {
-                                    videoConstraints.deviceId = { exact: deviceId };
-                                } else {
-                                    videoConstraints.facingMode = { ideal: "environment" };
-                                }
-
-                                try {
-                                    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
-                                    activeStream = stream;
-                                    var v = document.getElementById("scanner-feed");
-                                    v.srcObject = stream;
-                                    v.setAttribute('playsinline', 'true');
-                                    v.setAttribute('webkit-playsinline', 'true');
-                                    v.muted = true;
-                                    await v.play();
-                                    statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
-
-                                    if (detector) {
-                                        scanLoop(v);
-                                    } else {
-                                        codeReader = new ZXing.BrowserMultiFormatReader();
-                                        codeReader.decodeFromVideoElement(v, (result, err) => {
-                                            if (result && result.text) {
-                                                sendCode(result.text);
-                                            }
-                                        });
-                                    }
-                                } catch(err) {
-                                    statusEl.innerHTML = "⚠️ تعذر تشغيل هذه العدسة (جرب الضغط على عدسة أخرى أعلاه).";
-                                }
-                            }
-
-                            async function setupCameras() {
-                                await initDetector();
-                                try {
-                                    const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                                    promptStream.getTracks().forEach(t => t.stop());
-
-                                    const devices = await navigator.mediaDevices.enumerateDevices();
-                                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                                    const lensContainer = document.getElementById("lens-buttons");
-                                    lensContainer.innerHTML = "";
-
-                                    if (videoDevices.length === 0) {
-                                        document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
-                                        return;
-                                    }
-
-                                    let targetIndex = 0;
-                                    videoDevices.forEach((dev, idx) => {
-                                        const b = document.createElement("button");
-                                        b.className = "lens-btn";
-                                        const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
-                                        const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
-                                        
-                                        b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
-                                        b.onclick = function() { startLens(dev.deviceId, b); };
-                                        lensContainer.appendChild(b);
-
-                                        if (isBack) {
-                                            targetIndex = idx;
-                                        }
-                                    });
-
-                                    // بدء تشغيل العدسة الخلفية تلقائياً
-                                    var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
-                                    startLens(videoDevices[targetIndex].deviceId, firstBtn);
-                                } catch(e) {
-                                    // إذا حظر المتصفح قراءة أسماء العدسات، اطلب الكاميرا الخلفية مباشرة
-                                    startLens(null, null);
-                                }
-                            }
-
-                            function readBarcodeFromImage(input) {
-                                if (input.files && input.files[0]) {
-                                    document.getElementById("status-bar").innerHTML = "🔍 جاري قراءة الكود من الصورة...";
-                                    var reader = new FileReader();
-                                    reader.onload = function(e) {
-                                        var img = new Image();
-                                        img.onload = function() {
-                                            var z = new ZXing.BrowserMultiFormatReader();
-                                            z.decodeFromImage(img).then(res => {
-                                                if (res && res.text) sendCode(res.text);
-                                            }).catch(() => {
-                                                document.getElementById("status-bar").innerHTML = "⚠️ لم يتم لقط الباركود، التقط صورة أقرب.";
-                                            });
-                                        };
-                                        img.src = e.target.result;
-                                    };
-                                    reader.readAsDataURL(input.files[0]);
-                                }
-                            }
-
-                            window.addEventListener('load', () => setTimeout(setupCameras, 200));
-                        </script>
-                    </body>
-                    </html>
-                    """
-                    components.html(pro_live_scanner_html, height=450)
-
-            else:  # جهاز الإسكانر اللاسلكي
-                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
-                scanned_raw = st.text_input(
-                    "🔫 امسح باركود الصنف (جاهز للضرب مباشرة):",
-                    key=barcode_field_key,
-                    placeholder="مرر الإسكانر هنا..."
-                )
-
-                if not st.session_state.current_scanned_code:
-                    focus_barcode_js = """
-                    <script>
-                    (function() {
-                        var tries = 0;
-                        var interval = setInterval(function() {
-                            tries++;
-                            try {
-                                var doc = window.parent.document;
-                                var el = doc.querySelector('input[placeholder*="مرر الإسكانر"]');
-                                if (el) {
-                                    el.focus();
-                                    el.select();
-                                    clearInterval(interval);
-                                }
-                            } catch(e) {}
-                            if (tries > 35) clearInterval(interval);
-                        }, 40);
-                    })();
-                    </script>
-                    """
-                    components.html(focus_barcode_js, height=0, width=0)
-
-                if scanned_raw:
-                    c_clean = str(scanned_raw).strip().upper()
-                    if c_clean in system_inventory:
-                        st.session_state.current_scanned_code = c_clean
-                    else:
-                        st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
-                        st.session_state.current_scanned_code = None
-
-            # 📦 كارت الصنف وصورته وخانة إضافة الكمية تظهر فوراً بمجرد المسح
+            # -------------------------------------------------------------
+            # الحالة 1: تم مسح كود بنجاح -> إظهار كارت الصنف وخانة الكمية فقط
+            # -------------------------------------------------------------
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
                 already_counted = scanned_map.get(active_c, 0)
                 
-                st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:10px 16px; border-radius:10px; margin-bottom:12px; font-weight:800; font-size:16px;'>🎯 تم لقط الباركود بنجاح! إجمالي المجرد حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
-                # عرض كارت الصنف وصورته واسمه ورصيده
+                # كارت الصنف وصورته
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
-                # نموذج إدخال الكمية والحفظ بـ Enter
-                with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
+                # نموذج إضافة الكمية وضغط Enter
+                with st.form(key=f"inv_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
                     col_q, col_s = st.columns([3, 2])
                     with col_q:
                         add_q = st.number_input(
@@ -1114,11 +753,12 @@ with main_tab2:
                         l_inv["scanned_items"][active_c] = max(0, l_inv["scanned_items"].get(active_c, 0) + add_q)
                         save_shared_inventory(l_inv)
                         
-                        st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}] في الجلسة", icon="📦")
+                        st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
+                # تركيز المؤشر فوراً داخل خانة الكمية
                 focus_qty_js = """
                 <script>
                 (function() {
@@ -1134,17 +774,344 @@ with main_tab2:
                                 clearInterval(interval);
                             }
                         } catch(e) {}
-                        if (tries > 35) clearInterval(interval);
+                        if (tries > 30) clearInterval(interval);
                     }, 40);
                 })();
                 </script>
                 """
                 components.html(focus_qty_js, height=0, width=0)
 
-                if st.button("❌ إلغاء وتخطي الموديل", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
+                if st.button("⏭️ تخطي والصنف التالي (إلغاء)", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
                     st.session_state.current_scanned_code = None
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
+
+            # -------------------------------------------------------------
+            # الحالة 2: انتظار مسح باركود جديد -> إظهار الكاميرا وحقل الإدخال
+            # -------------------------------------------------------------
+            else:
+                # حقل استقبال الباركود (يتم حقن الكود فيه برمجياً فور مسحه من الكاميرا)
+                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+                scanned_raw = st.text_input(
+                    "🔫 باركود الصنف (جاهز للاستقبال التلقائي من الكاميرا أو الإسكانر):",
+                    key=barcode_field_key,
+                    placeholder="وجّه الكاميرا نحو الباركود أو مرر الإسكانر..."
+                )
+
+                if scanned_raw:
+                    matched_k = match_product_code(scanned_raw)
+                    if matched_k:
+                        st.session_state.current_scanned_code = matched_k
+                        st.rerun()
+                    else:
+                        st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
+
+                # مشغل الكاميرا اللايف مع الحاقن البرمجي السريع
+                pro_live_scanner_html = """
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                    <script src="https://unpkg.com/@zxing/library@latest"></script>
+                    <style>
+                        body { margin: 0; padding: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }
+                        .scanner-box {
+                            background: #FFFFFF;
+                            border: 2.5px solid #1C65A6;
+                            border-radius: 14px;
+                            padding: 10px;
+                            max-width: 480px;
+                            margin: 0 auto;
+                            box-shadow: 0 4px 15px rgba(28, 101, 166, 0.15);
+                        }
+                        .video-container {
+                            width: 100%;
+                            height: 250px;
+                            background: #111111;
+                            position: relative;
+                        }
+                        video {
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }
+                        .laser-line {
+                            position: absolute;
+                            top: 50%;
+                            left: 5%;
+                            width: 90%;
+                            height: 2px;
+                            background: #EF4444;
+                            box-shadow: 0 0 8px #EF4444;
+                            pointer-events: none;
+                        }
+                        .lens-bar {
+                            display: flex;
+                            gap: 6px;
+                            justify-content: center;
+                            flex-wrap: wrap;
+                            margin-top: 8px;
+                        }
+                        .lens-btn {
+                            background: #F1F5F9;
+                            color: #1E293B;
+                            border: 1.5px solid #CBD5E1;
+                            border-radius: 8px;
+                            padding: 6px 12px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            cursor: pointer;
+                        }
+                        .lens-btn.active {
+                            background: #1C65A6;
+                            color: #FFFFFF;
+                            border-color: #1C65A6;
+                        }
+                        #status-bar {
+                            margin-top: 8px;
+                            font-size: 13.5px;
+                            font-weight: 800;
+                            color: #1C65A6;
+                            min-height: 20px;
+                        }
+                        .fallback-file-btn {
+                            display: block;
+                            background: #059669;
+                            color: #FFFFFF;
+                            border-radius: 10px;
+                            padding: 10px 16px;
+                            font-size: 14px;
+                            font-weight: 800;
+                            margin-top: 8px;
+                            cursor: pointer;
+                            text-decoration: none;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="scanner-box">
+                        <div class="video-container">
+                            <video id="scanner-feed" autoplay playsinline webkit-playsinline muted></video>
+                            <div class="laser-line"></div>
+                        </div>
+                        
+                        <div id="lens-buttons" class="lens-bar">
+                            <span style="font-size:12px; color:#64748B;">🔍 جاري تشغيل الكاميرا الخلفية...</span>
+                        </div>
+
+                        <div id="status-bar">🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة</div>
+
+                        <label class="fallback-file-btn">
+                            📷 التقاط بالكاميرا الأصلية للهاتف (بديل فوري)
+                            <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="readBarcodeFromImage(this)">
+                        </label>
+                    </div>
+
+                    <script>
+                        var activeStream = null;
+                        var codeReader = null;
+                        var isLocked = false;
+                        var detector = null;
+
+                        function playBeep() {
+                            try {
+                                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                var osc = ctx.createOscillator();
+                                var gain = ctx.createGain();
+                                osc.type = "sine";
+                                osc.frequency.setValueAtTime(1900, ctx.currentTime);
+                                gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                                osc.connect(gain);
+                                gain.connect(ctx.destination);
+                                osc.start();
+                                osc.stop(ctx.currentTime + 0.12);
+                                if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+                            } catch(e) {}
+                        }
+
+                        function sendCode(code) {
+                            if (isLocked) return;
+                            isLocked = true;
+                            playBeep();
+                            var cleanCode = code.trim().toUpperCase();
+                            document.getElementById("status-bar").innerHTML = "🎯 تم لقط الكود: <b>" + cleanCode + "</b><br>⏳ جاري فتح كارت الصنف...";
+
+                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+                            if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
+
+                            // 1. حقن الكود مباشرة داخل حقل الإدخال في Streamlit
+                            var injected = false;
+                            try {
+                                var doc = window.parent.document;
+                                var targetInput = doc.querySelector('input[placeholder*="مرر الإسكانر"]') || doc.querySelector('input[data-testid="stTextInput"]');
+                                if (targetInput) {
+                                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                    nativeSetter.call(targetInput, cleanCode);
+                                    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                    targetInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', keyCode: 13 }));
+                                    injected = true;
+                                }
+                            } catch(err) {}
+
+                            // 2. تحديث الرابط كخطة أمان بديلة
+                            if (!injected) {
+                                setTimeout(function() {
+                                    try {
+                                        var ref = document.referrer || window.location.href;
+                                        var u = new URL(ref);
+                                        u.searchParams.set("scanned_code", cleanCode);
+                                        window.top.location.href = u.href;
+                                    } catch(e) {
+                                        var newUrl = window.location.href.split('?')[0] + "?scanned_code=" + encodeURIComponent(cleanCode);
+                                        window.top.location.href = newUrl;
+                                    }
+                                }, 100);
+                            }
+                        }
+
+                        async function initDetector() {
+                            if ('BarcodeDetector' in window) {
+                                try {
+                                    detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
+                                } catch(e) { detector = null; }
+                            }
+                        }
+
+                        function scanLoop(videoEl) {
+                            if (isLocked) return;
+                            if (detector && videoEl.readyState >= 2) {
+                                detector.detect(videoEl).then(barcodes => {
+                                    if (barcodes.length > 0 && barcodes[0].rawValue) {
+                                        sendCode(barcodes[0].rawValue.trim());
+                                        return;
+                                    }
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                }).catch(() => {
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                });
+                            } else {
+                                if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                            }
+                        }
+
+                        async function startLens(deviceId, btnElement) {
+                            var statusEl = document.getElementById("status-bar");
+                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
+
+                            document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+                            if (btnElement) btnElement.classList.add('active');
+
+                            if (activeStream) {
+                                activeStream.getTracks().forEach(t => t.stop());
+                                activeStream = null;
+                            }
+                            if (codeReader) {
+                                try { codeReader.reset(); } catch(e) {}
+                            }
+
+                            var videoConstraints = {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            };
+                            if (deviceId) {
+                                videoConstraints.deviceId = { exact: deviceId };
+                            } else {
+                                videoConstraints.facingMode = { ideal: "environment" };
+                            }
+
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
+                                activeStream = stream;
+                                var v = document.getElementById("scanner-feed");
+                                v.srcObject = stream;
+                                v.setAttribute('playsinline', 'true');
+                                v.setAttribute('webkit-playsinline', 'true');
+                                v.muted = true;
+                                await v.play();
+                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة";
+
+                                if (detector) {
+                                    scanLoop(v);
+                                } else {
+                                    codeReader = new ZXing.BrowserMultiFormatReader();
+                                    codeReader.decodeFromVideoElement(v, (result, err) => {
+                                        if (result && result.text) {
+                                            sendCode(result.text);
+                                        }
+                                    });
+                                }
+                            } catch(err) {
+                                statusEl.innerHTML = "⚠️ اضغط على زر عدسة أخرى أعلاه للتبديل.";
+                            }
+                        }
+
+                        async function setupCameras() {
+                            await initDetector();
+                            try {
+                                const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                                promptStream.getTracks().forEach(t => t.stop());
+
+                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                                const lensContainer = document.getElementById("lens-buttons");
+                                lensContainer.innerHTML = "";
+
+                                if (videoDevices.length === 0) {
+                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
+                                    return;
+                                }
+
+                                let targetIndex = 0;
+                                videoDevices.forEach((dev, idx) => {
+                                    const b = document.createElement("button");
+                                    b.className = "lens-btn";
+                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
+                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
+                                    
+                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
+                                    b.onclick = function() { startLens(dev.deviceId, b); };
+                                    lensContainer.appendChild(b);
+
+                                    if (isBack) {
+                                        targetIndex = idx;
+                                    }
+                                });
+
+                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
+                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
+                            } catch(e) {
+                                startLens(null, null);
+                            }
+                        }
+
+                        function readBarcodeFromImage(input) {
+                            if (input.files && input.files[0]) {
+                                document.getElementById("status-bar").innerHTML = "🔍 جاري قراءة الكود من الصورة...";
+                                var reader = new FileReader();
+                                reader.onload = function(e) {
+                                    var img = new Image();
+                                    img.onload = function() {
+                                        var z = new ZXing.BrowserMultiFormatReader();
+                                        z.decodeFromImage(img).then(res => {
+                                            if (res && res.text) sendCode(res.text);
+                                        }).catch(() => {
+                                            document.getElementById("status-bar").innerHTML = "⚠️ لم يتم لقط الباركود، التقط صورة أقرب.";
+                                        });
+                                    };
+                                    img.src = e.target.result;
+                                };
+                                reader.readAsDataURL(input.files[0]);
+                            }
+                        }
+
+                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
+                    </script>
+                </body>
+                </html>
+                """
+                components.html(pro_live_scanner_html, height=440)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
@@ -1284,8 +1251,8 @@ with main_tab3:
             scan_pos = st.text_input("كود الصنف للفاتورة:", key="pos_barcode_in")
             
             if scan_pos:
-                p_c = str(scan_pos).strip().upper()
-                if p_c in system_inventory:
+                p_c = match_product_code(scan_pos)
+                if p_c:
                     p_data = system_inventory[p_c]
                     s_qty = float(p_data.get('sys_stock', 0.0))
                     price = float(p_data.get('price', 0.0))
