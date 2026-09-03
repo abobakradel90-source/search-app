@@ -661,7 +661,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (التقنية الناجحة الأصلية المضمونة + كارت الصنف وخانة العدد)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -807,7 +807,7 @@ with main_tab2:
                                     st.session_state.current_scanned_code = mc_clean
                                     st.rerun()
 
-            # 📦 عرض كارت الصنف وصورته وخانة إضافة الكمية فوراً بمجرد اللقط
+            # 📦 عرض كارت الصنف وصورته وخانة إضافة الكمية فوراً
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
