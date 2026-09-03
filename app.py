@@ -629,7 +629,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع زر تشغيل صريح وخيار رفع صورة الباركود كبديل فوري)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -703,7 +703,7 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # ⚡ التقاط الباركود المباشر عبر الرابط
+            # ⚡ التقاط الكود وإعادة التوجيه الفوري لفتح كارت الصنف
             if "scanned_code" in st.query_params:
                 detected_param = st.query_params.get("scanned_code", "")
                 st.query_params.clear()
@@ -711,7 +711,7 @@ with main_tab2:
                     c_clean = str(detected_param).strip().upper()
                     if c_clean in system_inventory:
                         st.session_state.current_scanned_code = c_clean
-                        st.toast(f"🎯 تم مسح الكود: {c_clean}", icon="📦")
+                        st.toast(f"🎯 تم مسح الكود بنجاح: {c_clean}", icon="📦")
                         st.rerun()
                     else:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في قاعدة البيانات.")
@@ -767,10 +767,10 @@ with main_tab2:
                     """
                     components.html(focus_barcode_js, height=0, width=0)
 
-            # 📱 وضع كاميرا الهاتف مع زر تشغيل صريح لضمان عدم ظهور شاشة سوداء وخيار رفع صورة الباركود كبديل فوري
+            # 📱 كاميرا الموبايل النظيفة مع خيار رفع صورة كبديل احتياطي فورى فائق السرعة
             else:
                 if not st.session_state.current_scanned_code:
-                    st.info("💡 إذا ظهرت شاشة سوداء بسبب قيود المتصفح، يمكنك الضغط على زر **(تشغيل الكاميرا)** أدناه أو استخدام خيار **رفع صورة الباركود** الفوري.")
+                    st.info("💡 لضمان عمل الكاميرا المباشرة بسلاسة، استخدم الزر أدناه، أو قم برفع **صورة الباركود** مباشرة كبديل فوري وسريع في حال قيود المتصفح.")
                     
                     live_scanner_html = """
                     <!DOCTYPE html>
@@ -811,11 +811,6 @@ with main_tab2:
                                 font-size: 14px;
                                 padding: 20px;
                             }
-                            .btn-row {
-                                display: flex;
-                                gap: 8px;
-                                margin-top: 10px;
-                            }
                             .ctrl-btn {
                                 background-color: #1C65A6 !important;
                                 color: white !important;
@@ -825,8 +820,9 @@ with main_tab2:
                                 font-weight: 800 !important;
                                 font-size: 14px !important;
                                 cursor: pointer !important;
-                                flex: 1 !important;
+                                width: 100% !important;
                                 box-shadow: 0 3px 8px rgba(28,101,166,0.2) !important;
+                                margin-top: 10px;
                             }
                             .ctrl-btn:hover { background-color: #144A7A !important; }
                             .ctrl-btn.start { background-color: #10B981 !important; }
@@ -842,13 +838,10 @@ with main_tab2:
                     <body>
                         <div id="scanner-card">
                             <div class="video-container" id="vid-container">
-                                <div class="placeholder-text" id="ph-text">اضغط على زر (تشغيل الكاميرا) بالأسفل للبدء</div>
+                                <div class="placeholder-text" id="ph-text">اضغط على زر (تشغيل الكاميرا الخلفية) بالأسفل للبدء</div>
                                 <video id="scanner-video" autoplay playsinline muted style="display:none;"></video>
                             </div>
-                            <div class="btn-row">
-                                <button class="ctrl-btn start" onclick="launchCamera('environment')">▶️ تشغيل الكاميرا الخلفية</button>
-                                <button class="ctrl-btn" onclick="launchCamera('user')">🤳 الأمامية</button>
-                            </div>
+                            <button class="ctrl-btn start" onclick="launchCamera('environment')">▶️ تشغيل الكاميرا الخلفية الآن</button>
                             <div id="status">جاهز للتشغيل...</div>
                         </div>
 
@@ -931,7 +924,7 @@ with main_tab2:
                                 stopStream();
                                 setupDetector();
                                 var statusEl = document.getElementById("status");
-                                statusEl.innerHTML = "⏳ جاري تشغيل الكاميرا...";
+                                statusEl.innerHTML = "⏳ جاري تشغيل الكاميرا الخلفية...";
 
                                 navigator.mediaDevices.getUserMedia({
                                     audio: false,
@@ -939,14 +932,13 @@ with main_tab2:
                                 }).then(function(stream) {
                                     handleSuccess(stream);
                                 }).catch(function(err) {
-                                    // محاولة بوضع ideal البديل إن رفض الهاتف exact
                                     navigator.mediaDevices.getUserMedia({
                                         audio: false,
                                         video: { facingMode: facing }
                                     }).then(function(stream) {
                                         handleSuccess(stream);
                                     }).catch(function(err2) {
-                                        statusEl.innerHTML = "❌ تعذر تشغيل الكاميرا. تأكد من إعطاء الإذن للمتصفح.";
+                                        statusEl.innerHTML = "❌ تعذر تشغيل الكاميرا. تأكد من إعطاء إذن الكاميرا في المتصفح.";
                                     });
                                 });
                             }
@@ -962,7 +954,7 @@ with main_tab2:
                                 phEl.style.display = "none";
 
                                 videoEl.play().then(function() {
-                                    document.getElementById("status").innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
+                                    document.getElementById("status").innerHTML = "🟢 الكاميرا الخلفية تعمل - وجّه الباركود داخل الإطار";
                                     startLoop(videoEl);
                                 });
                             }
@@ -973,11 +965,11 @@ with main_tab2:
                     </body>
                     </html>
                     """
-                    components.html(live_scanner_html, height=390)
+                    components.html(live_scanner_html, height=380)
 
-                    # خيار بديل فوري: رفع صورة الباركود لتجنب مشاكل المتصفح تماماً
+                    # خيار رفع صورة الباركود كبديل فوري وسريع
                     st.markdown("---")
-                    st.markdown("##### 📁 أو التقط صورة الباركود وارفعها مباشرة (بديل فوري وسريع):")
+                    st.markdown("##### 📁 أو التقط صورة الباركود وارفعها مباشرة (بديل فوري):")
                     barcode_img_file = st.file_uploader("اختر صورة الباركود من الهاتف", type=["jpg", "jpeg", "png"], key="barcode_img_upload_fallback")
                     if barcode_img_file is not None:
                         with st.spinner("🔍 جاري قراءة الباركود من الصورة المرفوعة..."):
@@ -985,13 +977,13 @@ with main_tab2:
                             dec_c = decode_barcode_from_image(img_b)
                             if dec_c and dec_c in system_inventory:
                                 st.session_state.current_scanned_code = dec_c
-                                st.success(fn := f"✅ تم التعرف على الكود بنجاح: [{dec_c}]")
+                                st.success(f"✅ تم التعرف على الكود بنجاح: [{dec_c}]")
                                 time.sleep(0.3)
                                 st.rerun()
                             else:
                                 st.error("⚠️ لم يتم العثور على باركود صالح في الصورة أو الكود غير مسجل في النظام.")
 
-            # 📦 كارت الصنف وصورته وخانة إدخال الكمية (يظهر فور لقط الباركود)
+            # 📦 كارت الصنف وصورته وخانة إدخال الكمية (يظهر فور لقط الباركود أو رفعه)
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -1268,7 +1260,7 @@ with main_tab3:
 # ==========================================
 with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
-    st.markdown("يعرض الأصناف المتوفرة بالمستودع مرتبة تصاعدياً مع حركة الرصيد والأسعار والصور:")
+    st.markdown("يعرس الأصناف المتوفرة بالمستودع مرتبة تصاعدياً مع حركة الرصيد والأسعار والصور:")
     
     shared_s_cat = load_shared_sales()
     deductions = shared_s_cat.get("deductions", {})
