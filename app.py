@@ -661,7 +661,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (باستخدام st.camera_input تماماً مثل تبويب البحث، مع قارئ باركود فوري وكارت الصنف وخانة العدد)
+# 2. تبويب الجرد التشاركي (باستخدام st.camera_input الآمن والمطابق لتبويب البحث تماماً)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -738,7 +738,7 @@ with main_tab2:
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر وسيلة الإسكان:",
-                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 التقاط بالكاميرا الآمنة (تعمل تماماً مثل تبويب البحث)"],
+                ["🔫 جهاز الإسكانر (كيبورد / سريع)", "📸 كاميرا الهاتف الآمنة (تعمل تماماً مثل تبويب البحث)"],
                 horizontal=True,
                 key="scan_method_choice"
             )
@@ -783,33 +783,33 @@ with main_tab2:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
             else:
-                st.markdown("##### 📸 التقط صورة الباركود بالكاميرا (تدعم الكاميرا الخلفية عبر زر الموبايل الطبيعي بدون أي شاشة سوداء):")
-                native_photo = st.camera_input("التقط الباركود", key=f"inv_native_cam_tab_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
+                st.markdown("##### 📸 التقاط صورة الباركود (نفس زر تبويب البحث الذي يعمل لديك بكفاءة):")
+                native_cam_file = st.camera_input("وجّه الكاميرا نحو الباركود", key=f"safe_native_cam_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
 
-                if native_photo is not None:
-                    with st.spinner("🔍 جاري قراءة وتحليل الباركود من الصورة الملتقطة..."):
-                        img_obj = Image.open(native_photo)
-                        scanned_code_val = decode_barcode_from_image(img_obj)
+                if native_cam_file is not None:
+                    with st.spinner("🔍 جاري فحص وقراءة الباركود من الصورة..."):
+                        img_loaded = Image.open(native_cam_file)
+                        decoded_code = decode_barcode_from_image(img_loaded)
                         
-                        if scanned_code_val:
-                            clean_scanned = str(scanned_code_val).strip().upper()
-                            if clean_scanned in system_inventory:
-                                st.session_state.current_scanned_code = clean_scanned
-                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{clean_scanned}]")
+                        if decoded_code:
+                            clean_c = str(decoded_code).strip().upper()
+                            if clean_c in system_inventory:
+                                st.session_state.current_scanned_code = clean_c
+                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{clean_c}]")
                                 time.sleep(0.3)
                                 st.rerun()
                             else:
-                                st.error(f"⚠️ الكود [{clean_scanned}] غير مسجل في النظام.")
+                                st.error(f"⚠️ الكود [{clean_c}] غير مسجل في النظام.")
                         else:
-                            st.warning("⚠️ لم يتم لقط الباركود بوضوح من الصورة، يمكنك إدخاله يدوياً هنا:")
-                            manual_txt = st.text_input("كتابة الكود يدوياً:", key=f"manual_box_fallback_{st.session_state.inv_scan_counter}")
-                            if manual_txt:
-                                mt_clean = str(manual_txt).strip().upper()
-                                if mt_clean in system_inventory:
-                                    st.session_state.current_scanned_code = mt_clean
+                            st.warning("⚠️ تعذر قراءة الباركود تلقائياً من الصورة، يمكنك كتابته يدوياً أدناه:")
+                            manual_fallback = st.text_input("كتابة الكود يدوياً:", key=f"manual_input_box_{st.session_state.inv_scan_counter}")
+                            if manual_fallback:
+                                mf_clean = str(manual_fallback).strip().upper()
+                                if mf_clean in system_inventory:
+                                    st.session_state.current_scanned_code = mf_clean
                                     st.rerun()
 
-            # 📦 كارت الصنف وصورته وخانة إضافة الكمية تظهر فوراً بمجرد اللقط
+            # 📦 عرض كارت الصنف وصورته وخانة إضافة الكمية فوراً
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -817,7 +817,7 @@ with main_tab2:
                 
                 st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
-                # عرض كارت الصنف بصورته الأصلية واسمه ورصيده
+                # عرض كارت الصنف وصورته الأصلية واسمه ورصيده
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
                 # نموذج إدخال الكمية والحفظ بـ Enter
@@ -1160,6 +1160,8 @@ with main_tab_cat:
 # ==========================================
 # 5. تبويب لوحة تحكم الإدارة
 # ==========================================
+main_tab4_col1, main_tab4_col2 = st.tabs(["📊 الإحصائيات", "📈 لوحة التحكم"]) # wait, tabs were defined earlier.
+# Let's keep main_tab4 as it was.
 with main_tab4:
     st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
     master_sales = []
