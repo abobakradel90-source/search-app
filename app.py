@@ -30,16 +30,8 @@ st.set_page_config(
 
 USERS = {
     "abobakr": "admin2026",    
-    "gomaa": "123456",       
-    "hytham": "edstore",
-    "sawy": "123456",
-    "ahmed": "123456",
-    "zidan": "123456",
-    "sheded": "123456",
-    "ali": "123456",
-    "yahia": "123456",
-    "shymaa": "123456",
-    "abdallah": "123456",
+    "mohamed": "123456",       
+    "ahmed": "edstore"         
 }
 
 if 'logged_in' not in st.session_state:
@@ -48,35 +40,54 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 دوال إدارة قواعد البيانات
+# 🌐 دوال إدارة قواعد البيانات وحفظ الجلسات بالمسار المطلق
 # ==========================================
-SHARED_INV_FILE = "shared_inventory.json"
-MASTER_DB_FILE = "master_database.csv"
-HISTORY_INV_FILE = "inventory_history.json"
-SHARED_SALES_FILE = "shared_sales.json"
-HISTORY_SALES_FILE = "sales_history.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
+MASTER_DB_FILE = os.path.join(BASE_DIR, "master_database.csv")
+HISTORY_INV_FILE = os.path.join(BASE_DIR, "inventory_history.json")
+SHARED_SALES_FILE = os.path.join(BASE_DIR, "shared_sales.json")
+HISTORY_SALES_FILE = os.path.join(BASE_DIR, "sales_history.json")
 
 def load_json(file_path, default_data):
     if os.path.exists(file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f: return json.load(f)
-        except: pass
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
     return default_data
 
 def save_json(file_path, data):
-    with open(file_path, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        st.error(f"خطأ في حفظ البيانات: {e}")
 
-def load_shared_inventory(): return load_json(SHARED_INV_FILE, {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}})
-def save_shared_inventory(data): save_json(SHARED_INV_FILE, data)
-def load_inv_history(): return load_json(HISTORY_INV_FILE, [])
+def load_shared_inventory():
+    return load_json(SHARED_INV_FILE, {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}})
+
+def save_shared_inventory(data):
+    save_json(SHARED_INV_FILE, data)
+
+def load_inv_history():
+    return load_json(HISTORY_INV_FILE, [])
+
 def save_to_inv_history(record):
     history = load_inv_history()
     history.append(record)
     save_json(HISTORY_INV_FILE, history)
 
-def load_shared_sales(): return load_json(SHARED_SALES_FILE, {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}})
-def save_shared_sales(data): save_json(SHARED_SALES_FILE, data)
-def load_sales_history(): return load_json(HISTORY_SALES_FILE, [])
+def load_shared_sales():
+    return load_json(SHARED_SALES_FILE, {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}})
+
+def save_shared_sales(data):
+    save_json(SHARED_SALES_FILE, data)
+
+def load_sales_history():
+    return load_json(HISTORY_SALES_FILE, [])
+
 def save_to_sales_history(record):
     history = load_sales_history()
     history.append(record)
@@ -84,21 +95,20 @@ def save_to_sales_history(record):
 
 def get_image_base64(img_path):
     try:
-        with open(img_path, "rb") as img_file: return base64.b64encode(img_file.read()).decode('utf-8')
-    except: return ""
+        with open(img_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode('utf-8')
+    except Exception:
+        return ""
 
-# دالة فك شفرة الباركود من صور كاميرا الهاتف بذكاء ومرونة
 def decode_barcode_from_image(pil_img):
-    # 1. التجربة عبر zxing-cpp (الأدق والأسرع)
     try:
         import zxingcpp
         results = zxingcpp.read_barcodes(pil_img)
         if results:
             return results[0].text.strip().upper()
-    except ImportError:
+    except Exception:
         pass
     
-    # 2. التجربة عبر pyzbar كخيار بديل
     try:
         from pyzbar.pyzbar import decode
         barcodes = decode(pil_img)
@@ -107,7 +117,6 @@ def decode_barcode_from_image(pil_img):
     except Exception:
         pass
         
-    # 3. التجربة عبر OpenCV كخيار ثالث
     try:
         import cv2
         import numpy as np
@@ -137,7 +146,8 @@ def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
                     if a_box and (a_box[2] - a_box[0] > 20) and (a_box[3] - a_box[1] > 20):
                         if a_box != (0, 0, w, h):
                             crop_box = a_box
-                except: pass
+                except Exception:
+                    pass
             
             if not crop_box:
                 corners = [
@@ -183,7 +193,6 @@ def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
             nh = max(1, int(sh * scale))
             
             resized_shoe = shoe_cropped.resize((nw, nh), Image.Resampling.LANCZOS)
-            
             canvas = Image.new("RGB", (target_w, target_h), (255, 255, 255))
             offset = ((target_w - nw) // 2, (target_h - nh) // 2)
             canvas.paste(resized_shoe, offset)
@@ -271,7 +280,8 @@ def generate_catalog_excel(catalog_items):
                     xl_img.width = 145
                     xl_img.height = 95
                     ws.add_image(xl_img, f"A{row_idx}")
-            except: pass
+            except Exception:
+                pass
                 
     buf = io.BytesIO()
     wb.save(buf)
@@ -283,7 +293,6 @@ logo_base64 = get_image_base64("edstore.jpg")
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
-        
         :root {{ --primary-color: #1C65A6 !important; }}
         html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
         .stApp {{ background-color: #F0F4F8; }}
@@ -291,10 +300,7 @@ st.markdown(f"""
         footer {{ visibility: hidden; }}
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         [data-testid="stToolbar"] {{ display: none !important; }}
-        
-        [data-testid="stSidebarResizerRoot"],
-        [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
-        
+        [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
         .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
         .stTabs [data-baseweb="tab-list"] {{
@@ -306,9 +312,7 @@ st.markdown(f"""
             border-bottom: none !important;
             flex-wrap: wrap;
         }}
-        
-        .stTabs [data-baseweb="tab-highlight"],
-        .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
+        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
         
         .stTabs [data-baseweb="tab"] {{
             background-color: #FFFFFF !important;
@@ -321,14 +325,12 @@ st.markdown(f"""
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04) !important;
             transition: all 0.2s ease !important;
         }}
-        
         .stTabs [data-baseweb="tab"]:hover {{
             border-color: #1C65A6 !important;
             color: #1C65A6 !important;
             background-color: #F8FAFC !important;
             transform: translateY(-1px);
         }}
-        
         .stTabs [data-baseweb="tab"][aria-selected="true"] {{
             background-color: #1C65A6 !important;
             border: 2px solid #1C65A6 !important;
@@ -336,19 +338,13 @@ st.markdown(f"""
             box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
         }}
         
-        div[data-baseweb="input"],
-        div[data-baseweb="base-input"],
-        div[data-baseweb="select"] > div {{
+        div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {{
             background-color: #FFFFFF !important;
             border: 2px solid #94A3B8 !important;
             border-radius: 10px !important;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-            transition: border-color 0.2s ease !important;
         }}
-        
-        div[data-baseweb="input"]:focus-within,
-        div[data-baseweb="base-input"]:focus-within,
-        div[data-baseweb="select"]:focus-within > div {{
+        div[data-baseweb="input"]:focus-within, div[data-baseweb="base-input"]:focus-within, div[data-baseweb="select"]:focus-within > div {{
             border-color: #1C65A6 !important;
             box-shadow: 0 0 0 3px rgba(28, 101, 166, 0.2) !important;
             outline: none !important;
@@ -477,23 +473,25 @@ st.markdown("<br>", unsafe_allow_html=True)
 # --- محرك البحث الذكي ---
 @st.cache_resource
 def download_chroma_db():
-    zip_p, ext_p, mark_f = "chroma_db.zip", "./chroma_db", "./chroma_db/fashion_clip_v3.txt"
+    zip_p = os.path.join(BASE_DIR, "chroma_db.zip")
+    ext_p = os.path.join(BASE_DIR, "chroma_db")
+    mark_f = os.path.join(ext_p, "fashion_clip_v3.txt")
     download_url = "https://github.com/abobakradel90-source/search-app/releases/download/v1.0/chroma_db.zip"
     if os.path.exists(ext_p) and not os.path.exists(mark_f): shutil.rmtree(ext_p)
     if not os.path.exists(ext_p):
         with st.spinner('📦 جاري تهيئة مستودع البيانات الذكي...'):
             try:
                 urllib.request.urlretrieve(download_url, zip_p)
-                with zipfile.ZipFile(zip_p, 'r') as zip_ref: zip_ref.extractall(".")
+                with zipfile.ZipFile(zip_p, 'r') as zip_ref: zip_ref.extractall(BASE_DIR)
                 if os.path.exists(zip_p): os.remove(zip_p)
                 with open(mark_f, 'w') as f: f.write("done")
-            except: pass
+            except Exception: pass
 
 @st.cache_resource
 def load_vision():
     download_chroma_db()
     model_id = "patrickjohncyh/fashion-clip"
-    return CLIPModel.from_pretrained(model_id), CLIPProcessor.from_pretrained(model_id), chromadb.PersistentClient(path="./chroma_db").get_collection(name="products_collection")
+    return CLIPModel.from_pretrained(model_id), CLIPProcessor.from_pretrained(model_id), chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db")).get_collection(name="products_collection")
 
 try: model, processor, collection = load_vision()
 except Exception as e: st.error(f"⚠️ خطأ محرك الذكاء الاصطناعي: {e}")
@@ -584,14 +582,14 @@ if os.path.exists(MASTER_DB_FILE):
     except: pass
 else:
     try:
-        df_p = pd.read_csv('products.csv', encoding='utf-8-sig', sep=None, engine='python')
+        df_p = pd.read_csv(os.path.join(BASE_DIR, 'products.csv'), encoding='utf-8-sig', sep=None, engine='python')
         process_df(df_p)
     except: pass
 
 def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     img_html = '<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">بدون صورة</div>'
     for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
-        img_path = os.path.join("compressed_images", f"{p_code}{ext}")
+        img_path = os.path.join(BASE_DIR, "compressed_images", f"{p_code}{ext}")
         if os.path.exists(img_path):
             img_html = f'<img src="data:image/jpeg;base64,{get_image_base64(img_path)}" class="product-img">'
             break
@@ -652,7 +650,7 @@ with main_tab1:
                         refined = []
                         for i in range(len(res['distances'][0])):
                             fn = res['metadatas'][0][i].get('filename', '')
-                            img_p = os.path.join("compressed_images", fn)
+                            img_p = os.path.join(BASE_DIR, "compressed_images", fn)
                             c_dist = compare_histograms(u_color, get_color_histogram(Image.open(img_p))) if os.path.exists(img_p) else 0
                             refined.append({'fn': fn, 'score': res['distances'][0][i] + (c_dist * 0.5)})
                         refined.sort(key=lambda x: x['score'])
@@ -664,24 +662,54 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع ميزة مسح كاميرا الهاتف)
+# 2. تبويب الجرد التشاركي (مع بقاء الجلسة مفتوحة وخاصية المراجعة والتعديل)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
+    
     if not shared_inv.get("is_active", False):
         st.markdown("### 🆕 إعداد جلسة جرد جديدة")
-        inv_n = st.text_input("اسم/رقم الجرد", key="inv_n_in")
-        inv_r = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "نهاية العام"], key="inv_r_in")
-        inv_d = st.date_input("تاريخ الجرد", datetime.date.today(), key="inv_d_in")
-        
-        if st.button("🚀 فتح جلسة الجرد", key="open_inv_btn"):
-            if not inv_n.strip(): st.error("⚠️ اكتب اسم الجرد أولاً!")
-            else:
-                save_shared_inventory({"is_active": True, "name": inv_n.strip(), "reason": inv_r, "date": str(inv_d), "scanned_items": {}})
-                st.rerun()
+        col_i1, col_i2 = st.columns(2)
+        with col_i1:
+            inv_n = st.text_input("اسم/رقم الجرد (مثال: جرد مخزن رئيسي 1)", key="inv_n_in")
+            inv_r = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "نهاية العام"], key="inv_r_in")
+        with col_i2:
+            inv_d = st.date_input("تاريخ الجرد", datetime.date.today(), key="inv_d_in")
+            st.write("")
+            st.write("")
+            if st.button("🚀 فتح جلسة الجرد وتثبيتها", key="open_inv_btn"):
+                if not inv_n.strip():
+                    st.error("⚠️ اكتب اسم الجرد أولاً للمتابعة!")
+                else:
+                    save_shared_inventory({
+                        "is_active": True,
+                        "name": inv_n.strip(),
+                        "reason": inv_r,
+                        "date": str(inv_d),
+                        "scanned_items": {}
+                    })
+                    st.success("✅ تم فتح الجلسة وتثبيتها بنجاح!")
+                    time.sleep(0.3)
+                    st.rerun()
+
+        # أمان: خيار استعادة جلسة سابقة من ملف خارجي إن وجد
+        with st.expander("📥 استعادة جلسة جرد محفوظة مسبقاً (Backup)", expanded=False):
+            backup_file = st.file_uploader("ارفع ملف الجلسة (.json):", type=['json'], key="restore_inv_uploader")
+            if backup_file and st.button("استعادة هذه الجلسة فوراً 🔄", key="restore_inv_btn"):
+                try:
+                    data = json.load(backup_file)
+                    data["is_active"] = True
+                    save_shared_inventory(data)
+                    st.success("✅ تمت استعادة الجلسة بنجاح!")
+                    time.sleep(0.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"ملف غير صالح: {e}")
     else:
-        st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد نشطة:</b> {shared_inv.get("name")} | <b>السبب:</b> {shared_inv.get("reason")}</div>', unsafe_allow_html=True)
-        tab_sum, tab_scan, tab_rep = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود", "⚖️ تقرير الفروقات"])
+        # شريط رأس الجلسة النشطة
+        st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد نشطة ومحفوظة:</b> {shared_inv.get("name")} | <b>السبب:</b> {shared_inv.get("reason")} | <b>التاريخ:</b> {shared_inv.get("date")}</div>', unsafe_allow_html=True)
+        
+        tab_sum, tab_scan, tab_edit, tab_rep = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود", "📝 مراجعة وتعديل المجرد", "⚖️ تقرير الفروقات"])
         scanned_map = shared_inv.get("scanned_items", {})
 
         with tab_sum:
@@ -690,8 +718,20 @@ with main_tab2:
             with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(system_inventory)}</div></div>', unsafe_allow_html=True)
             with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي القطع</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
             with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي المجرد فعلياً</div><div class="metric-value" style="color:#F59E0B;">{int(sum(scanned_map.values()))}</div></div>', unsafe_allow_html=True)
+            
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
+            col_rf, col_bk = st.columns(2)
+            with col_rf:
+                if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
+            with col_bk:
+                # زر تصدير الجلسة الحالية كملف JSON لضمان عدم ضياعها
+                json_bytes = json.dumps(shared_inv, ensure_ascii=False, indent=4).encode('utf-8')
+                st.download_button(
+                    "💾 تحميل نسخة احتياطية للجلسة الحالية (JSON)",
+                    data=json_bytes,
+                    file_name=f"Active_Inventory_{shared_inv.get('name')}.json",
+                    mime="application/json"
+                )
 
         with tab_scan:
             if "inv_scan_counter" not in st.session_state:
@@ -699,7 +739,6 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # 🔘 شريط اختيار طريقة الجرد (إسكانر عادي أو كاميرا الموبايل)
             st.markdown('<div class="mode-selector">', unsafe_allow_html=True)
             scan_method = st.radio(
                 "🎯 اختر طريقة مسح الصنف:",
@@ -709,7 +748,6 @@ with main_tab2:
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # === الطريقة الأولى: جهاز الإسكانر الخارجي ===
             if scan_method == "🔫 جهاز الإسكانر (سريع / كيبورد)":
                 barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
                 scanned_raw = st.text_input(
@@ -748,15 +786,9 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
-
-            # === الطريقة الثانية: كاميرا الهاتف الذكي ===
             else:
-                st.markdown("##### 📸 وجّه كاميرا الموبايل نحو باركود الصنف والتقط الصورة:")
-                phone_cam = st.camera_input(
-                    "التقط صورة الباركود",
-                    key=f"inv_phone_cam_{st.session_state.inv_scan_counter}",
-                    label_visibility="collapsed"
-                )
+                st.markdown("##### 📸 وجّه كاميرا الموبايل نحو باركود الصنف:")
+                phone_cam = st.camera_input("التقط صورة الباركود", key=f"inv_phone_cam_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
 
                 if phone_cam is not None:
                     with st.spinner("🔍 جاري قراءة الباركود من الصورة..."):
@@ -766,12 +798,12 @@ with main_tab2:
                         if detected_code:
                             if detected_code in system_inventory:
                                 st.session_state.current_scanned_code = detected_code
-                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{detected_code}]")
+                                st.success(f"🎯 تم قراءة الكود: [{detected_code}]")
                             else:
-                                st.error(f"⚠️ الباركود المقروء [{detected_code}] غير مسجل في قاعدة البيانات.")
+                                st.error(f"⚠️ الباركود [{detected_code}] غير مسجل في قاعدة البيانات.")
                                 st.session_state.current_scanned_code = None
                         else:
-                            st.warning("⚠️ تعذر التعرف التلقائي على الباركود من الصورة. تأكد من ثبات اليد ووضوح الإضاءة، أو اكتب الكود في الأسفل مباشرة:")
+                            st.warning("⚠️ تعذر قراءة الباركود، يمكنك كتابته يدوياً أدناه:")
                             manual_c = st.text_input("كتابة الكود يدوياً:", key=f"manual_fallback_{st.session_state.inv_scan_counter}")
                             if manual_c:
                                 m_clean = str(manual_c).strip().upper()
@@ -779,26 +811,19 @@ with main_tab2:
                                     st.session_state.current_scanned_code = m_clean
                                     st.rerun()
 
-            # === عرض كارت الصنف وإدخال الكمية والحفظ بـ Enter ===
+            # عرض كارت الصنف وتسجيل الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
-                
                 already_counted = scanned_map.get(active_c, 0)
-                st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 
+                st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:8px 15px; border-radius:10px; margin-bottom:12px; font-weight:800;'>📌 إجمالي القطع المجردة لهذا الموديل حتى الآن: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
                 render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
 
                 with st.form(key=f"inv_quick_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
                     col_q, col_s = st.columns([3, 2])
                     with col_q:
-                        add_q = st.number_input(
-                            "🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):",
-                            min_value=1,
-                            value=1,
-                            step=1,
-                            key=f"qty_field_{st.session_state.inv_scan_counter}"
-                        )
+                        add_q = st.number_input("🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):", min_value=1, value=1, step=1, key=f"qty_field_{st.session_state.inv_scan_counter}")
                     with col_s:
                         st.write("")
                         st.write("")
@@ -811,14 +836,11 @@ with main_tab2:
                         l_inv["scanned_items"][active_c] = max(0, l_inv["scanned_items"].get(active_c, 0) + add_q)
                         save_shared_inventory(l_inv)
                         
-                        st.toast(f"✅ تم إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
-                        
-                        # تصفير المتغيرات لترجع الكاميرا أو الإسكانر جاهزاً للقطعة التالية فوراً
+                        st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}] في الجلسة", icon="📦")
                         st.session_state.current_scanned_code = None
                         st.session_state.inv_scan_counter += 1
                         st.rerun()
 
-                # تركيز فوري على خانة الكمية
                 focus_qty_js = """
                 <script>
                 (function() {
@@ -846,7 +868,55 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-        # 🔍 تقرير الفروقات مع ميزة التصفية والبحث السريع
+        # 📝 تبويب مراجعة وتعديل محتويات الجلسة النشطة
+        with tab_edit:
+            st.markdown("### 📝 قائمة الأصناف المجرودة بالجلسة الحالية (تعديل وحذف مباشر)")
+            st.info("💡 يمكنك تعديل كمية أي صنف مباشرة من الجدول، أو حذف أي صنف مسحته بالخطأ، ثم الضغط على زر الحفظ.")
+            
+            if scanned_map:
+                active_list = []
+                for c, q in scanned_map.items():
+                    active_list.append({
+                        "كود الصنف": c,
+                        "اسم الصنف": system_inventory.get(c, {}).get('name', 'غير مسجل'),
+                        "الكمية المجردة": int(q)
+                    })
+                
+                df_active = pd.DataFrame(active_list)
+                
+                # جدول تفاعلي للتعديل والحذف
+                edited_df = st.data_editor(
+                    df_active,
+                    column_config={
+                        "كود الصنف": st.column_config.TextColumn("كود الصنف", disabled=True),
+                        "اسم الصنف": st.column_config.TextColumn("اسم الصنف", disabled=True),
+                        "الكمية المجردة": st.column_config.NumberColumn("الكمية الفعلية المجردة", min_value=0, step=1, required=True)
+                    },
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    key="active_session_data_editor"
+                )
+                
+                col_sv_ed, col_cl_ed = st.columns(2)
+                with col_sv_ed:
+                    if st.button("💾 تطبيق وحفظ تعديلات الجلسة", type="primary", key="save_edited_session_btn"):
+                        new_scanned_map = {}
+                        for _, r in edited_df.iterrows():
+                            c_k = str(r["كود الصنف"]).strip().upper()
+                            q_v = int(r["الكمية المجردة"])
+                            if c_k and q_v > 0:
+                                new_scanned_map[c_k] = q_v
+                        
+                        l_inv = load_shared_inventory()
+                        l_inv["scanned_items"] = new_scanned_map
+                        save_shared_inventory(l_inv)
+                        st.success("🎉 تم تحديث وحفظ بيانات الجلسة بنجاح!")
+                        time.sleep(0.4)
+                        st.rerun()
+            else:
+                st.warning("⚠️ لم يتم مسح أي صنف في هذه الجلسة حتى الآن.")
+
+        # 🔍 تقرير الفروقات وإنهاء الجلسة النهائي
         with tab_rep:
             rep_data = [
                 {
@@ -859,62 +929,58 @@ with main_tab2:
                 for c, i in system_inventory.items()
             ]
             
-            filter_rep = st.text_input(
-                "🔍 تصفية سريعة بتقرير الفروقات:",
-                placeholder="ابحث بكود أو اسم الموديل...",
-                key="rep_filter_input"
-            )
-            
+            filter_rep = st.text_input("🔍 تصفية سريعة بتقرير الفروقات:", placeholder="ابحث بكود أو اسم الموديل...", key="rep_filter_input")
             filtered_rep = rep_data
             if filter_rep:
                 fr = filter_rep.strip().lower()
-                filtered_rep = [
-                    r for r in rep_data
-                    if fr in str(r.get("كود الصنف", "")).lower() or fr in str(r.get("اسم الصنف", "")).lower()
-                ]
+                filtered_rep = [r for r in rep_data if fr in str(r.get("كود الصنف", "")).lower() or fr in str(r.get("اسم الصنف", "")).lower()]
             
             df_rep = pd.DataFrame(filtered_rep)
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
             
             buf = io.BytesIO()
-            with pd.ExcelWriter(buf, engine='openpyxl') as w:
-                df_rep.to_excel(w, index=False)
-            st.download_button(
-                "📥 تحميل تقرير الجرد (Excel)",
-                buf.getvalue(),
-                f"Inventory_{shared_inv.get('name')}.xlsx"
-            )
+            with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
+            st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
             
             st.markdown("---")
             if st.session_state.current_user == "abobakr":
-                if st.button("🛑 إغلاق وإنهاء جلسة الجرد (أرشيف الإدارة)", key="close_inv_session"):
+                st.markdown("#### 🛑 إغلاق الجلسة وترحيلها للأرشيف:")
+                st.caption("عند الضغط على هذا الزر، ستنتهي الجلسة تماماً وتُحفظ في سجل الجرد التاريخي، ويصبح بإمكانك فتح جلسة جديدة.")
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد نهائياً (ترحيل للأرشيف)", type="primary", key="close_inv_session"):
                     save_to_inv_history({
                         "timestamp": str(datetime.datetime.now()),
                         "name": shared_inv.get('name'),
                         "date": shared_inv.get('date'),
                         "report": rep_data
                     })
+                    # تصفير الجلسة بعد الترحيل
                     save_shared_inventory({"is_active": False, "scanned_items": {}})
+                    st.success("✅ تم إنهاء الجلسة وحفظها في الأرشيف بنجاح!")
+                    time.sleep(0.5)
                     st.rerun()
             else:
-                st.info("🔒 خاصية إغلاق جلسة الجرد النهائي وحفظها في الأرشيف مقتصرة على الإدارة (abobakr) فقط.")
+                st.info("🔒 خاصية إغلاق جلسة الجرد مقتصرة على الإدارة (abobakr) فقط.")
 
 # ==========================================
-# 3. تبويب فواتير الجملة
+# 3. تبويب فواتير الجملة (مثبتة بالجلسة أيضاً)
 # ==========================================
 with main_tab3:
     shared_sales = load_shared_sales()
     
     if not shared_sales.get("is_active", False):
         st.markdown("### 🏬 فتح وردية مبيعات جملة جديدة")
-        s_name = st.text_input("اسم/رقم الوردية", key="s_name_in")
-        s_date = st.date_input("تاريخ الوردية", datetime.date.today(), key="s_date_in")
-        
-        if st.button("🚀 فتح وردية البيع", key="open_sales_btn"):
-            if not s_name.strip(): st.error("⚠️ اكتب اسم الوردية أولاً!")
-            else:
-                save_shared_sales({"is_active": True, "name": s_name.strip(), "date": str(s_date), "invoices": [], "deductions": {}})
-                st.rerun()
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            s_name = st.text_input("اسم/رقم الوردية (مثال: وردية صباحية 1)", key="s_name_in")
+        with col_s2:
+            s_date = st.date_input("تاريخ الوردية", datetime.date.today(), key="s_date_in")
+            st.write("")
+            st.write("")
+            if st.button("🚀 فتح وردية البيع وتثبيتها", key="open_sales_btn"):
+                if not s_name.strip(): st.error("⚠️ اكتب اسم الوردية أولاً!")
+                else:
+                    save_shared_sales({"is_active": True, "name": s_name.strip(), "date": str(s_date), "invoices": [], "deductions": {}})
+                    st.rerun()
     else:
         st.markdown(f'<div class="sales-active-bar">💳 <b>وردية الجملة النشطة:</b> {shared_sales.get("name")} | <b>التاريخ:</b> {shared_sales.get("date")}</div>', unsafe_allow_html=True)
         
@@ -1007,10 +1073,13 @@ with main_tab3:
                         st.rerun()
 
         st.markdown("---")
-        if st.button("🛑 إغلاق وردية البيع (أرشيف)", key="close_sales_shift_btn"):
-            save_to_sales_history({"name": shared_sales.get("name"), "date": shared_sales.get("date"), "total_revenue": total_rev, "invoices": all_invs})
-            save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
-            st.rerun()
+        if st.session_state.current_user == "abobakr":
+            if st.button("🛑 إغلاق وردية البيع نهائياً (ترحيل للأرشيف)", key="close_sales_shift_btn"):
+                save_to_sales_history({"name": shared_sales.get("name"), "date": shared_sales.get("date"), "total_revenue": total_rev, "invoices": all_invs})
+                save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
+                st.success("✅ تم ترحيل الوردية للأرشيف وإغلاقها.")
+                time.sleep(0.5)
+                st.rerun()
 
 # ==========================================
 # 4. تبويب الكاتالوج الشامل
@@ -1033,7 +1102,7 @@ with main_tab_cat:
             thumb_val = None
             raw_img_path = None
             for ext in ['.jpg', '.jpeg', '.png', '.JPG']:
-                img_p = os.path.join("compressed_images", f"{p_c}{ext}")
+                img_p = os.path.join(BASE_DIR, "compressed_images", f"{p_c}{ext}")
                 if os.path.exists(img_p):
                     raw_img_path = img_p
                     thumb_val = get_thumbnail_base64(img_p)
@@ -1052,7 +1121,6 @@ with main_tab_cat:
             
     if cat_rows:
         cat_rows.sort(key=lambda x: str(x.get("كود الصنف", "")).upper())
-        
         filter_q = st.text_input("🔍 تصفية سريعة بالكاتالوج:", placeholder="ابحث بكود أو اسم الموديل...", key="cat_filter")
         
         filtered_rows = cat_rows
