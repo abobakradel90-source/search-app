@@ -628,7 +628,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (مع معالجة الكاميرا الخلفية التلقائية بنظام DeviceId)
+# 2. تبويب الجرد التشاركي (مع الإسكانر المباشر فائق الدقة)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -706,7 +706,7 @@ with main_tab2:
             if "scanned_code" in st.query_params:
                 detected_param = st.query_params.get("scanned_code", "")
                 try: del st.query_params["scanned_code"]
-                except: pass
+                except Exception: pass
                 if detected_param:
                     c_clean = str(detected_param).strip().upper()
                     if c_clean in system_inventory:
@@ -765,7 +765,7 @@ with main_tab2:
                         st.error(f"❌ الباركود '{c_clean}' غير مسجل في النظام.")
                         st.session_state.current_scanned_code = None
 
-            # --- وضع كاميرا الموبايل اللايف (مع نظام كشف وتحديد الكاميرا الخلفية العتادي) ---
+            # --- وضع كاميرا الموبايل المباشرة المحسنة بدون شاشة سوداء ---
             else:
                 if not st.session_state.current_scanned_code:
                     live_scanner_html = """
@@ -773,7 +773,7 @@ with main_tab2:
                     <html>
                     <head>
                         <meta charset="utf-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                         <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
                         <style>
                             body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; text-align: center; direction: rtl; }
@@ -790,67 +790,51 @@ with main_tab2:
                                 width: 100%;
                                 border-radius: 12px;
                                 overflow: hidden;
-                                background: #000000;
-                                min-height: 250px;
+                                background: #111111;
+                                min-height: 280px;
                             }
-                            .cam-controls {
-                                margin-top: 12px;
-                                display: flex;
-                                flex-direction: column;
-                                gap: 8px;
-                            }
-                            select.cam-select {
-                                width: 100%;
-                                padding: 10px 14px;
-                                border: 2px solid #1C65A6;
-                                border-radius: 10px;
-                                font-size: 14px;
-                                font-weight: bold;
-                                background: #F8FAFC;
-                                color: #0F2942;
-                                outline: none;
-                                cursor: pointer;
+                            #reader video {
+                                width: 100% !important;
+                                border-radius: 12px;
+                                object-fit: cover !important;
                             }
                             .ctrl-btn {
                                 background-color: #1C65A6;
                                 color: white;
                                 border: none;
-                                padding: 10px 16px;
-                                border-radius: 10px;
+                                padding: 11px 20px;
+                                border-radius: 12px;
                                 font-weight: 800;
-                                font-size: 14px;
+                                font-size: 15px;
                                 cursor: pointer;
-                                transition: background 0.2s;
+                                margin-top: 10px;
+                                width: 100%;
+                                display: inline-flex;
+                                justify-content: center;
+                                align-items: center;
+                                gap: 8px;
+                                box-shadow: 0 4px 10px rgba(28,101,166,0.2);
                             }
                             .ctrl-btn:hover { background-color: #144A7A; }
                             #status {
                                 margin-top: 10px;
-                                font-size: 13px;
+                                font-size: 14px;
                                 font-weight: 800;
                                 color: #1C65A6;
-                                min-height: 20px;
+                                min-height: 22px;
                             }
                         </style>
                     </head>
                     <body>
                         <div id="scanner-card">
                             <div id="reader"></div>
-                            <div class="cam-controls">
-                                <select id="camera-select" class="cam-select" onchange="onCameraSelectChange(this.value)">
-                                    <option value="">🔍 جاري فحص واكتشاف الكاميرات...</option>
-                                </select>
-                                <div style="display:flex; gap:8px; justify-content:center;">
-                                    <button class="ctrl-btn" onclick="cycleCamera()" style="flex:1;">🔄 تبديل الكاميرا التالية</button>
-                                    <button class="ctrl-btn" onclick="restartScanner()" style="flex:1;">⚡ إعادة تشغيل البث</button>
-                                </div>
-                            </div>
-                            <div id="status">📷 جاري تهيئة الكاميرا الخلفية تلقائياً...</div>
+                            <button id="toggle-cam-btn" class="ctrl-btn" onclick="switchCamera()">🔄 تبديل الكاميرا (خلفية / أمامية)</button>
+                            <div id="status">📷 جاري تشغيل الكاميرا الخلفية تلقائياً...</div>
                         </div>
 
                         <script>
                             var html5QrCode = null;
-                            var availableCameras = [];
-                            var currentCameraIndex = 0;
+                            var currentFacing = "environment"; // الكاميرا الخلفية افتراضياً
                             var isRunning = false;
 
                             function playBeep() {
@@ -893,149 +877,105 @@ with main_tab2:
                                 }
                             }
 
-                            function stopCurrentScanner() {
+                            function onScanSuccess(decodedText, decodedResult) {
+                                playBeep();
+                                document.getElementById("status").innerHTML = "🎯 تم التقاط: " + decodedText;
                                 if (html5QrCode && isRunning) {
-                                    return html5QrCode.stop().then(function() {
+                                    html5QrCode.stop().then(function() {
                                         isRunning = false;
-                                    }).catch(function(err) {
-                                        isRunning = false;
+                                        sendCodeToSystem(decodedText);
+                                    }).catch(function() {
+                                        sendCodeToSystem(decodedText);
                                     });
+                                } else {
+                                    sendCodeToSystem(decodedText);
                                 }
-                                return Promise.resolve();
                             }
 
-                            function startCameraById(cameraId) {
+                            function startScanning(facing) {
                                 var statusEl = document.getElementById("status");
-                                statusEl.innerHTML = "⏳ جاري تشغيل الكاميرا المحددة...";
+                                statusEl.innerHTML = "⏳ جاري فتح " + (facing === "environment" ? "الكاميرا الخلفية" : "الكاميرا الأمامية") + "...";
                                 
-                                stopCurrentScanner().then(function() {
-                                    if (!html5QrCode) {
-                                        html5QrCode = new Html5Qrcode("reader");
-                                    }
-                                    
-                                    var config = {
-                                        fps: 20,
-                                        qrbox: { width: 280, height: 160 },
-                                        aspectRatio: 1.333,
-                                        formatsToSupport: [
-                                            Html5QrcodeSupportedFormats.CODE_128,
-                                            Html5QrcodeSupportedFormats.EAN_13,
-                                            Html5QrcodeSupportedFormats.EAN_8,
-                                            Html5QrcodeSupportedFormats.CODE_39,
-                                            Html5QrcodeSupportedFormats.UPC_A,
-                                            Html5QrcodeSupportedFormats.UPC_E,
-                                            Html5QrcodeSupportedFormats.QR_CODE
-                                        ]
-                                    };
-
-                                    // تشغيل الكاميرا مباشرة بمعرفها العتادي الدقيق دون أي تخمين
-                                    html5QrCode.start(
-                                        cameraId,
-                                        config,
-                                        function(decodedText, decodedResult) {
-                                            playBeep();
-                                            statusEl.innerHTML = "🎯 تم التقاط: " + decodedText;
-                                            stopCurrentScanner().then(function() {
-                                                sendCodeToSystem(decodedText);
-                                            });
-                                        },
-                                        function(errorMessage) {}
-                                    ).then(function() {
-                                        isRunning = true;
-                                        statusEl.innerHTML = "🟢 الكاميرا تعمل الآن! وجّه الباركود داخل المربع وستلقطه فوراً";
-                                    }).catch(function(err) {
-                                        isRunning = false;
-                                        statusEl.innerHTML = "❌ تعذر تشغيل هذه الكاميرا، جرب كاميرا أخرى من القائمة.";
-                                    });
-                                });
-                            }
-
-                            function onCameraSelectChange(selectedId) {
-                                if (!selectedId) return;
-                                for (var i = 0; i < availableCameras.length; i++) {
-                                    if (availableCameras[i].id === selectedId) {
-                                        currentCameraIndex = i;
-                                        break;
-                                    }
+                                if (!html5QrCode) {
+                                    html5QrCode = new Html5Qrcode("reader");
                                 }
-                                startCameraById(selectedId);
-                            }
 
-                            function cycleCamera() {
-                                if (availableCameras.length <= 1) {
-                                    document.getElementById("status").innerHTML = "ℹ️ توجد كاميرا واحدة فقط متاحة على هذا الجهاز.";
-                                    return;
-                                }
-                                currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
-                                var nextId = availableCameras[currentCameraIndex].id;
-                                document.getElementById("camera-select").value = nextId;
-                                startCameraById(nextId);
-                            }
+                                var config = {
+                                    fps: 20,
+                                    qrbox: function(viewfinderWidth, viewfinderHeight) {
+                                        return {
+                                            width: Math.floor(viewfinderWidth * 0.88),
+                                            height: Math.floor(viewfinderHeight * 0.45)
+                                        };
+                                    },
+                                    aspectRatio: 1.333,
+                                    formatsToSupport: [
+                                        Html5QrcodeSupportedFormats.CODE_128,
+                                        Html5QrcodeSupportedFormats.EAN_13,
+                                        Html5QrcodeSupportedFormats.EAN_8,
+                                        Html5QrcodeSupportedFormats.CODE_39,
+                                        Html5QrcodeSupportedFormats.UPC_A,
+                                        Html5QrcodeSupportedFormats.UPC_E,
+                                        Html5QrcodeSupportedFormats.QR_CODE
+                                    ]
+                                };
 
-                            function restartScanner() {
-                                if (availableCameras.length > 0) {
-                                    startCameraById(availableCameras[currentCameraIndex].id);
-                                }
-                            }
-
-                            function initCameras() {
-                                var selectEl = document.getElementById("camera-select");
-                                var statusEl = document.getElementById("status");
-
-                                // 1. طلب إذن الكاميرا لإظهار أسماء العدسات الحقيقية (Unlocking Device Labels)
-                                navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
-                                    stream.getTracks().forEach(function(track) { track.stop(); });
-
-                                    Html5Qrcode.getCameras().then(function(devices) {
-                                        if (!devices || devices.length === 0) {
-                                            statusEl.innerHTML = "❌ لم يتم العثور على أي كاميرا!";
-                                            selectEl.innerHTML = "<option>لا توجد كاميرات</option>";
-                                            return;
-                                        }
-
-                                        availableCameras = devices;
-                                        selectEl.innerHTML = "";
-
-                                        var bestBackIndex = -1;
-
-                                        devices.forEach(function(dev, idx) {
-                                            var label = dev.label || ("عدسة " + (idx + 1));
-                                            var isBack = /back|rear|environment|خلف|main|0/i.test(label);
-                                            
-                                            var opt = document.createElement("option");
-                                            opt.value = dev.id;
-                                            opt.text = (isBack ? "📸 عدسة خلفية: " : "🤳 عدسة أمامية: ") + label;
-                                            selectEl.appendChild(opt);
-
-                                            if (isBack && bestBackIndex === -1) {
-                                                bestBackIndex = idx;
-                                            }
-                                        });
-
-                                        // اختيار الكاميرا الخلفية المكتشفة، أو آخر كاميرا في هواتف أندرويد
-                                        currentCameraIndex = (bestBackIndex !== -1) ? bestBackIndex : (devices.length > 1 ? 1 : 0);
-                                        selectEl.value = availableCameras[currentCameraIndex].id;
-
-                                        // بدء التشغيل الفوري
-                                        startCameraById(availableCameras[currentCameraIndex].id);
-
-                                    }).catch(function(err) {
-                                        statusEl.innerHTML = "❌ خطأ في حصر الكاميرات: " + err;
-                                    });
-
+                                html5QrCode.start(
+                                    { facingMode: facing },
+                                    config,
+                                    onScanSuccess,
+                                    function(err) {}
+                                ).then(function() {
+                                    isRunning = true;
+                                    currentFacing = facing;
+                                    statusEl.innerHTML = "🟢 " + (facing === "environment" ? "الكاميرا الخلفية تعمل" : "الكاميرا الأمامية تعمل") + " - وجّه الباركود داخل الإطار";
+                                    document.getElementById("toggle-cam-btn").innerHTML = (facing === "environment" ? "🤳 التبديل للكاميرا الأمامية" : "📸 التبديل للكاميرا الخلفية");
                                 }).catch(function(err) {
-                                    statusEl.innerHTML = "⚠️ يرجى السماح للمتصفح بالوصول إلى الكاميرا أولاً.";
+                                    console.warn("Direct facing failed:", err);
+                                    // إذا رفض الموبايل الكاميرا الخلفية مباشرة، جرب النمط التلقائي
+                                    if (facing === "environment") {
+                                        statusEl.innerHTML = "⚠️ جاري التبديل التلقائي للعدسة المتاحة...";
+                                        html5QrCode.start(
+                                            { facingMode: "user" },
+                                            config,
+                                            onScanSuccess,
+                                            function(e) {}
+                                        ).then(function() {
+                                            isRunning = true;
+                                            currentFacing = "user";
+                                            statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
+                                            document.getElementById("toggle-cam-btn").innerHTML = "📸 التبديل للكاميرا الخلفية";
+                                        }).catch(function(err2) {
+                                            statusEl.innerHTML = "❌ تعذر الوصول للكاميرا، تأكد من إعطاء الصلاحية في إعدادات المتصفح.";
+                                        });
+                                    } else {
+                                        statusEl.innerHTML = "❌ خطأ في فتح الكاميرا: " + (err.message || err);
+                                    }
                                 });
+                            }
+
+                            function switchCamera() {
+                                var nextFacing = (currentFacing === "environment") ? "user" : "environment";
+                                if (html5QrCode && isRunning) {
+                                    html5QrCode.stop().then(function() {
+                                        isRunning = false;
+                                        startScanning(nextFacing);
+                                    }).catch(function() {
+                                        startScanning(nextFacing);
+                                    });
+                                } else {
+                                    startScanning(nextFacing);
+                                }
                             }
 
                             window.addEventListener('load', function() {
-                                initCameras();
+                                startScanning("environment");
                             });
                         </script>
                     </body>
                     </html>
                     """
-                    components.html(live_scanner_html, height=440)
+                    components.html(live_scanner_html, height=420)
 
             # عرض كارت الصنف وتسجيل الكمية
             if st.session_state.current_scanned_code:
