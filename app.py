@@ -679,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (الكود الأصلي للإسكانر الناجح تماماً بدون أي تعديل)
+# 2. تبويب الجرد التشاركي (النسخة الأصلية للإسكانر)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -753,7 +753,6 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # استقبال الكود الممسوح عبر رابط الصفحة (من الإسكانر الأصلي)
             params = st.query_params
             if "scanned_code" in params:
                 scanned_val = str(params["scanned_code"]).strip().upper()
@@ -763,7 +762,6 @@ with main_tab2:
                     st.query_params.clear()
                     st.rerun()
 
-            # الحالة 1: تم مسح كود بنجاح -> إظهار كارت الصنف وخانة الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -823,7 +821,6 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-            # الحالة 2: انتظار مسح باركود جديد -> إظهار الإسكانر الحقيقي الناجح تماماً
             else:
                 barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
                 scanned_raw = st.text_input(
@@ -840,7 +837,6 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأصلي الصاروخي للإسكانر بدون أي تعديل
                 original_working_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
@@ -1044,7 +1040,7 @@ with main_tab2:
                                 lensContainer.innerHTML = "";
 
                                 if (videoDevices.length === 0) {
-                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
+                                    statusEl.innerHTML = "❌ لم يتم العثور على أي كاميرا!";
                                     return;
                                 }
 
