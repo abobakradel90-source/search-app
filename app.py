@@ -17,13 +17,12 @@ import json
 import re
 import time
 import requests
-import uuid
 import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==============================================================================
-# 🌐 الرابط السحابي لقاعدة البيانات
+# 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
 # ==============================================================================
 FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
 
@@ -47,7 +46,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 إدارة البيانات
+# 🌐 إدارة البيانات السحابية والمحلية المزدوجة
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
@@ -306,20 +305,20 @@ def generate_catalog_excel(catalog_items):
 logo_base64 = get_image_base64("edstore.jpg")
 
 # --- 2. الهوية البصرية ---
-st.markdown("""
+st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
-        :root { --primary-color: #1C65A6 !important; }
-        html, body, [class*="css"] { font-family: 'Tajawal', sans-serif !important; direction: rtl; }
-        .stApp { background-color: #F0F4F8; }
-        #MainMenu { visibility: hidden; }
-        footer { visibility: hidden; }
-        header[data-testid="stHeader"] { background: transparent !important; }
-        [data-testid="stToolbar"] { display: none !important; }
-        [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] { display: none !important; }
-        .block-container { padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }
+        :root {{ --primary-color: #1C65A6 !important; }}
+        html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
+        .stApp {{ background-color: #F0F4F8; }}
+        #MainMenu {{ visibility: hidden; }}
+        footer {{ visibility: hidden; }}
+        header[data-testid="stHeader"] {{ background: transparent !important; }}
+        [data-testid="stToolbar"] {{ display: none !important; }}
+        [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
+        .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
-        .stTabs [data-baseweb="tab-list"] {
+        .stTabs [data-baseweb="tab-list"] {{
             gap: 12px;
             justify-content: center;
             background: transparent !important;
@@ -327,10 +326,10 @@ st.markdown("""
             margin-bottom: 25px;
             border-bottom: none !important;
             flex-wrap: wrap;
-        }
-        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
+        }}
+        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
         
-        .stTabs [data-baseweb="tab"] {
+        .stTabs [data-baseweb="tab"] {{
             background-color: #FFFFFF !important;
             border: 2px solid #CBD5E1 !important;
             border-radius: 12px !important;
@@ -340,33 +339,33 @@ st.markdown("""
             color: #475569 !important;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04) !important;
             transition: all 0.2s ease !important;
-        }
-        .stTabs [data-baseweb="tab"]:hover {
+        }}
+        .stTabs [data-baseweb="tab"]:hover {{
             border-color: #1C65A6 !important;
             color: #1C65A6 !important;
             background-color: #F8FAFC !important;
             transform: translateY(-1px);
-        }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        }}
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
             background-color: #1C65A6 !important;
             border: 2px solid #1C65A6 !important;
             color: #FFFFFF !important;
             box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
-        }
+        }}
         
-        div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {
+        div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {{
             background-color: #FFFFFF !important;
             border: 2px solid #94A3B8 !important;
             border-radius: 10px !important;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-        }
-        div[data-baseweb="input"]:focus-within, div[data-baseweb="base-input"]:focus-within, div[data-baseweb="select"]:focus-within > div {
+        }}
+        div[data-baseweb="input"]:focus-within, div[data-baseweb="base-input"]:focus-within, div[data-baseweb="select"]:focus-within > div {{
             border-color: #1C65A6 !important;
             box-shadow: 0 0 0 3px rgba(28, 101, 166, 0.2) !important;
             outline: none !important;
-        }
+        }}
         
-        .login-card {
+        .login-card {{
             background: #FFFFFF;
             padding: 40px 35px;
             border-radius: 24px;
@@ -376,32 +375,32 @@ st.markdown("""
             text-align: center;
             border: 1px solid #E2E8F0;
             border-top: 6px solid #1C65A6;
-        }
-        .login-logo-wrap { display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }
-        .login-logo-img { height: 90px; width: 90px; object-fit: cover; border-radius: 50%; border: 3px solid #E8F0F8; background: #FFFFFF; padding: 3px; }
-        .login-title { color: #0F2942; font-weight: 900; font-size: 26px; margin-bottom: 6px; }
-        .login-subtitle { color: #64748B; font-size: 14px; margin-bottom: 25px; }
+        }}
+        .login-logo-wrap {{ display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }}
+        .login-logo-img {{ height: 90px; width: 90px; object-fit: cover; border-radius: 50%; border: 3px solid #E8F0F8; background: #FFFFFF; padding: 3px; }}
+        .login-title {{ color: #0F2942; font-weight: 900; font-size: 26px; margin-bottom: 6px; }}
+        .login-subtitle {{ color: #64748B; font-size: 14px; margin-bottom: 25px; }}
         
-        .brand-navbar { background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -20px; margin-bottom: 15px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }
-        .brand-navbar img { height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }
-        .brand-navbar h1 { color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }
-        .stButton > button { background-color: #1C65A6 !important; color: white !important; border-radius: 10px; border: none; padding: 9px 18px; font-weight: 800; font-size: 15px; width: 100%; box-shadow: 0 4px 10px rgba(28, 101, 166, 0.2); }
-        .stButton > button:hover { background-color: #144A7A !important; }
-        .logout-btn > button { background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; }
+        .brand-navbar {{ background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -20px; margin-bottom: 15px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }}
+        .brand-navbar img {{ height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }}
+        .brand-navbar h1 {{ color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }}
+        .stButton > button {{ background-color: #1C65A6 !important; color: white !important; border-radius: 10px; border: none; padding: 9px 18px; font-weight: 800; font-size: 15px; width: 100%; box-shadow: 0 4px 10px rgba(28, 101, 166, 0.2); }}
+        .stButton > button:hover {{ background-color: #144A7A !important; }}
+        .logout-btn > button {{ background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; }}
         
-        .product-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; }
-        .product-img { width: 120px; height: 120px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }
-        .code-badge { background-color: #E8F0F8; color: #1C65A6; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 800; display: inline-block; margin-bottom: 8px; }
-        .product-title { font-size: 18px; color: #0F172A; font-weight: 800; margin: 0 0 6px 0; }
-        .stock-badge { display: inline-block; margin-top: 5px; padding: 4px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; }
-        .in-stock { background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }
-        .out-of-stock { background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; }
-        .metric-card { background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #1C65A6; }
-        .metric-title { color: #64748B; font-size: 15px; font-weight: 700; margin-bottom: 5px; }
-        .metric-value { color: #0F172A; font-size: 28px; font-weight: 900; }
-        .inv-active-bar { background: linear-gradient(90deg, #10B981, #059669); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }
-        .sales-active-bar { background: linear-gradient(90deg, #F59E0B, #D97706); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }
-        .footer { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #144A7A; color: white; text-align: center; padding: 10px; font-weight: 500; z-index: 999; }
+        .product-card {{ background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; }}
+        .product-img {{ width: 120px; height: 120px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }}
+        .code-badge {{ background-color: #E8F0F8; color: #1C65A6; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 800; display: inline-block; margin-bottom: 8px; }}
+        .product-title {{ font-size: 18px; color: #0F172A; font-weight: 800; margin: 0 0 6px 0; }}
+        .stock-badge {{ display: inline-block; margin-top: 5px; padding: 4px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; }}
+        .in-stock {{ background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }}
+        .out-of-stock {{ background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; }}
+        .metric-card {{ background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #1C65A6; }}
+        .metric-title {{ color: #64748B; font-size: 15px; font-weight: 700; margin-bottom: 5px; }}
+        .metric-value {{ color: #0F172A; font-size: 28px; font-weight: 900; }}
+        .inv-active-bar {{ background: linear-gradient(90deg, #10B981, #059669); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }}
+        .sales-active-bar {{ background: linear-gradient(90deg, #F59E0B, #D97706); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }}
+        .footer {{ position: fixed; bottom: 0; left: 0; width: 100%; background-color: #144A7A; color: white; text-align: center; padding: 10px; font-weight: 500; z-index: 999; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -680,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (النسخة الأصلية للإسكانر اللحظي المباشر)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -814,7 +813,7 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-            # الحالة 2: انتظار مسح باركود جديد -> إظهار الكاميرا اللايف وحقل الإدخال
+            # الحالة 2: انتظار مسح باركود جديد -> إظهار الإسكانر الحقيقي الناجح
             else:
                 barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
                 scanned_raw = st.text_input(
@@ -831,9 +830,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأصلي الناجح مع معرّف جلسة عازل يمنع تعارض الهواتف
-                random_session_key = str(uuid.uuid4())[:8]
-                pro_live_scanner_html = f"""
+                # الكود الأصلي الصاروخي الذي كان يعمل معك بامتياز
+                original_working_scanner_html = f"""
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -853,7 +851,7 @@ with main_tab2:
                         }}
                         .video-container {{
                             width: 100%;
-                            height: 250px;
+                            height: 260px;
                             background: #111111;
                             position: relative;
                         }}
@@ -877,7 +875,7 @@ with main_tab2:
                             gap: 6px;
                             justify-content: center;
                             flex-wrap: wrap;
-                            margin-top: 8px;
+                            margin-top: 10px;
                         }}
                         .lens-btn {{
                             background: #F1F5F9;
@@ -901,37 +899,20 @@ with main_tab2:
                             color: #1C65A6;
                             min-height: 20px;
                         }}
-                        .fallback-file-btn {{
-                            display: block;
-                            background: #059669;
-                            color: #FFFFFF;
-                            border-radius: 10px;
-                            padding: 10px 16px;
-                            font-size: 14px;
-                            font-weight: 800;
-                            margin-top: 8px;
-                            cursor: pointer;
-                            text-decoration: none;
-                        }}
                     </style>
                 </head>
                 <body>
-                    <div class="scanner-box" id="scanner-{random_session_key}">
+                    <div class="scanner-box">
                         <div class="video-container">
                             <video id="scanner-feed" autoplay playsinline webkit-playsinline muted></video>
                             <div class="laser-line"></div>
                         </div>
                         
                         <div id="lens-buttons" class="lens-bar">
-                            <span style="font-size:12px; color:#64748B;">🔍 جاري تشغيل الكاميرا الخلفية...</span>
+                            <span style="font-size:12px; color:#64748B;">🔍 جاري تهيئة الكاميرا...</span>
                         </div>
 
-                        <div id="status-bar">🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة</div>
-
-                        <label class="fallback-file-btn">
-                            📷 التقاط بالكاميرا الأصلية للهاتف (بديل فوري)
-                            <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="readBarcodeFromImage(this)">
-                        </label>
+                        <div id="status-bar">⏳ جاري الاتصال بالكاميرا...</div>
                     </div>
 
                     <script>
@@ -961,22 +942,18 @@ with main_tab2:
                             isLocked = true;
                             playBeep();
                             var cleanCode = code.trim().toUpperCase();
-                            document.getElementById("status-bar").innerHTML = "🎯 تم لقط الكود: <b>" + cleanCode + "</b><br>⏳ جاري فتح كارت الصنف...";
+                            document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
 
                             if (codeReader) {{ try {{ codeReader.reset(); }} catch(e) {{}} }}
                             if (activeStream) {{ try {{ activeStream.getTracks().forEach(t => t.stop()); }} catch(e) {{}} }}
 
-                            try {{
-                                var doc = window.parent.document;
-                                var targetInput = doc.querySelector('input[placeholder*="وجّه الكاميرا نحو الباركود"]') || doc.querySelector('input[data-testid="stTextInput"]');
-                                if (targetInput) {{
-                                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                                    nativeSetter.call(targetInput, cleanCode);
-                                    targetInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                    targetInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                    targetInput.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, cancelable: true, key: 'Enter', keyCode: 13 }}));
-                                }}
-                            }} catch(err) {{}}
+                            setTimeout(function() {{
+                                try {{
+                                    var url = new URL(window.parent.location.href);
+                                    url.searchParams.set("scanned_code", cleanCode);
+                                    window.parent.location.href = url.href;
+                                }} catch(e) {{}}
+                            }}, 120);
                         }}
 
                         async function initDetector() {{
@@ -1015,19 +992,11 @@ with main_tab2:
                                 activeStream.getTracks().forEach(t => t.stop());
                                 activeStream = null;
                             }}
-                            if (codeReader) {{
-                                try {{ codeReader.reset(); }} catch(e) {{}}
-                            }}
+                            if (codeReader) {{ try {{ codeReader.reset(); }} catch(e) {{}} }}
 
-                            var videoConstraints = {{
-                                width: {{ ideal: 1280 }},
-                                height: {{ ideal: 720 }}
-                            }};
-                            if (deviceId) {{
-                                videoConstraints.deviceId = {{ exact: deviceId }};
-                            }} else {{
-                                videoConstraints.facingMode = {{ ideal: "environment" }};
-                            }}
+                            var videoConstraints = {{ width: {{ ideal: 1280 }}, height: {{ ideal: 720 }} }};
+                            if (deviceId) videoConstraints.deviceId = {{ exact: deviceId }};
+                            else videoConstraints.facingMode = {{ ideal: "environment" }};
 
                             try {{
                                 const stream = await navigator.mediaDevices.getUserMedia({{ audio: false, video: videoConstraints }});
@@ -1038,20 +1007,18 @@ with main_tab2:
                                 v.setAttribute('webkit-playsinline', 'true');
                                 v.muted = true;
                                 await v.play();
-                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة";
+                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
 
                                 if (detector) {{
                                     scanLoop(v);
                                 }} else {{
                                     codeReader = new ZXing.BrowserMultiFormatReader();
                                     codeReader.decodeFromVideoElement(v, (result, err) => {{
-                                        if (result && result.text) {{
-                                            sendCode(result.text);
-                                        }}
+                                        if (result && result.text) sendCode(result.text);
                                     }});
                                 }}
                             }} catch(err) {{
-                                statusEl.innerHTML = "⚠️ اضغط على زر عدسة أخرى أعلاه للتبديل.";
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل هذه العدسة (جرب الضغط على عدسة أخرى أعلاه).";
                             }}
                         }}
 
@@ -1082,9 +1049,7 @@ with main_tab2:
                                     b.onclick = function() {{ startLens(dev.deviceId, b); }};
                                     lensContainer.appendChild(b);
 
-                                    if (isBack) {{
-                                        targetIndex = idx;
-                                    }}
+                                    if (isBack) targetIndex = idx;
                                 }});
 
                                 var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
@@ -1094,32 +1059,12 @@ with main_tab2:
                             }}
                         }}
 
-                        function readBarcodeFromImage(input) {{
-                            if (input.files && input.files[0]) {{
-                                document.getElementById("status-bar").innerHTML = "🔍 جاري قراءة الكود من الصورة...";
-                                var reader = new FileReader();
-                                reader.onload = function(e) {{
-                                    var img = new Image();
-                                    img.onload = function() {{
-                                        var z = new ZXing.BrowserMultiFormatReader();
-                                        z.decodeFromImage(img).then(res => {{
-                                            if (res && res.text) sendCode(res.text);
-                                        }}).catch(() => {{
-                                            document.getElementById("status-bar").innerHTML = "⚠️ لم يتم لقط الباركود، التقط صورة أقرب.";
-                                        }});
-                                    }};
-                                    img.src = e.target.result;
-                                }};
-                                reader.readAsDataURL(input.files[0]);
-                            }}
-                        }}
-
                         window.addEventListener('load', () => setTimeout(setupCameras, 200));
                     </script>
                 </body>
                 </html>
                 """
-                components.html(pro_live_scanner_html, height=440)
+                components.html(original_working_scanner_html, height=440, key=f"orig_scanner_{uuid.uuid4().hex[:6]}")
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
