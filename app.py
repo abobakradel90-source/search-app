@@ -679,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (النسخة الأصلية للإسكانر)
+# 2. تبويب الجرد التشاركي (مع زر إعادة تشغيل الكاميرا الفوري)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -822,12 +822,20 @@ with main_tab2:
                     st.rerun()
 
             else:
-                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
-                scanned_raw = st.text_input(
-                    "🔫 باركود الصنف (استقبال تلقائي من الكاميرا أو كتابة يدوية):",
-                    key=barcode_field_key,
-                    placeholder="وجّه الكاميرا نحو الباركود أو مرر الإسكانر..."
-                )
+                col_sc1, col_sc2 = st.columns([4, 1])
+                with col_sc1:
+                    barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+                    scanned_raw = st.text_input(
+                        "🔫 باركود الصنف (استقبال تلقائي من الكاميرا أو كتابة يدوية):",
+                        key=barcode_field_key,
+                        placeholder="وجّه الكاميرا نحو الباركود أو مرر الإسكانر..."
+                    )
+                with col_sc2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🔄 إعادة تشغيل الكاميرا", key="reset_cam_btn", use_container_width=True):
+                        st.session_state.inv_scan_counter += 1
+                        st.rerun()
 
                 if scanned_raw:
                     matched_k = match_product_code(scanned_raw)
