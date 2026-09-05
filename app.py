@@ -23,6 +23,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==============================================================================
 # 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
+# ضع الرابط الخاص بك الذي نسخته من Firebase هنا:
 # ==============================================================================
 FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
 
@@ -679,7 +680,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (كود الإسكانر الناجح والمثبت)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -830,7 +831,7 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الناجح والمختبر مسبقاً للكاميرا (بدون f-string نهائياً)
+                # الكود الناجح والمختبر للكاميرا (نص قياسي نظيف بدون f-string)
                 pro_live_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
@@ -966,7 +967,7 @@ with main_tab2:
 
                             try {
                                 var doc = window.parent.document;
-                                var targetInput = doc.querySelector('input[placeholder*="وجّه الكاميرا نحو الباركود"]') || doc.querySelector('input[data-testid="stTextInput"]');
+                                var targetInput = doc.querySelector('input[placeholder*="مرر الإسكانر"]') || doc.querySelector('input[data-testid="stTextInput"]');
                                 if (targetInput) {
                                     var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
                                     nativeSetter.call(targetInput, cleanCode);
