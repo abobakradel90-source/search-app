@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # ==============================================================================
 # 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
 # ==============================================================================
-FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
+FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"   # 👈 ضع رابط Firebase هنا
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(
@@ -56,7 +56,7 @@ SHARED_SALES_FILE = os.path.join(BASE_DIR, "shared_sales.json")
 HISTORY_SALES_FILE = os.path.join(BASE_DIR, "sales_history.json")
 
 def cloud_get(endpoint, default_val):
-    if FIREBASE_DB_URL and not "edstore-default" in FIREBASE_DB_URL:
+    if FIREBASE_DB_URL and not "your-project" in FIREBASE_DB_URL and not "edstore-default" in FIREBASE_DB_URL:
         try:
             url = f"{FIREBASE_DB_URL.rstrip('/')}/{endpoint}.json"
             r = requests.get(url, timeout=3.5)
@@ -67,7 +67,7 @@ def cloud_get(endpoint, default_val):
     return default_val
 
 def cloud_put(endpoint, data):
-    if FIREBASE_DB_URL and not "edstore-default" in FIREBASE_DB_URL:
+    if FIREBASE_DB_URL and not "your-project" in FIREBASE_DB_URL and not "edstore-default" in FIREBASE_DB_URL:
         try:
             url = f"{FIREBASE_DB_URL.rstrip('/')}/{endpoint}.json"
             requests.put(url, json=data, timeout=3.5)
@@ -146,38 +146,6 @@ def get_image_base64(img_path):
             return base64.b64encode(img_file.read()).decode('utf-8')
     except Exception:
         return ""
-
-def decode_barcode_from_image(pil_img):
-    try:
-        import zxingcpp
-        results = zxingcpp.read_barcodes(pil_img)
-        if results:
-            return results[0].text.strip().upper()
-    except Exception:
-        pass
-    
-    try:
-        from pyzbar.pyzbar import decode
-        barcodes = decode(pil_img)
-        if barcodes:
-            return barcodes[0].data.decode("utf-8").strip().upper()
-    except Exception:
-        pass
-        
-    try:
-        import cv2
-        import numpy as np
-        cv_img = np.array(pil_img.convert('RGB'))[:, :, ::-1]
-        detector = cv2.barcode.BarcodeDetector()
-        ok, decoded_info, _, _ = detector.detectAndDecode(cv_img)
-        if ok and decoded_info:
-            val = decoded_info[0] if isinstance(decoded_info, (list, tuple)) else decoded_info
-            if str(val).strip():
-                return str(val).strip().upper()
-    except Exception:
-        pass
-
-    return None
 
 def process_shoe_image(img_path, target_w=280, target_h=180, quality=88):
     try:
@@ -336,7 +304,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية ---
+# --- 2. الهوية البصرية وضبط الإطارات ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -711,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (نظام الإسكانر الفوري المضمون 100%)
+# 2. تبويب الجرد التشاركي (الكود الأصلي للإسكانر الناجح تماماً بدون أي تعديل)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -785,6 +753,16 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
+            # استقبال الكود الممسوح عبر رابط الصفحة (من الإسكانر الأصلي)
+            params = st.query_params
+            if "scanned_code" in params:
+                scanned_val = str(params["scanned_code"]).strip().upper()
+                matched_k = match_product_code(scanned_val)
+                if matched_k:
+                    st.session_state.current_scanned_code = matched_k
+                    st.query_params.clear()
+                    st.rerun()
+
             # الحالة 1: تم مسح كود بنجاح -> إظهار كارت الصنف وخانة الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
@@ -845,39 +823,13 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-            # الحالة 2: إسكانر التصوير الفوري المضمون 100% لكل الأجهزة
+            # الحالة 2: انتظار مسح باركود جديد -> إظهار الإسكانر الحقيقي الناجح تماماً
             else:
-                st.markdown("""
-                <div style="background:#FFFFFF; border:2.5px solid #1C65A6; border-radius:14px; padding:15px; text-align:center; box-shadow:0 4px 14px rgba(28,101,166,0.15); margin-bottom:12px;">
-                    <h4 style="color:#1C65A6; margin:0 0 5px 0;">📷 إسكانر الباركود الفوري</h4>
-                    <p style="color:#64748B; font-size:13.5px; margin:0;">اضغط على الزر أدناه لالتقاط صورة الباركود؛ سيتم قراءته وفحصه فوراً دون شاشة سوداء أو أخطاء:</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                cam_file = st.camera_input("📷 تصوير الباركود", key=f"instant_cam_{st.session_state.inv_scan_counter}", label_visibility="collapsed")
-                
-                if cam_file is not None:
-                    with st.spinner("🔍 جاري قراءة الكود..."):
-                        pil_img = Image.open(cam_file)
-                        detected_code = decode_barcode_from_image(pil_img)
-                        if detected_code:
-                            matched_k = match_product_code(detected_code)
-                            if matched_k:
-                                st.session_state.current_scanned_code = matched_k
-                                st.success(f"🎯 تم التعرف على الكود بنجاح: [{matched_k}]")
-                                time.sleep(0.3)
-                                st.rerun()
-                            else:
-                                st.error(f"❌ الكود المستخرج '{detected_code}' غير مسجل في قاعدة البيانات.")
-                        else:
-                            st.warning("⚠️ تعذر قراءة الباركود، حاول تقريب الكاميرا أكثر من الكود واضغط تصوير مرة أخرى.")
-
-                st.markdown("<br>", unsafe_allow_html=True)
                 barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
                 scanned_raw = st.text_input(
-                    "أو استخدم جهاز الإسكانر الخارجي / اكتب الكود يدوياً:",
+                    "🔫 باركود الصنف (استقبال تلقائي من الكاميرا أو كتابة يدوية):",
                     key=barcode_field_key,
-                    placeholder="مرر الإسكانر أو اكتب الكود..."
+                    placeholder="وجّه الكاميرا نحو الباركود أو مرر الإسكانر..."
                 )
 
                 if scanned_raw:
@@ -886,7 +838,243 @@ with main_tab2:
                         st.session_state.current_scanned_code = matched_k
                         st.rerun()
                     else:
-                        st.error(f"❌ الكود '{scanned_raw.strip()}' غير مسجل في النظام.")
+                        st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
+
+                # الكود الأصلي الصاروخي للإسكانر بدون أي تعديل
+                original_working_scanner_html = """
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                    <script src="https://unpkg.com/@zxing/library@latest"></script>
+                    <style>
+                        body { margin: 0; padding: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }
+                        .scanner-box {
+                            background: #FFFFFF;
+                            border: 2.5px solid #1C65A6;
+                            border-radius: 14px;
+                            padding: 10px;
+                            max-width: 480px;
+                            margin: 0 auto;
+                            box-shadow: 0 4px 15px rgba(28, 101, 166, 0.15);
+                        }
+                        .video-container {
+                            width: 100%;
+                            height: 260px;
+                            background: #111111;
+                            position: relative;
+                        }
+                        video {
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }
+                        .laser-line {
+                            position: absolute;
+                            top: 50%;
+                            left: 5%;
+                            width: 90%;
+                            height: 2px;
+                            background: #EF4444;
+                            box-shadow: 0 0 8px #EF4444;
+                            pointer-events: none;
+                        }
+                        .lens-bar {
+                            display: flex;
+                            gap: 6px;
+                            justify-content: center;
+                            flex-wrap: wrap;
+                            margin-top: 10px;
+                        }
+                        .lens-btn {
+                            background: #F1F5F9;
+                            color: #1E293B;
+                            border: 1.5px solid #CBD5E1;
+                            border-radius: 8px;
+                            padding: 6px 12px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            cursor: pointer;
+                        }
+                        .lens-btn.active {
+                            background: #1C65A6;
+                            color: #FFFFFF;
+                            border-color: #1C65A6;
+                        }
+                        #status-bar {
+                            margin-top: 8px;
+                            font-size: 13.5px;
+                            font-weight: 800;
+                            color: #1C65A6;
+                            min-height: 20px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="scanner-box">
+                        <div class="video-container">
+                            <video id="scanner-feed" autoplay playsinline webkit-playsinline muted></video>
+                            <div class="laser-line"></div>
+                        </div>
+                        
+                        <div id="lens-buttons" class="lens-bar">
+                            <span style="font-size:12px; color:#64748B;">🔍 جاري تهيئة الكاميرا...</span>
+                        </div>
+
+                        <div id="status-bar">⏳ جاري الاتصال بالكاميرا...</div>
+                    </div>
+
+                    <script>
+                        var activeStream = null;
+                        var codeReader = null;
+                        var isLocked = false;
+                        var detector = null;
+
+                        function playBeep() {
+                            try {
+                                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                var osc = ctx.createOscillator();
+                                var gain = ctx.createGain();
+                                osc.type = "sine";
+                                osc.frequency.setValueAtTime(1900, ctx.currentTime);
+                                gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                                osc.connect(gain);
+                                gain.connect(ctx.destination);
+                                osc.start();
+                                osc.stop(ctx.currentTime + 0.12);
+                                if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+                            } catch(e) {}
+                        }
+
+                        function sendCode(code) {
+                            if (isLocked) return;
+                            isLocked = true;
+                            playBeep();
+                            var cleanCode = code.trim().toUpperCase();
+                            document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
+
+                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+                            if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
+
+                            setTimeout(function() {
+                                try {
+                                    var url = new URL(window.parent.location.href);
+                                    url.searchParams.set("scanned_code", cleanCode);
+                                    window.parent.location.href = url.href;
+                                } catch(e) {}
+                            }, 120);
+                        }
+
+                        async function initDetector() {
+                            if ('BarcodeDetector' in window) {
+                                try {
+                                    detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
+                                } catch(e) { detector = null; }
+                            }
+                        }
+
+                        function scanLoop(videoEl) {
+                            if (isLocked) return;
+                            if (detector && videoEl.readyState >= 2) {
+                                detector.detect(videoEl).then(barcodes => {
+                                    if (barcodes.length > 0 && barcodes[0].rawValue) {
+                                        sendCode(barcodes[0].rawValue.trim());
+                                        return;
+                                    }
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                }).catch(() => {
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                });
+                            } else {
+                                if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                            }
+                        }
+
+                        async function startLens(deviceId, btnElement) {
+                            var statusEl = document.getElementById("status-bar");
+                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
+
+                            document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+                            if (btnElement) btnElement.classList.add('active');
+
+                            if (activeStream) {
+                                activeStream.getTracks().forEach(t => t.stop());
+                                activeStream = null;
+                            }
+                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+
+                            var videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
+                            if (deviceId) videoConstraints.deviceId = { exact: deviceId };
+                            else videoConstraints.facingMode = { ideal: "environment" };
+
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
+                                activeStream = stream;
+                                var v = document.getElementById("scanner-feed");
+                                v.srcObject = stream;
+                                v.setAttribute('playsinline', 'true');
+                                v.setAttribute('webkit-playsinline', 'true');
+                                v.muted = true;
+                                await v.play();
+                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
+
+                                if (detector) {
+                                    scanLoop(v);
+                                } else {
+                                    codeReader = new ZXing.BrowserMultiFormatReader();
+                                    codeReader.decodeFromVideoElement(v, (result, err) => {
+                                        if (result && result.text) sendCode(result.text);
+                                    });
+                                }
+                            } catch(err) {
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل هذه العدسة (جرب الضغط على عدسة أخرى أعلاه).";
+                            }
+                        }
+
+                        async function setupCameras() {
+                            await initDetector();
+                            try {
+                                const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                                promptStream.getTracks().forEach(t => t.stop());
+
+                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                                const lensContainer = document.getElementById("lens-buttons");
+                                lensContainer.innerHTML = "";
+
+                                if (videoDevices.length === 0) {
+                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
+                                    return;
+                                }
+
+                                let targetIndex = 0;
+                                videoDevices.forEach((dev, idx) => {
+                                    const b = document.createElement("button");
+                                    b.className = "lens-btn";
+                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
+                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
+                                    
+                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
+                                    b.onclick = function() { startLens(dev.deviceId, b); };
+                                    lensContainer.appendChild(b);
+
+                                    if (isBack) targetIndex = idx;
+                                });
+
+                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
+                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
+                            } catch(e) {
+                                startLens(null, null);
+                            }
+                        }
+
+                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
+                    </script>
+                </body>
+                </html>
+                """
+                components.html(original_working_scanner_html, height=440)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
