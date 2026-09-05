@@ -1143,7 +1143,11 @@ with main_tab2:
                 </body>
                 </html>
                 """
-                components.html(pro_live_scanner_html, height=440)
+                components.html(
+    pro_live_scanner_html,
+    height=440,
+    key=f"scanner_iframe_{st.session_state.current_user}_{st.session_state.inv_scan_counter}"
+)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
