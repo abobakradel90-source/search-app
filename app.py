@@ -23,9 +23,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==============================================================================
 # 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
-# ضع الرابط الخاص بك الذي نسخته من Firebase هنا:
 # ==============================================================================
-FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"   # 👈 ضع رابط Firebase هنا
+FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(
@@ -366,23 +365,6 @@ st.markdown(f"""
             outline: none !important;
         }}
         
-        [data-testid="stFileUploaderDropzone"] {{
-            background-color: #FFFFFF !important;
-            border: 2px dashed #1C65A6 !important;
-            border-radius: 14px !important;
-            padding: 20px !important;
-            text-align: center !important;
-        }}
-        
-        .mode-selector {{
-            background: #FFFFFF;
-            padding: 12px 20px;
-            border-radius: 14px;
-            border: 2px solid #CBD5E1;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }}
-        
         .login-card {{
             background: #FFFFFF;
             padding: 40px 35px;
@@ -697,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (كود الإسكانر الناجح حصرياً هنا لمنع التعارض)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -848,7 +830,7 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # مشغل الكاميرا الناجح بالكامل والمثبت
+                # مشغل الكاميرا الاحترافي المحمي من الشاشة السوداء
                 pro_live_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
@@ -870,7 +852,7 @@ with main_tab2:
                         .video-container {
                             width: 100%;
                             height: 250px;
-                            background: #111111;
+                            background: #000000;
                             position: relative;
                         }
                         video {
@@ -938,14 +920,12 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <div id="lens-buttons" class="lens-bar">
-                            <span style="font-size:12px; color:#64748B;">🔍 جاري تشغيل الكاميرا الخلفية...</span>
-                        </div>
+                        <div id="lens-buttons" class="lens-bar"></div>
 
-                        <div id="status-bar">🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة</div>
+                        <div id="status-bar">⏳ جاري الاتصال بالكاميرا الخلفية الأساسية...</div>
 
                         <label class="fallback-file-btn">
-                            📷 التقاط بالكاميرا الأصلية للهاتف (بديل فوري)
+                            📷 فتح كاميرا الهاتف الأصلية (بديل فوري مضمون)
                             <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="readBarcodeFromImage(this)">
                         </label>
                     </div>
@@ -1020,7 +1000,7 @@ with main_tab2:
                             }
                         }
 
-                        async function startLens(deviceId, btnElement) {
+                        async function startCamera(deviceId, btnElement) {
                             var statusEl = document.getElementById("status-bar");
                             statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
 
@@ -1039,6 +1019,8 @@ with main_tab2:
                                 width: { ideal: 1280 },
                                 height: { ideal: 720 }
                             };
+                            
+                            // اختيار الكاميرا الخلفية القياسية بدون فرض DeviceId مجهول في البداية
                             if (deviceId) {
                                 videoConstraints.deviceId = { exact: deviceId };
                             } else {
@@ -1050,11 +1032,15 @@ with main_tab2:
                                 activeStream = stream;
                                 var v = document.getElementById("scanner-feed");
                                 v.srcObject = stream;
-                                v.setAttribute('playsinline', 'true');
-                                v.setAttribute('webkit-playsinline', 'true');
                                 v.muted = true;
+                                v.playsInline = true;
+                                v.autoplay = true;
                                 await v.play();
                                 statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة";
+
+                                if (!deviceId) {
+                                    populateLensButtons();
+                                }
 
                                 if (detector) {
                                     scanLoop(v);
@@ -1071,43 +1057,39 @@ with main_tab2:
                             }
                         }
 
-                        async function setupCameras() {
-                            await initDetector();
+                        async function populateLensButtons() {
                             try {
-                                const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                                promptStream.getTracks().forEach(t => t.stop());
-
                                 const devices = await navigator.mediaDevices.enumerateDevices();
                                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                                 const lensContainer = document.getElementById("lens-buttons");
+                                if (!lensContainer || videoDevices.length === 0) return;
                                 lensContainer.innerHTML = "";
 
-                                if (videoDevices.length === 0) {
-                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
-                                    return;
-                                }
-
-                                let targetIndex = 0;
+                                let backIdx = 0;
                                 videoDevices.forEach((dev, idx) => {
+                                    const lbl = (dev.label || "").toLowerCase();
+                                    
+                                    // استبعاد حساسات العزل والـ IR التي تسبب الشاشة السوداء
+                                    if (lbl.includes("depth") || lbl.includes("ir") || lbl.includes("tof")) {
+                                        return;
+                                    }
+
+                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
                                     const b = document.createElement("button");
                                     b.className = "lens-btn";
-                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
-                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
                                     
-                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
-                                    b.onclick = function() { startLens(dev.deviceId, b); };
-                                    lensContainer.appendChild(b);
-
                                     if (isBack) {
-                                        targetIndex = idx;
+                                        backIdx++;
+                                        b.innerText = "📸 خلفية " + backIdx;
+                                        if (backIdx === 1) b.classList.add('active');
+                                    } else {
+                                        b.innerText = "🤳 أمامية";
                                     }
-                                });
 
-                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
-                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
-                            } catch(e) {
-                                startLens(null, null);
-                            }
+                                    b.onclick = function() { startCamera(dev.deviceId, b); };
+                                    lensContainer.appendChild(b);
+                                });
+                            } catch(e) {}
                         }
 
                         function readBarcodeFromImage(input) {
@@ -1130,12 +1112,19 @@ with main_tab2:
                             }
                         }
 
-                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
+                        window.addEventListener('load', () => {
+                            initDetector();
+                            setTimeout(() => { startCamera(null, null); }, 150);
+                        });
                     </script>
                 </body>
                 </html>
                 """
-                components.html(pro_live_scanner_html, height=440)
+                components.html(
+                    pro_live_scanner_html,
+                    height=440,
+                    key=f"scanner_iframe_{st.session_state.current_user}"
+                )
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
