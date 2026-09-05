@@ -17,12 +17,13 @@ import json
 import re
 import time
 import requests
+import uuid
 import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==============================================================================
-# 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
+# 🌐 الرابط السحابي لقاعدة البيانات
 # ==============================================================================
 FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
 
@@ -46,7 +47,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 إدارة البيانات السحابية والمحلية المزدوجة
+# 🌐 إدارة البيانات
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
@@ -304,21 +305,21 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وضبط الإطارات ---
-st.markdown(f"""
+# --- 2. الهوية البصرية ---
+st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
-        :root {{ --primary-color: #1C65A6 !important; }}
-        html, body, [class*="css"] {{ font-family: 'Tajawal', sans-serif !important; direction: rtl; }}
-        .stApp {{ background-color: #F0F4F8; }}
-        #MainMenu {{ visibility: hidden; }}
-        footer {{ visibility: hidden; }}
-        header[data-testid="stHeader"] {{ background: transparent !important; }}
-        [data-testid="stToolbar"] {{ display: none !important; }}
-        [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
-        .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
+        :root { --primary-color: #1C65A6 !important; }
+        html, body, [class*="css"] { font-family: 'Tajawal', sans-serif !important; direction: rtl; }
+        .stApp { background-color: #F0F4F8; }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        header[data-testid="stHeader"] { background: transparent !important; }
+        [data-testid="stToolbar"] { display: none !important; }
+        [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] { display: none !important; }
+        .block-container { padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }
         
-        .stTabs [data-baseweb="tab-list"] {{
+        .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
             justify-content: center;
             background: transparent !important;
@@ -326,10 +327,10 @@ st.markdown(f"""
             margin-bottom: 25px;
             border-bottom: none !important;
             flex-wrap: wrap;
-        }}
-        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
+        }
+        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
         
-        .stTabs [data-baseweb="tab"] {{
+        .stTabs [data-baseweb="tab"] {
             background-color: #FFFFFF !important;
             border: 2px solid #CBD5E1 !important;
             border-radius: 12px !important;
@@ -339,33 +340,33 @@ st.markdown(f"""
             color: #475569 !important;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04) !important;
             transition: all 0.2s ease !important;
-        }}
-        .stTabs [data-baseweb="tab"]:hover {{
+        }
+        .stTabs [data-baseweb="tab"]:hover {
             border-color: #1C65A6 !important;
             color: #1C65A6 !important;
             background-color: #F8FAFC !important;
             transform: translateY(-1px);
-        }}
-        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+        }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {
             background-color: #1C65A6 !important;
             border: 2px solid #1C65A6 !important;
             color: #FFFFFF !important;
             box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
-        }}
+        }
         
-        div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {{
+        div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {
             background-color: #FFFFFF !important;
             border: 2px solid #94A3B8 !important;
             border-radius: 10px !important;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-        }}
-        div[data-baseweb="input"]:focus-within, div[data-baseweb="base-input"]:focus-within, div[data-baseweb="select"]:focus-within > div {{
+        }
+        div[data-baseweb="input"]:focus-within, div[data-baseweb="base-input"]:focus-within, div[data-baseweb="select"]:focus-within > div {
             border-color: #1C65A6 !important;
             box-shadow: 0 0 0 3px rgba(28, 101, 166, 0.2) !important;
             outline: none !important;
-        }}
+        }
         
-        .login-card {{
+        .login-card {
             background: #FFFFFF;
             padding: 40px 35px;
             border-radius: 24px;
@@ -375,32 +376,32 @@ st.markdown(f"""
             text-align: center;
             border: 1px solid #E2E8F0;
             border-top: 6px solid #1C65A6;
-        }}
-        .login-logo-wrap {{ display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }}
-        .login-logo-img {{ height: 90px; width: 90px; object-fit: cover; border-radius: 50%; border: 3px solid #E8F0F8; background: #FFFFFF; padding: 3px; }}
-        .login-title {{ color: #0F2942; font-weight: 900; font-size: 26px; margin-bottom: 6px; }}
-        .login-subtitle {{ color: #64748B; font-size: 14px; margin-bottom: 25px; }}
+        }
+        .login-logo-wrap { display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }
+        .login-logo-img { height: 90px; width: 90px; object-fit: cover; border-radius: 50%; border: 3px solid #E8F0F8; background: #FFFFFF; padding: 3px; }
+        .login-title { color: #0F2942; font-weight: 900; font-size: 26px; margin-bottom: 6px; }
+        .login-subtitle { color: #64748B; font-size: 14px; margin-bottom: 25px; }
         
-        .brand-navbar {{ background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -20px; margin-bottom: 15px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }}
-        .brand-navbar img {{ height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }}
-        .brand-navbar h1 {{ color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }}
-        .stButton > button {{ background-color: #1C65A6 !important; color: white !important; border-radius: 10px; border: none; padding: 9px 18px; font-weight: 800; font-size: 15px; width: 100%; box-shadow: 0 4px 10px rgba(28, 101, 166, 0.2); }}
-        .stButton > button:hover {{ background-color: #144A7A !important; }}
-        .logout-btn > button {{ background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; }}
+        .brand-navbar { background: linear-gradient(90deg, #1C65A6 0%, #144A7A 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: center; color: white; width: 100%; margin-top: -20px; margin-bottom: 15px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; box-shadow: 0 4px 15px rgba(28, 101, 166, 0.3); }
+        .brand-navbar img { height: 55px; margin-left: 15px; border-radius: 8px; background-color: white; padding: 2px; }
+        .brand-navbar h1 { color: white; margin: 0; font-weight: 900; font-size: 2.2rem; }
+        .stButton > button { background-color: #1C65A6 !important; color: white !important; border-radius: 10px; border: none; padding: 9px 18px; font-weight: 800; font-size: 15px; width: 100%; box-shadow: 0 4px 10px rgba(28, 101, 166, 0.2); }
+        .stButton > button:hover { background-color: #144A7A !important; }
+        .logout-btn > button { background-color: #EF4444 !important; font-size: 14px !important; padding: 5px 15px !important; width: auto !important; }
         
-        .product-card {{ background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; }}
-        .product-img {{ width: 120px; height: 120px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }}
-        .code-badge {{ background-color: #E8F0F8; color: #1C65A6; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 800; display: inline-block; margin-bottom: 8px; }}
-        .product-title {{ font-size: 18px; color: #0F172A; font-weight: 800; margin: 0 0 6px 0; }}
-        .stock-badge {{ display: inline-block; margin-top: 5px; padding: 4px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; }}
-        .in-stock {{ background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }}
-        .out-of-stock {{ background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; }}
-        .metric-card {{ background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #1C65A6; }}
-        .metric-title {{ color: #64748B; font-size: 15px; font-weight: 700; margin-bottom: 5px; }}
-        .metric-value {{ color: #0F172A; font-size: 28px; font-weight: 900; }}
-        .inv-active-bar {{ background: linear-gradient(90deg, #10B981, #059669); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }}
-        .sales-active-bar {{ background: linear-gradient(90deg, #F59E0B, #D97706); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }}
-        .footer {{ position: fixed; bottom: 0; left: 0; width: 100%; background-color: #144A7A; color: white; text-align: center; padding: 10px; font-weight: 500; z-index: 999; }}
+        .product-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 25px; margin-bottom: 20px; border: 1px solid #E1E8F0; border-right: 6px solid #1C65A6; }
+        .product-img { width: 120px; height: 120px; object-fit: contain; border-radius: 10px; background-color: #F8FAFC; padding: 5px; border: 1px solid #E1E8F0; }
+        .code-badge { background-color: #E8F0F8; color: #1C65A6; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 800; display: inline-block; margin-bottom: 8px; }
+        .product-title { font-size: 18px; color: #0F172A; font-weight: 800; margin: 0 0 6px 0; }
+        .stock-badge { display: inline-block; margin-top: 5px; padding: 4px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; }
+        .in-stock { background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }
+        .out-of-stock { background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; }
+        .metric-card { background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #1C65A6; }
+        .metric-title { color: #64748B; font-size: 15px; font-weight: 700; margin-bottom: 5px; }
+        .metric-value { color: #0F172A; font-size: 28px; font-weight: 900; }
+        .inv-active-bar { background: linear-gradient(90deg, #10B981, #059669); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }
+        .sales-active-bar { background: linear-gradient(90deg, #F59E0B, #D97706); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }
+        .footer { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #144A7A; color: white; text-align: center; padding: 10px; font-weight: 500; z-index: 999; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -512,7 +513,7 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🚀 محرك استخراج البيانات الموحد والذكي
+# 🚀 محرك استخراج البيانات الموحد
 # ==========================================
 system_inventory = {}
 
@@ -679,7 +680,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (حل الكاميرا المستقرة بنظام التشغيل التفاعلي)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -753,7 +754,7 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # الحالة 1: تم مسح كود بنجاح -> إظهار كارت الصنف وخانة الكمية فقط
+            # الحالة 1: تم مسح كود بنجاح -> إظهار كارت الصنف وخانة الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -830,17 +831,18 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # محرك الكاميرا التفاعلي (يمنع الشاشة السوداء بضغطة زر واحدة واضحة)
-                pro_live_scanner_html = """
+                # الكود الأصلي الناجح مع معرّف جلسة عازل يمنع تعارض الهواتف
+                random_session_key = str(uuid.uuid4())[:8]
+                pro_live_scanner_html = f"""
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+                    <script src="https://unpkg.com/@zxing/library@latest"></script>
                     <style>
-                        body { margin: 0; padding: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }
-                        .scanner-box {
+                        body {{ margin: 0; padding: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }}
+                        .scanner-box {{
                             background: #FFFFFF;
                             border: 2.5px solid #1C65A6;
                             border-radius: 14px;
@@ -848,42 +850,58 @@ with main_tab2:
                             max-width: 480px;
                             margin: 0 auto;
                             box-shadow: 0 4px 15px rgba(28, 101, 166, 0.15);
-                        }
-                        #reader {
+                        }}
+                        .video-container {{
                             width: 100%;
                             height: 250px;
                             background: #111111;
+                            position: relative;
+                        }}
+                        video {{
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }}
+                        .laser-line {{
+                            position: absolute;
+                            top: 50%;
+                            left: 5%;
+                            width: 90%;
+                            height: 2px;
+                            background: #EF4444;
+                            box-shadow: 0 0 8px #EF4444;
+                            pointer-events: none;
+                        }}
+                        .lens-bar {{
+                            display: flex;
+                            gap: 6px;
+                            justify-content: center;
+                            flex-wrap: wrap;
+                            margin-top: 8px;
+                        }}
+                        .lens-btn {{
+                            background: #F1F5F9;
+                            color: #1E293B;
+                            border: 1.5px solid #CBD5E1;
                             border-radius: 8px;
-                            overflow: hidden;
-                            margin-bottom: 8px;
-                        }
-                        #reader video {
-                            object-fit: cover !important;
-                            width: 100% !important;
-                            height: 100% !important;
-                        }
-                        .action-btn {
+                            padding: 6px 12px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            cursor: pointer;
+                        }}
+                        .lens-btn.active {{
                             background: #1C65A6;
                             color: #FFFFFF;
-                            border: none;
-                            border-radius: 10px;
-                            padding: 12px 18px;
-                            font-size: 15px;
-                            font-weight: 800;
-                            width: 100%;
-                            cursor: pointer;
-                            margin-top: 5px;
-                            box-shadow: 0 3px 8px rgba(28, 101, 166, 0.25);
-                        }
-                        .action-btn:hover { background: #144A7A; }
-                        #status-bar {
+                            border-color: #1C65A6;
+                        }}
+                        #status-bar {{
                             margin-top: 8px;
                             font-size: 13.5px;
                             font-weight: 800;
                             color: #1C65A6;
                             min-height: 20px;
-                        }
-                        .fallback-file-btn {
+                        }}
+                        .fallback-file-btn {{
                             display: block;
                             background: #059669;
                             color: #FFFFFF;
@@ -894,29 +912,36 @@ with main_tab2:
                             margin-top: 8px;
                             cursor: pointer;
                             text-decoration: none;
-                        }
+                        }}
                     </style>
                 </head>
                 <body>
-                    <div class="scanner-box">
-                        <div id="reader"></div>
+                    <div class="scanner-box" id="scanner-{random_session_key}">
+                        <div class="video-container">
+                            <video id="scanner-feed" autoplay playsinline webkit-playsinline muted></video>
+                            <div class="laser-line"></div>
+                        </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 فتح الكاميرا الخلفية (اضغط للتشغيل)</button>
+                        <div id="lens-buttons" class="lens-bar">
+                            <span style="font-size:12px; color:#64748B;">🔍 جاري تشغيل الكاميرا الخلفية...</span>
+                        </div>
 
-                        <div id="status-bar">اضغط على زر الفتح لتشغيل الكاميرا فوراً</div>
+                        <div id="status-bar">🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة</div>
 
                         <label class="fallback-file-btn">
-                            📷 فتح كاميرا الهاتف الأصلية (بديل فوري مضمون)
+                            📷 التقاط بالكاميرا الأصلية للهاتف (بديل فوري)
                             <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="readBarcodeFromImage(this)">
                         </label>
                     </div>
 
                     <script>
-                        var html5QrCode = null;
+                        var activeStream = null;
+                        var codeReader = null;
                         var isLocked = false;
+                        var detector = null;
 
-                        function playBeep() {
-                            try {
+                        function playBeep() {{
+                            try {{
                                 var ctx = new (window.AudioContext || window.webkitAudioContext)();
                                 var osc = ctx.createOscillator();
                                 var gain = ctx.createGain();
@@ -928,92 +953,168 @@ with main_tab2:
                                 osc.start();
                                 osc.stop(ctx.currentTime + 0.12);
                                 if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
-                            } catch(e) {}
-                        }
+                            }} catch(e) {{}}
+                        }}
 
-                        function sendCode(code) {
+                        function sendCode(code) {{
                             if (isLocked) return;
                             isLocked = true;
                             playBeep();
                             var cleanCode = code.trim().toUpperCase();
                             document.getElementById("status-bar").innerHTML = "🎯 تم لقط الكود: <b>" + cleanCode + "</b><br>⏳ جاري فتح كارت الصنف...";
 
-                            if (html5QrCode) {
-                                html5QrCode.stop().then(doInject).catch(doInject);
-                            } else {
-                                doInject();
-                            }
+                            if (codeReader) {{ try {{ codeReader.reset(); }} catch(e) {{}} }}
+                            if (activeStream) {{ try {{ activeStream.getTracks().forEach(t => t.stop()); }} catch(e) {{}} }}
 
-                            function doInject() {
-                                try {
-                                    var doc = window.parent.document;
-                                    var targetInput = doc.querySelector('input[placeholder*="وجّه الكاميرا نحو الباركود"]') || doc.querySelector('input[data-testid="stTextInput"]');
-                                    if (targetInput) {
-                                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                                        nativeSetter.call(targetInput, cleanCode);
-                                        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                        targetInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                        targetInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', keyCode: 13 }));
-                                    }
-                                } catch(err) {}
-                            }
-                        }
+                            try {{
+                                var doc = window.parent.document;
+                                var targetInput = doc.querySelector('input[placeholder*="وجّه الكاميرا نحو الباركود"]') || doc.querySelector('input[data-testid="stTextInput"]');
+                                if (targetInput) {{
+                                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                    nativeSetter.call(targetInput, cleanCode);
+                                    targetInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                    targetInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    targetInput.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, cancelable: true, key: 'Enter', keyCode: 13 }}));
+                                }}
+                            }} catch(err) {{}}
+                        }}
 
-                        function startScanner() {
+                        async function initDetector() {{
+                            if ('BarcodeDetector' in window) {{
+                                try {{
+                                    detector = new BarcodeDetector({{ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] }});
+                                }} catch(e) {{ detector = null; }}
+                            }}
+                        }}
+
+                        function scanLoop(videoEl) {{
+                            if (isLocked) return;
+                            if (detector && videoEl.readyState >= 2) {{
+                                detector.detect(videoEl).then(barcodes => {{
+                                    if (barcodes.length > 0 && barcodes[0].rawValue) {{
+                                        sendCode(barcodes[0].rawValue.trim());
+                                        return;
+                                    }}
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                }}).catch(() => {{
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                }});
+                            }} else {{
+                                if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                            }}
+                        }}
+
+                        async function startLens(deviceId, btnElement) {{
                             var statusEl = document.getElementById("status-bar");
-                            var btnEl = document.getElementById("start-btn");
-                            statusEl.innerHTML = "⏳ جاري الاتصال بالكاميرا الخلفية...";
-                            btnEl.style.display = "none";
+                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
 
-                            html5QrCode = new Html5Qrcode("reader");
-                            var config = {
-                                fps: 15,
-                                qrbox: { width: 250, height: 160 },
-                                aspectRatio: 1.333
-                            };
+                            document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+                            if (btnElement) btnElement.classList.add('active');
 
-                            html5QrCode.start(
-                                { facingMode: { exact: "environment" } },
-                                config,
-                                function(decodedText) {
-                                    sendCode(decodedText);
-                                },
-                                function(error) {}
-                            ).then(function() {
-                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
-                            }).catch(function(err) {
-                                // محاولة ثانية بالوضع المرن في حال تعذر التحديد الدقيق
-                                html5QrCode.start(
-                                    { facingMode: "environment" },
-                                    config,
-                                    function(decodedText) {
-                                        sendCode(decodedText);
-                                    },
-                                    function(error) {}
-                                ).then(function() {
-                                    statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
-                                }).catch(function(e) {
-                                    statusEl.innerHTML = "⚠️ تعذر تشغيل الفيديو المباشر. استخدم زر 'فتح كاميرا الهاتف الأصلية' بالأسفل فهو يعمل دائماً.";
-                                    btnEl.style.display = "block";
-                                });
-                            });
-                        }
+                            if (activeStream) {{
+                                activeStream.getTracks().forEach(t => t.stop());
+                                activeStream = null;
+                            }}
+                            if (codeReader) {{
+                                try {{ codeReader.reset(); }} catch(e) {{}}
+                            }}
 
-                        function readBarcodeFromImage(input) {
-                            if (input.files && input.files[0]) {
+                            var videoConstraints = {{
+                                width: {{ ideal: 1280 }},
+                                height: {{ ideal: 720 }}
+                            }};
+                            if (deviceId) {{
+                                videoConstraints.deviceId = {{ exact: deviceId }};
+                            }} else {{
+                                videoConstraints.facingMode = {{ ideal: "environment" }};
+                            }}
+
+                            try {{
+                                const stream = await navigator.mediaDevices.getUserMedia({{ audio: false, video: videoConstraints }});
+                                activeStream = stream;
+                                var v = document.getElementById("scanner-feed");
+                                v.srcObject = stream;
+                                v.setAttribute('playsinline', 'true');
+                                v.setAttribute('webkit-playsinline', 'true');
+                                v.muted = true;
+                                await v.play();
+                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة";
+
+                                if (detector) {{
+                                    scanLoop(v);
+                                }} else {{
+                                    codeReader = new ZXing.BrowserMultiFormatReader();
+                                    codeReader.decodeFromVideoElement(v, (result, err) => {{
+                                        if (result && result.text) {{
+                                            sendCode(result.text);
+                                        }}
+                                    }});
+                                }}
+                            }} catch(err) {{
+                                statusEl.innerHTML = "⚠️ اضغط على زر عدسة أخرى أعلاه للتبديل.";
+                            }}
+                        }}
+
+                        async function setupCameras() {{
+                            await initDetector();
+                            try {{
+                                const promptStream = await navigator.mediaDevices.getUserMedia({{ video: true, audio: false }});
+                                promptStream.getTracks().forEach(t => t.stop());
+
+                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                                const lensContainer = document.getElementById("lens-buttons");
+                                lensContainer.innerHTML = "";
+
+                                if (videoDevices.length === 0) {{
+                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
+                                    return;
+                                }}
+
+                                let targetIndex = 0;
+                                videoDevices.forEach((dev, idx) => {{
+                                    const b = document.createElement("button");
+                                    b.className = "lens-btn";
+                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
+                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
+                                    
+                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
+                                    b.onclick = function() {{ startLens(dev.deviceId, b); }};
+                                    lensContainer.appendChild(b);
+
+                                    if (isBack) {{
+                                        targetIndex = idx;
+                                    }}
+                                }});
+
+                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
+                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
+                            }} catch(e) {{
+                                startLens(null, null);
+                            }}
+                        }}
+
+                        function readBarcodeFromImage(input) {{
+                            if (input.files && input.files[0]) {{
                                 document.getElementById("status-bar").innerHTML = "🔍 جاري قراءة الكود من الصورة...";
-                                if (!html5QrCode) {
-                                    html5QrCode = new Html5Qrcode("reader");
-                                }
-                                html5QrCode.scanFile(input.files[0], true)
-                                .then(function(decodedText) {
-                                    sendCode(decodedText);
-                                })
-                                .catch(function(err) {
-                                    document.getElementById("status-bar").innerHTML = "⚠️ لم يتم لقط الباركود، التقط صورة أقرب.";
-                                });
-                            }
-                        }
+                                var reader = new FileReader();
+                                reader.onload = function(e) {{
+                                    var img = new Image();
+                                    img.onload = function() {{
+                                        var z = new ZXing.BrowserMultiFormatReader();
+                                        z.decodeFromImage(img).then(res => {{
+                                            if (res && res.text) sendCode(res.text);
+                                        }}).catch(() => {{
+                                            document.getElementById("status-bar").innerHTML = "⚠️ لم يتم لقط الباركود، التقط صورة أقرب.";
+                                        }});
+                                    }};
+                                    img.src = e.target.result;
+                                }};
+                                reader.readAsDataURL(input.files[0]);
+                            }}
+                        }}
+
+                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
                     </script>
                 </body>
                 </html>
