@@ -679,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (كود الإسكانر الناجح والمثبت)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -830,7 +830,7 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # مشغل الكاميرا الاحترافي بنص قياسي دون أخطاء f-string
+                # الكود الناجح والمختبر مسبقاً للكاميرا (بدون f-string نهائياً)
                 pro_live_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
@@ -852,7 +852,7 @@ with main_tab2:
                         .video-container {
                             width: 100%;
                             height: 250px;
-                            background: #000000;
+                            background: #111111;
                             position: relative;
                         }
                         video {
@@ -920,12 +920,14 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <div id="lens-buttons" class="lens-bar"></div>
+                        <div id="lens-buttons" class="lens-bar">
+                            <span style="font-size:12px; color:#64748B;">🔍 جاري تشغيل الكاميرا الخلفية...</span>
+                        </div>
 
-                        <div id="status-bar">⏳ جاري الاتصال بالكاميرا الخلفية الأساسية...</div>
+                        <div id="status-bar">🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة</div>
 
                         <label class="fallback-file-btn">
-                            📷 فتح كاميرا الهاتف الأصلية (بديل فوري مضمون)
+                            📷 التقاط بالكاميرا الأصلية للهاتف (بديل فوري)
                             <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="readBarcodeFromImage(this)">
                         </label>
                     </div>
@@ -1000,7 +1002,7 @@ with main_tab2:
                             }
                         }
 
-                        async function startCamera(deviceId, btnElement) {
+                        async function startLens(deviceId, btnElement) {
                             var statusEl = document.getElementById("status-bar");
                             statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
 
@@ -1019,7 +1021,6 @@ with main_tab2:
                                 width: { ideal: 1280 },
                                 height: { ideal: 720 }
                             };
-                            
                             if (deviceId) {
                                 videoConstraints.deviceId = { exact: deviceId };
                             } else {
@@ -1031,15 +1032,11 @@ with main_tab2:
                                 activeStream = stream;
                                 var v = document.getElementById("scanner-feed");
                                 v.srcObject = stream;
+                                v.setAttribute('playsinline', 'true');
+                                v.setAttribute('webkit-playsinline', 'true');
                                 v.muted = true;
-                                v.playsInline = true;
-                                v.autoplay = true;
                                 await v.play();
                                 statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة";
-
-                                if (!deviceId) {
-                                    populateLensButtons();
-                                }
 
                                 if (detector) {
                                     scanLoop(v);
@@ -1056,38 +1053,43 @@ with main_tab2:
                             }
                         }
 
-                        async function populateLensButtons() {
+                        async function setupCameras() {
+                            await initDetector();
                             try {
+                                const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                                promptStream.getTracks().forEach(t => t.stop());
+
                                 const devices = await navigator.mediaDevices.enumerateDevices();
                                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                                 const lensContainer = document.getElementById("lens-buttons");
-                                if (!lensContainer || videoDevices.length === 0) return;
                                 lensContainer.innerHTML = "";
 
-                                let backIdx = 0;
-                                videoDevices.forEach((dev, idx) => {
-                                    const lbl = (dev.label || "").toLowerCase();
-                                    
-                                    if (lbl.includes("depth") || lbl.includes("ir") || lbl.includes("tof")) {
-                                        return;
-                                    }
+                                if (videoDevices.length === 0) {
+                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
+                                    return;
+                                }
 
-                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
+                                let targetIndex = 0;
+                                videoDevices.forEach((dev, idx) => {
                                     const b = document.createElement("button");
                                     b.className = "lens-btn";
+                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
+                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
                                     
-                                    if (isBack) {
-                                        backIdx++;
-                                        b.innerText = "📸 خلفية " + backIdx;
-                                        if (backIdx === 1) b.classList.add('active');
-                                    } else {
-                                        b.innerText = "🤳 أمامية";
-                                    }
-
-                                    b.onclick = function() { startCamera(dev.deviceId, b); };
+                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
+                                    b.onclick = function() { startLens(dev.deviceId, b); };
                                     lensContainer.appendChild(b);
+
+                                    if (isBack) {
+                                        targetIndex = idx;
+                                    }
                                 });
-                            } catch(e) {}
+
+                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
+                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
+                            } catch(e) {
+                                startLens(null, null);
+                            }
                         }
 
                         function readBarcodeFromImage(input) {
@@ -1110,10 +1112,7 @@ with main_tab2:
                             }
                         }
 
-                        window.addEventListener('load', () => {
-                            initDetector();
-                            setTimeout(() => { startCamera(null, null); }, 150);
-                        });
+                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
                     </script>
                 </body>
                 </html>
