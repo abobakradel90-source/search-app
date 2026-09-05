@@ -37,8 +37,16 @@ st.set_page_config(
 
 USERS = {
     "abobakr": "admin2026",    
-    "mohamed": "123456",       
-    "ahmed": "edstore"         
+    "gomaa": "123456",       
+    "hytham": "123456",
+    "sawy": "123456",
+    "ahmed": "123456",
+    "zidan": "123456",
+    "sheded": "123456",
+    "ali": "123456",
+    "yahia": "123456",
+    "shymaa": "123456",
+    "abdallah": "123456"         
 }
 
 if 'logged_in' not in st.session_state:
