@@ -837,8 +837,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # محرك الإسكانر المطور والمخصص لسرعة لقط باركود الأحذية والمتاجر
-                optimized_scanner_html = """
+                # محرك الإسكانر مع خط أحمر متحرك (أنيماشن) وقراءة صاروخية سريعة
+                animated_laser_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -869,15 +869,20 @@ with main_tab2:
                             height: 100%;
                             object-fit: cover;
                         }
+                        @keyframes laserMove {
+                            0% { top: 10%; }
+                            50% { top: 90%; }
+                            100% { top: 10%; }
+                        }
                         .laser-line {
                             position: absolute;
-                            top: 50%;
                             left: 5%;
                             width: 90%;
                             height: 2px;
                             background: #EF4444;
-                            box-shadow: 0 0 8px #EF4444;
+                            box-shadow: 0 0 10px #EF4444;
                             pointer-events: none;
+                            animation: laserMove 2s infinite ease-in-out;
                         }
                         .action-btn {
                             background: #1C65A6;
@@ -909,13 +914,12 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الكاميرا الفائق</button>
+                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الإسكانر الفائق</button>
 
                         <div id="status-bar">اضغط للتشغيل الفوري وقراءة الباركود</div>
                     </div>
 
                     <script>
-                        var activeStream = null;
                         var codeReader = null;
                         var isLocked = false;
 
@@ -943,7 +947,6 @@ with main_tab2:
                             document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
 
                             if (codeReader) { try { codeReader.reset(); } catch(e) {} }
-                            if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
 
                             setTimeout(function() {
                                 try {
@@ -957,27 +960,10 @@ with main_tab2:
                         async function startScanner() {
                             var statusEl = document.getElementById("status-bar");
                             var btnEl = document.getElementById("start-btn");
-                            statusEl.innerHTML = "⏳ جاري تفعيل حساسات الكاميرا...";
+                            statusEl.innerHTML = "⏳ جاري تفعيل الكاميرا الخلفية...";
                             btnEl.style.display = "none";
 
                             try {
-                                const constraints = {
-                                    audio: false,
-                                    video: {
-                                        facingMode: { ideal: "environment" },
-                                        width: { ideal: 1280 },
-                                        height: { ideal: 720 }
-                                    }
-                                };
-
-                                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                                activeStream = stream;
-                                var v = document.getElementById("scanner-feed");
-                                v.srcObject = stream;
-                                await v.play();
-                                statusEl.innerHTML = "🟢 الإسكانر يعمل - ضع الباركود منتصف الخط الأحمر";
-
-                                // تخصيص الصيغ التجارية السريعة لزيادة دقة وسرعة اللقط
                                 const hints = new Map();
                                 const formats = [
                                     ZXing.BarcodeFormat.CODE_128,
@@ -989,11 +975,15 @@ with main_tab2:
                                 hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
 
                                 codeReader = new ZXing.BrowserMultiFormatReader(hints);
-                                codeReader.decodeFromVideoElement(v, (result, err) => {
+                                
+                                // استخدام decodeFromVideoDevice للفتح التلقائي والمسح المستمر السريع
+                                codeReader.decodeFromVideoDevice(null, 'scanner-feed', (result, err) => {
                                     if (result && result.text) {
                                         sendCode(result.text);
                                     }
                                 });
+
+                                statusEl.innerHTML = "🟢 الإسكانر يعمل - مرر الباركود أمام الخط المتحرك";
 
                             } catch(err) {
                                 statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تأكد من الإذن.";
@@ -1004,7 +994,7 @@ with main_tab2:
                 </body>
                 </html>
                 """
-                components.html(optimized_scanner_html, height=360)
+                components.html(animated_laser_scanner_html, height=360)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
