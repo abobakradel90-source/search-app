@@ -46,7 +46,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 إدارة البيانات السحابية والمحلية المزدوجة
+# 🌐 إدارة البيانات
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
@@ -304,7 +304,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وضبط الإطارات ---
+# --- 2. الهوية البصرية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -837,8 +837,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # محرك المسح الآمن المدعوم بـ ZXing الفوري
-                safe_live_scanner_html = """
+                # الكود الأصلي والمستقر للإسكانر المباشر مع زر تفعيل لمسي صريح
+                stable_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -858,7 +858,7 @@ with main_tab2:
                         }
                         .video-container {
                             width: 100%;
-                            height: 250px;
+                            height: 240px;
                             background: #000000;
                             position: relative;
                             border-radius: 8px;
@@ -909,9 +909,9 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startCamera()">📸 تشغيل الإسكانر المباشر</button>
+                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الكاميرا الخلفية للإسكانر</button>
 
-                        <div id="status-bar">اضغط على زر التشغيل لفتح الكاميرا الخلفية فوراً</div>
+                        <div id="status-bar">اضغط على الزر لتفعيل الكاميرا والبدء الفوري</div>
                     </div>
 
                     <script>
@@ -954,28 +954,35 @@ with main_tab2:
                             }, 120);
                         }
 
-                        async function startCamera() {
+                        async function startScanner() {
                             var statusEl = document.getElementById("status-bar");
                             var btnEl = document.getElementById("start-btn");
-                            statusEl.innerHTML = "⏳ جاري تشغيل الكاميرا الخلفية...";
+                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة الخلفية...";
                             btnEl.style.display = "none";
 
                             try {
                                 const constraints = {
                                     audio: false,
                                     video: {
-                                        facingMode: { ideal: "environment" },
+                                        facingMode: { exact: "environment" },
                                         width: { ideal: 1280 },
                                         height: { ideal: 720 }
                                     }
                                 };
 
-                                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                                var stream;
+                                try {
+                                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                                } catch(e) {
+                                    // محاولة بالوضع المرن في حال لم تقبل الكاميرا exact
+                                    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment" } });
+                                }
+
                                 activeStream = stream;
                                 var v = document.getElementById("scanner-feed");
                                 v.srcObject = stream;
                                 await v.play();
-                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام الخط الأحمر";
+                                statusEl.innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود أمام الخط الأحمر";
 
                                 codeReader = new ZXing.BrowserMultiFormatReader();
                                 codeReader.decodeFromVideoElement(v, (result, err) => {
@@ -985,7 +992,7 @@ with main_tab2:
                                 });
 
                             } catch(err) {
-                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا المباشرة، يستخدم النظام إدخال الباركود أعلاه.";
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تحقق من صلاحيات المتصفح.";
                                 btnEl.style.display = "block";
                             }
                         }
@@ -993,7 +1000,7 @@ with main_tab2:
                 </body>
                 </html>
                 """
-                components.html(safe_live_scanner_html, height=360)
+                components.html(stable_scanner_html, height=360)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
