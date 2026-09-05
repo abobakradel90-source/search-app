@@ -304,7 +304,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية ---
+# --- 2. الهوية البصرية وضبط الإطارات ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -318,18 +318,15 @@ st.markdown(f"""
         [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
         .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
-        .stTabs [data-baseweb="tab-list"] {{
+        div.stRadio > div {{
             gap: 12px;
             justify-content: center;
             background: transparent !important;
             padding: 5px;
             margin-bottom: 25px;
-            border-bottom: none !important;
             flex-wrap: wrap;
         }}
-        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
-        
-        .stTabs [data-baseweb="tab"] {{
+        div.stRadio > div > label {{
             background-color: #FFFFFF !important;
             border: 2px solid #CBD5E1 !important;
             border-radius: 12px !important;
@@ -338,20 +335,14 @@ st.markdown(f"""
             font-weight: 800 !important;
             color: #475569 !important;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04) !important;
-            transition: all 0.2s ease !important;
+            cursor: pointer;
         }}
-        .stTabs [data-baseweb="tab"]:hover {{
+        div.stRadio > div > label:hover {{
             border-color: #1C65A6 !important;
             color: #1C65A6 !important;
             background-color: #F8FAFC !important;
-            transform: translateY(-1px);
         }}
-        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-            background-color: #1C65A6 !important;
-            border: 2px solid #1C65A6 !important;
-            color: #FFFFFF !important;
-            box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
-        }}
+        div.stRadio input[type="radio"] {{ display: none; }}
         
         div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {{
             background-color: #FFFFFF !important;
@@ -618,14 +609,29 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
         </div>
     </div>""", unsafe_allow_html=True)
 
-# 🌟 التبويبات الرئيسية 🌟
-tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
-main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
+# ==========================================
+# 🌟 إدارة التبويبات المدارة بالذاكرة (لتثبيت الانتقال الفوري للجرد عند المسح)
+# ==========================================
+nav_options = ["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"]
+if "main_nav_tab" not in st.session_state:
+    st.session_state.main_nav_tab = nav_options[0]
+
+# فحص كود الباركود عند إعادة التحميل وتحويل التبويب تلقائياً
+params = st.query_params
+if "scanned_code" in params:
+    scanned_val = str(params["scanned_code"]).strip().upper()
+    matched_k = match_product_code(scanned_val)
+    if matched_k:
+        st.session_state.current_scanned_code = matched_k
+        st.session_state.main_nav_tab = "📦 الجرد التشاركي"
+        st.query_params.clear()
+
+selected_main_tab = st.radio("التنقل الرئيسي", nav_options, horizontal=True, key="main_nav_tab", label_visibility="collapsed")
 
 # ==========================================
 # 1. تبويب البحث الذكي
 # ==========================================
-with main_tab1:
+if selected_main_tab == nav_options[0]:
     search_query = st.text_input(
         "🔍 ابحث هنا بالاسم أو الكود:",
         placeholder="اكتب الكود أو اسم الصنف هنا...",
@@ -681,7 +687,7 @@ with main_tab1:
 # ==========================================
 # 2. تبويب الجرد التشاركي
 # ==========================================
-with main_tab2:
+elif selected_main_tab == nav_options[1]:
     shared_inv = load_shared_inventory()
     
     if not shared_inv.get("is_active", False):
@@ -752,15 +758,6 @@ with main_tab2:
                 st.session_state.inv_scan_counter = 0
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
-
-            params = st.query_params
-            if "scanned_code" in params:
-                scanned_val = str(params["scanned_code"]).strip().upper()
-                matched_k = match_product_code(scanned_val)
-                if matched_k:
-                    st.session_state.current_scanned_code = matched_k
-                    st.query_params.clear()
-                    st.rerun()
 
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
@@ -837,8 +834,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # محرك إعادة توجيه الرابط السريع للتعامل مع كارت الصنف فورياً
-                url_redirect_scanner_html = """
+                # محرك الإسكانر السريع مع إعادة توجيه الرابط لفتح كارت الصنف فورياً
+                stable_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -914,9 +911,9 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startCamera()">📸 تشغيل الإسكانر الفوري</button>
+                        <button id="start-btn" class="action-btn" onclick="startCamera()">📸 تشغيل الكاميرا الخلفية للإسكانر</button>
 
-                        <div id="status-bar">اضغط للتشغيل الفوري وقراءة الباركود</div>
+                        <div id="status-bar">اضغط على زر التشغيل لبدء المسح الفوري</div>
                     </div>
 
                     <script>
@@ -1023,7 +1020,7 @@ with main_tab2:
                 </body>
                 </html>
                 """
-                components.html(url_redirect_scanner_html, height=360)
+                components.html(stable_scanner_html, height=360)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
@@ -1110,7 +1107,7 @@ with main_tab2:
 # ==========================================
 # 3. تبويب فواتير الجملة
 # ==========================================
-with main_tab3:
+elif selected_main_tab == nav_options[2]:
     shared_sales = load_shared_sales()
     
     if not shared_sales.get("is_active", False):
@@ -1275,7 +1272,7 @@ with main_tab3:
 # ==========================================
 # 4. تبويب الكاتالوج الشامل
 # ==========================================
-with main_tab_cat:
+elif selected_main_tab == nav_options[3]:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
     shared_s_cat = load_shared_sales()
     deductions = shared_s_cat.get("deductions", {})
@@ -1347,7 +1344,7 @@ with main_tab_cat:
 # ==========================================
 # 5. تبويب لوحة تحكم الإدارة
 # ==========================================
-with main_tab4:
+elif selected_main_tab == nav_options[4]:
     st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
     master_sales = []
     for rec in load_sales_history():
