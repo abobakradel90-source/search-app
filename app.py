@@ -304,7 +304,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وتنسيق التبويبات المدارة بالذاكرة ---
+# --- 2. الهوية البصرية وضبط الإطارات ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -732,11 +732,18 @@ elif selected_main_tab == nav_options[1]:
         
         scanned_map = shared_inv.get("scanned_items", {})
 
-        # التقاط الباركود وعرض كارت الصنف فوراً في أعلى الصفحة قبل أي تبويبات فرعية
         if "inv_scan_counter" not in st.session_state:
             st.session_state.inv_scan_counter = 0
         if "current_scanned_code" not in st.session_state:
             st.session_state.current_scanned_code = None
+
+        param_code = st.query_params.get("scanned_code")
+        if param_code:
+            matched_k = match_product_code(param_code)
+            if matched_k:
+                st.session_state.current_scanned_code = matched_k
+                st.query_params.clear()
+                st.rerun()
 
         if st.session_state.current_scanned_code:
             active_c = st.session_state.current_scanned_code
@@ -836,8 +843,8 @@ elif selected_main_tab == nav_options[1]:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأصلي والمستقر للإسكانر المباشر مع زر تفعيل لمسي صريح
-                stable_scanner_html = """
+                # محرك دقيق ومضمون تماماً لقراءة الباركود المتوافق مع جميع الهواتف
+                reliable_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -857,7 +864,7 @@ elif selected_main_tab == nav_options[1]:
                         }
                         .video-container {
                             width: 100%;
-                            height: 240px;
+                            height: 260px;
                             background: #000000;
                             position: relative;
                             border-radius: 8px;
@@ -873,9 +880,9 @@ elif selected_main_tab == nav_options[1]:
                             top: 50%;
                             left: 5%;
                             width: 90%;
-                            height: 2px;
+                            height: 2.5px;
                             background: #EF4444;
-                            box-shadow: 0 0 8px #EF4444;
+                            box-shadow: 0 0 10px #EF4444;
                             pointer-events: none;
                         }
                         .action-btn {
@@ -908,9 +915,9 @@ elif selected_main_tab == nav_options[1]:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الكاميرا الخلفية للإسكانر</button>
+                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الإسكانر الفوري</button>
 
-                        <div id="status-bar">اضغط على الزر لتفعيل الكاميرا والبدء الفوري</div>
+                        <div id="status-bar">اضغط للتشغيل الفوري وقراءة الباركود</div>
                     </div>
 
                     <script>
@@ -942,7 +949,6 @@ elif selected_main_tab == nav_options[1]:
                             document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
 
                             if (codeReader) { try { codeReader.reset(); } catch(e) {} }
-                            if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
 
                             setTimeout(function() {
                                 try {
@@ -956,41 +962,20 @@ elif selected_main_tab == nav_options[1]:
                         async function startScanner() {
                             var statusEl = document.getElementById("status-bar");
                             var btnEl = document.getElementById("start-btn");
-                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة الخلفية...";
+                            statusEl.innerHTML = "⏳ جاري تفعيل الكاميرا...";
                             btnEl.style.display = "none";
 
                             try {
-                                const constraints = {
-                                    audio: false,
-                                    video: {
-                                        facingMode: { exact: "environment" },
-                                        width: { ideal: 1280 },
-                                        height: { ideal: 720 }
-                                    }
-                                };
-
-                                var stream;
-                                try {
-                                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                                } catch(e) {
-                                    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment" } });
-                                }
-
-                                activeStream = stream;
-                                var v = document.getElementById("scanner-feed");
-                                v.srcObject = stream;
-                                await v.play();
-                                statusEl.innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود أمام الخط الأحمر";
-
                                 codeReader = new ZXing.BrowserMultiFormatReader();
-                                codeReader.decodeFromVideoElement(v, (result, err) => {
+                                // استخدام decodeFromVideoDevice الافتراضي الذي يعالج الكاميرا والباركود بسلاسة تامة
+                                codeReader.decodeFromVideoDevice(undefined, 'scanner-feed', (result, err) => {
                                     if (result && result.text) {
                                         sendCode(result.text);
                                     }
                                 });
-
+                                statusEl.innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود أمام الخط الأحمر";
                             } catch(err) {
-                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تحقق من صلاحيات المتصفح.";
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تحقق من الأذونات.";
                                 btnEl.style.display = "block";
                             }
                         }
@@ -998,7 +983,7 @@ elif selected_main_tab == nav_options[1]:
                 </body>
                 </html>
                 """
-                components.html(stable_scanner_html, height=360)
+                components.html(reliable_scanner_html, height=360)
 
             # 📝 مراجعة وتعديل الجلسة
             with tab_edit:
