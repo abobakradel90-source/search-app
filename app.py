@@ -837,8 +837,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأصلي والمستقر للإسكانر المباشر مع زر تفعيل لمسي صريح
-                stable_scanner_html = """
+                # محرك الإسكانر المطور والمخصص لسرعة لقط باركود الأحذية والمتاجر
+                optimized_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -858,7 +858,7 @@ with main_tab2:
                         }
                         .video-container {
                             width: 100%;
-                            height: 240px;
+                            height: 250px;
                             background: #000000;
                             position: relative;
                             border-radius: 8px;
@@ -909,9 +909,9 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الكاميرا الخلفية للإسكانر</button>
+                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الكاميرا الفائق</button>
 
-                        <div id="status-bar">اضغط على الزر لتفعيل الكاميرا والبدء الفوري</div>
+                        <div id="status-bar">اضغط للتشغيل الفوري وقراءة الباركود</div>
                     </div>
 
                     <script>
@@ -957,34 +957,38 @@ with main_tab2:
                         async function startScanner() {
                             var statusEl = document.getElementById("status-bar");
                             var btnEl = document.getElementById("start-btn");
-                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة الخلفية...";
+                            statusEl.innerHTML = "⏳ جاري تفعيل حساسات الكاميرا...";
                             btnEl.style.display = "none";
 
                             try {
                                 const constraints = {
                                     audio: false,
                                     video: {
-                                        facingMode: { exact: "environment" },
+                                        facingMode: { ideal: "environment" },
                                         width: { ideal: 1280 },
                                         height: { ideal: 720 }
                                     }
                                 };
 
-                                var stream;
-                                try {
-                                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                                } catch(e) {
-                                    // محاولة بالوضع المرن في حال لم تقبل الكاميرا exact
-                                    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment" } });
-                                }
-
+                                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                                 activeStream = stream;
                                 var v = document.getElementById("scanner-feed");
                                 v.srcObject = stream;
                                 await v.play();
-                                statusEl.innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود أمام الخط الأحمر";
+                                statusEl.innerHTML = "🟢 الإسكانر يعمل - ضع الباركود منتصف الخط الأحمر";
 
-                                codeReader = new ZXing.BrowserMultiFormatReader();
+                                // تخصيص الصيغ التجارية السريعة لزيادة دقة وسرعة اللقط
+                                const hints = new Map();
+                                const formats = [
+                                    ZXing.BarcodeFormat.CODE_128,
+                                    ZXing.BarcodeFormat.EAN_13,
+                                    ZXing.BarcodeFormat.EAN_8,
+                                    ZXing.BarcodeFormat.CODE_39,
+                                    ZXing.BarcodeFormat.UPC_A
+                                ];
+                                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+
+                                codeReader = new ZXing.BrowserMultiFormatReader(hints);
                                 codeReader.decodeFromVideoElement(v, (result, err) => {
                                     if (result && result.text) {
                                         sendCode(result.text);
@@ -992,7 +996,7 @@ with main_tab2:
                                 });
 
                             } catch(err) {
-                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تحقق من صلاحيات المتصفح.";
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تأكد من الإذن.";
                                 btnEl.style.display = "block";
                             }
                         }
@@ -1000,7 +1004,7 @@ with main_tab2:
                 </body>
                 </html>
                 """
-                components.html(stable_scanner_html, height=360)
+                components.html(optimized_scanner_html, height=360)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
