@@ -610,13 +610,13 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     </div>""", unsafe_allow_html=True)
 
 # ==========================================
-# 🌟 إدارة التبويبات المدارة بالذاكرة (لتثبيت الانتقال الفوري للجرد عند المسح)
+# 🌟 إدارة التبويبات المدارة بالذاكرة
 # ==========================================
 nav_options = ["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"]
 if "main_nav_tab" not in st.session_state:
     st.session_state.main_nav_tab = nav_options[0]
 
-# فحص كود الباركود عند إعادة التحميل وتحويل التبويب تلقائياً
+# معالجة القيمة الممررة عبر الـ URL مباشرة
 params = st.query_params
 if "scanned_code" in params:
     scanned_val = str(params["scanned_code"]).strip().upper()
@@ -759,6 +759,15 @@ elif selected_main_tab == nav_options[1]:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
+            # فحص القيمة الممررة من رابط الـ URL
+            param_code = st.query_params.get("scanned_code")
+            if param_code:
+                matched_k = match_product_code(param_code)
+                if matched_k:
+                    st.session_state.current_scanned_code = matched_k
+                    st.query_params.clear()
+                    st.rerun()
+
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -834,8 +843,8 @@ elif selected_main_tab == nav_options[1]:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # محرك الإسكانر السريع مع إعادة توجيه الرابط لفتح كارت الصنف فورياً
-                stable_scanner_html = """
+                # محرك العودة الآمن للرابط والتوجيه الفوري
+                direct_url_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -1020,7 +1029,7 @@ elif selected_main_tab == nav_options[1]:
                 </body>
                 </html>
                 """
-                components.html(stable_scanner_html, height=360)
+                components.html(direct_url_scanner_html, height=360)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
