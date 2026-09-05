@@ -679,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي (النسخة الأصلية التي كانت تعمل بامتياز)
+# 2. تبويب الجرد التشاركي
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -753,10 +753,10 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            params = st.query_params
-            if "scanned_code" in params:
-                scanned_val = str(params["scanned_code"]).strip().upper()
-                matched_k = match_product_code(scanned_val)
+            query_params = st.query_params
+            scanned_param = query_params.get("scanned_code")
+            if scanned_param:
+                matched_k = match_product_code(scanned_param)
                 if matched_k:
                     st.session_state.current_scanned_code = matched_k
                     st.query_params.clear()
@@ -837,8 +837,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأصلي المضبوط تماماً الذي يختار الكاميرا الخلفية ويدعم BarcodeDetector و ZXing
-                original_working_scanner_html = """
+                # محرك الإسكانر المدمج بأعلى سرعة قراءة مع خط أحمر متحرك
+                ultimate_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -859,46 +859,45 @@ with main_tab2:
                         .video-container {
                             width: 100%;
                             height: 260px;
-                            background: #111111;
+                            background: #000000;
                             position: relative;
+                            border-radius: 8px;
+                            overflow: hidden;
                         }
                         video {
                             width: 100%;
                             height: 100%;
                             object-fit: cover;
                         }
+                        @keyframes laserMove {
+                            0% { top: 10%; }
+                            50% { top: 90%; }
+                            100% { top: 10%; }
+                        }
                         .laser-line {
                             position: absolute;
-                            top: 50%;
                             left: 5%;
                             width: 90%;
-                            height: 2px;
+                            height: 2.5px;
                             background: #EF4444;
-                            box-shadow: 0 0 8px #EF4444;
+                            box-shadow: 0 0 10px #EF4444;
                             pointer-events: none;
+                            animation: laserMove 1.8s infinite ease-in-out;
                         }
-                        .lens-bar {
-                            display: flex;
-                            gap: 6px;
-                            justify-content: center;
-                            flex-wrap: wrap;
-                            margin-top: 10px;
-                        }
-                        .lens-btn {
-                            background: #F1F5F9;
-                            color: #1E293B;
-                            border: 1.5px solid #CBD5E1;
-                            border-radius: 8px;
-                            padding: 6px 12px;
-                            font-size: 13px;
-                            font-weight: 700;
-                            cursor: pointer;
-                        }
-                        .lens-btn.active {
+                        .action-btn {
                             background: #1C65A6;
                             color: #FFFFFF;
-                            border-color: #1C65A6;
+                            border: none;
+                            border-radius: 10px;
+                            padding: 12px 18px;
+                            font-size: 15px;
+                            font-weight: 800;
+                            width: 100%;
+                            cursor: pointer;
+                            margin-top: 10px;
+                            box-shadow: 0 3px 8px rgba(28, 101, 166, 0.25);
                         }
+                        .action-btn:hover { background: #144A7A; }
                         #status-bar {
                             margin-top: 8px;
                             font-size: 13.5px;
@@ -915,18 +914,16 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <div id="lens-buttons" class="lens-bar">
-                            <span style="font-size:12px; color:#64748B;">🔍 جاري تهيئة الكاميرا...</span>
-                        </div>
+                        <button id="start-btn" class="action-btn" onclick="startCamera()">📸 تشغيل الكاميرا الخلفية للإسكانر</button>
 
-                        <div id="status-bar">⏳ جاري الاتصال بالكاميرا...</div>
+                        <div id="status-bar">اضغط على زر التشغيل لبدء المسح الفوري</div>
                     </div>
 
                     <script>
                         var activeStream = null;
                         var codeReader = null;
                         var isLocked = false;
-                        var detector = null;
+                        var scanLoopTimer = null;
 
                         function playBeep() {
                             try {
@@ -951,6 +948,7 @@ with main_tab2:
                             var cleanCode = code.trim().toUpperCase();
                             document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
 
+                            if (scanLoopTimer) clearInterval(scanLoopTimer);
                             if (codeReader) { try { codeReader.reset(); } catch(e) {} }
                             if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
 
@@ -963,115 +961,69 @@ with main_tab2:
                             }, 120);
                         }
 
-                        async function initDetector() {
-                            if ('BarcodeDetector' in window) {
-                                try {
-                                    detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
-                                } catch(e) { detector = null; }
-                            }
-                        }
-
-                        function scanLoop(videoEl) {
-                            if (isLocked) return;
-                            if (detector && videoEl.readyState >= 2) {
-                                detector.detect(videoEl).then(barcodes => {
-                                    if (barcodes.length > 0 && barcodes[0].rawValue) {
-                                        sendCode(barcodes[0].rawValue.trim());
-                                        return;
-                                    }
-                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                }).catch(() => {
-                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                });
-                            } else {
-                                if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                            }
-                        }
-
-                        async function startLens(deviceId, btnElement) {
+                        async function startCamera() {
                             var statusEl = document.getElementById("status-bar");
-                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
-
-                            document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
-                            if (btnElement) btnElement.classList.add('active');
-
-                            if (activeStream) {
-                                activeStream.getTracks().forEach(t => t.stop());
-                                activeStream = null;
-                            }
-                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
-
-                            var videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
-                            if (deviceId) videoConstraints.deviceId = { exact: deviceId };
-                            else videoConstraints.facingMode = { ideal: "environment" };
+                            var btnEl = document.getElementById("start-btn");
+                            statusEl.innerHTML = "⏳ جاري تشغيل الكاميرا الخلفية...";
+                            btnEl.style.display = "none";
 
                             try {
-                                const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
+                                const constraints = {
+                                    audio: false,
+                                    video: {
+                                        facingMode: { ideal: "environment" },
+                                        width: { ideal: 1280 },
+                                        height: { ideal: 720 }
+                                    }
+                                };
+
+                                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                                 activeStream = stream;
                                 var v = document.getElementById("scanner-feed");
                                 v.srcObject = stream;
-                                v.setAttribute('playsinline', 'true');
-                                v.setAttribute('webkit-playsinline', 'true');
-                                v.muted = true;
                                 await v.play();
-                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
+                                statusEl.innerHTML = "🟢 الكاميرا تعمل - مرر الباركود أمام الخط المتحرك";
+
+                                let detector = null;
+                                if ('BarcodeDetector' in window) {
+                                    try {
+                                        detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
+                                    } catch(e) { detector = null; }
+                                }
 
                                 if (detector) {
-                                    scanLoop(v);
-                                } else {
+                                    scanLoopTimer = setInterval(async function() {
+                                        if (isLocked) return;
+                                        if (v.readyState >= 2) {
+                                            try {
+                                                const barcodes = await detector.detect(v);
+                                                if (barcodes.length > 0 && barcodes[0].rawValue) {
+                                                    sendCode(barcodes[0].rawValue);
+                                                }
+                                            } catch(e) {}
+                                        }
+                                    }, 80);
+                                }
+
+                                try {
                                     codeReader = new ZXing.BrowserMultiFormatReader();
                                     codeReader.decodeFromVideoElement(v, (result, err) => {
-                                        if (result && result.text) sendCode(result.text);
+                                        if (result && result.text) {
+                                            sendCode(result.text);
+                                        }
                                     });
-                                }
+                                } catch(ex) {}
+
                             } catch(err) {
-                                statusEl.innerHTML = "⚠️ تعذر تشغيل هذه العدسة (جرب الضغط على عدسة أخرى أعلاه).";
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا المباشرة: تأكد من الصلاحيات.";
+                                btnEl.style.display = "block";
                             }
                         }
-
-                        async function setupCameras() {
-                            await initDetector();
-                            try {
-                                const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                                promptStream.getTracks().forEach(t => t.stop());
-
-                                const devices = await navigator.mediaDevices.enumerateDevices();
-                                const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                                const lensContainer = document.getElementById("lens-buttons");
-                                lensContainer.innerHTML = "";
-
-                                if (videoDevices.length === 0) {
-                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
-                                    return;
-                                }
-
-                                let targetIndex = 0;
-                                videoDevices.forEach((dev, idx) => {
-                                    const b = document.createElement("button");
-                                    b.className = "lens-btn";
-                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
-                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
-                                    
-                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
-                                    b.onclick = function() { startLens(dev.deviceId, b); };
-                                    lensContainer.appendChild(b);
-
-                                    if (isBack) targetIndex = idx;
-                                });
-
-                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
-                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
-                            } catch(e) {
-                                startLens(null, null);
-                            }
-                        }
-
-                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
                     </script>
                 </body>
                 </html>
                 """
-                components.html(original_working_scanner_html, height=440)
+                components.html(ultimate_scanner_html, height=360)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
