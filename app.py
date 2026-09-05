@@ -46,7 +46,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 إدارة البيانات
+# 🌐 إدارة البيانات السحابية والمحلية المزدوجة
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
@@ -679,7 +679,7 @@ with main_tab1:
                 except Exception as e: st.error(f"⚠️ خطأ أثناء البحث: {e}")
 
 # ==========================================
-# 2. تبويب الجرد التشاركي
+# 2. تبويب الجرد التشاركي (النسخة الأصلية التي كانت تعمل بامتياز)
 # ==========================================
 with main_tab2:
     shared_inv = load_shared_inventory()
@@ -837,8 +837,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # محرك الإسكانر مع خط أحمر متحرك (أنيماشن) وقراءة صاروخية سريعة
-                animated_laser_scanner_html = """
+                # الكود الأصلي والمضبوط تماماً الذي يختار الكاميرا الخلفية ويدعم BarcodeDetector و ZXing
+                original_working_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -858,46 +858,47 @@ with main_tab2:
                         }
                         .video-container {
                             width: 100%;
-                            height: 250px;
-                            background: #000000;
+                            height: 260px;
+                            background: #111111;
                             position: relative;
-                            border-radius: 8px;
-                            overflow: hidden;
                         }
                         video {
                             width: 100%;
                             height: 100%;
                             object-fit: cover;
                         }
-                        @keyframes laserMove {
-                            0% { top: 10%; }
-                            50% { top: 90%; }
-                            100% { top: 10%; }
-                        }
                         .laser-line {
                             position: absolute;
+                            top: 50%;
                             left: 5%;
                             width: 90%;
                             height: 2px;
                             background: #EF4444;
-                            box-shadow: 0 0 10px #EF4444;
+                            box-shadow: 0 0 8px #EF4444;
                             pointer-events: none;
-                            animation: laserMove 2s infinite ease-in-out;
                         }
-                        .action-btn {
+                        .lens-bar {
+                            display: flex;
+                            gap: 6px;
+                            justify-content: center;
+                            flex-wrap: wrap;
+                            margin-top: 10px;
+                        }
+                        .lens-btn {
+                            background: #F1F5F9;
+                            color: #1E293B;
+                            border: 1.5px solid #CBD5E1;
+                            border-radius: 8px;
+                            padding: 6px 12px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            cursor: pointer;
+                        }
+                        .lens-btn.active {
                             background: #1C65A6;
                             color: #FFFFFF;
-                            border: none;
-                            border-radius: 10px;
-                            padding: 12px 18px;
-                            font-size: 15px;
-                            font-weight: 800;
-                            width: 100%;
-                            cursor: pointer;
-                            margin-top: 10px;
-                            box-shadow: 0 3px 8px rgba(28, 101, 166, 0.25);
+                            border-color: #1C65A6;
                         }
-                        .action-btn:hover { background: #144A7A; }
                         #status-bar {
                             margin-top: 8px;
                             font-size: 13.5px;
@@ -914,14 +915,18 @@ with main_tab2:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الإسكانر الفائق</button>
+                        <div id="lens-buttons" class="lens-bar">
+                            <span style="font-size:12px; color:#64748B;">🔍 جاري تهيئة الكاميرا...</span>
+                        </div>
 
-                        <div id="status-bar">اضغط للتشغيل الفوري وقراءة الباركود</div>
+                        <div id="status-bar">⏳ جاري الاتصال بالكاميرا...</div>
                     </div>
 
                     <script>
+                        var activeStream = null;
                         var codeReader = null;
                         var isLocked = false;
+                        var detector = null;
 
                         function playBeep() {
                             try {
@@ -947,6 +952,7 @@ with main_tab2:
                             document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
 
                             if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+                            if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
 
                             setTimeout(function() {
                                 try {
@@ -957,44 +963,115 @@ with main_tab2:
                             }, 120);
                         }
 
-                        async function startScanner() {
-                            var statusEl = document.getElementById("status-bar");
-                            var btnEl = document.getElementById("start-btn");
-                            statusEl.innerHTML = "⏳ جاري تفعيل الكاميرا الخلفية...";
-                            btnEl.style.display = "none";
-
-                            try {
-                                const hints = new Map();
-                                const formats = [
-                                    ZXing.BarcodeFormat.CODE_128,
-                                    ZXing.BarcodeFormat.EAN_13,
-                                    ZXing.BarcodeFormat.EAN_8,
-                                    ZXing.BarcodeFormat.CODE_39,
-                                    ZXing.BarcodeFormat.UPC_A
-                                ];
-                                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-
-                                codeReader = new ZXing.BrowserMultiFormatReader(hints);
-                                
-                                // استخدام decodeFromVideoDevice للفتح التلقائي والمسح المستمر السريع
-                                codeReader.decodeFromVideoDevice(null, 'scanner-feed', (result, err) => {
-                                    if (result && result.text) {
-                                        sendCode(result.text);
-                                    }
-                                });
-
-                                statusEl.innerHTML = "🟢 الإسكانر يعمل - مرر الباركود أمام الخط المتحرك";
-
-                            } catch(err) {
-                                statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تأكد من الإذن.";
-                                btnEl.style.display = "block";
+                        async function initDetector() {
+                            if ('BarcodeDetector' in window) {
+                                try {
+                                    detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
+                                } catch(e) { detector = null; }
                             }
                         }
+
+                        function scanLoop(videoEl) {
+                            if (isLocked) return;
+                            if (detector && videoEl.readyState >= 2) {
+                                detector.detect(videoEl).then(barcodes => {
+                                    if (barcodes.length > 0 && barcodes[0].rawValue) {
+                                        sendCode(barcodes[0].rawValue.trim());
+                                        return;
+                                    }
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                }).catch(() => {
+                                    if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                                });
+                            } else {
+                                if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
+                            }
+                        }
+
+                        async function startLens(deviceId, btnElement) {
+                            var statusEl = document.getElementById("status-bar");
+                            statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
+
+                            document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+                            if (btnElement) btnElement.classList.add('active');
+
+                            if (activeStream) {
+                                activeStream.getTracks().forEach(t => t.stop());
+                                activeStream = null;
+                            }
+                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+
+                            var videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
+                            if (deviceId) videoConstraints.deviceId = { exact: deviceId };
+                            else videoConstraints.facingMode = { ideal: "environment" };
+
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
+                                activeStream = stream;
+                                var v = document.getElementById("scanner-feed");
+                                v.srcObject = stream;
+                                v.setAttribute('playsinline', 'true');
+                                v.setAttribute('webkit-playsinline', 'true');
+                                v.muted = true;
+                                await v.play();
+                                statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود داخل الإطار";
+
+                                if (detector) {
+                                    scanLoop(v);
+                                } else {
+                                    codeReader = new ZXing.BrowserMultiFormatReader();
+                                    codeReader.decodeFromVideoElement(v, (result, err) => {
+                                        if (result && result.text) sendCode(result.text);
+                                    });
+                                }
+                            } catch(err) {
+                                statusEl.innerHTML = "⚠️ تعذر تشغيل هذه العدسة (جرب الضغط على عدسة أخرى أعلاه).";
+                            }
+                        }
+
+                        async function setupCameras() {
+                            await initDetector();
+                            try {
+                                const promptStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                                promptStream.getTracks().forEach(t => t.stop());
+
+                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                                const lensContainer = document.getElementById("lens-buttons");
+                                lensContainer.innerHTML = "";
+
+                                if (videoDevices.length === 0) {
+                                    document.getElementById("status-bar").innerHTML = "❌ لم يتم العثور على أي كاميرا!";
+                                    return;
+                                }
+
+                                let targetIndex = 0;
+                                videoDevices.forEach((dev, idx) => {
+                                    const b = document.createElement("button");
+                                    b.className = "lens-btn";
+                                    const lbl = (dev.label || ("عدسة " + (idx + 1))).toLowerCase();
+                                    const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
+                                    
+                                    b.innerText = (isBack ? "📸 خلفية " : "🤳 أمامية ") + (idx + 1);
+                                    b.onclick = function() { startLens(dev.deviceId, b); };
+                                    lensContainer.appendChild(b);
+
+                                    if (isBack) targetIndex = idx;
+                                });
+
+                                var firstBtn = lensContainer.children[targetIndex] || lensContainer.children[0];
+                                startLens(videoDevices[targetIndex].deviceId, firstBtn);
+                            } catch(e) {
+                                startLens(null, null);
+                            }
+                        }
+
+                        window.addEventListener('load', () => setTimeout(setupCameras, 200));
                     </script>
                 </body>
                 </html>
                 """
-                components.html(animated_laser_scanner_html, height=360)
+                components.html(original_working_scanner_html, height=440)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
