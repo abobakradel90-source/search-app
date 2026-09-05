@@ -16,9 +16,16 @@ import datetime
 import json
 import re
 import time
+import requests
 import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+# ==============================================================================
+# 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
+# ضع الرابط الخاص بك هنا لضمان حفظ الجلسات لأيام وشهور دون مسح نهائياً
+# ==============================================================================
+FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"   # 👈 استبدل هذا بالرابط الخاص بك
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(
@@ -40,7 +47,7 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 
 # ==========================================
-# 🌐 إدارة قواعد البيانات والجلسات بالمسار المطلق
+# 🌐 إدارة البيانات السحابية والمحلية المزدوجة
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHARED_INV_FILE = os.path.join(BASE_DIR, "shared_inventory.json")
@@ -48,6 +55,25 @@ MASTER_DB_FILE = os.path.join(BASE_DIR, "master_database.csv")
 HISTORY_INV_FILE = os.path.join(BASE_DIR, "inventory_history.json")
 SHARED_SALES_FILE = os.path.join(BASE_DIR, "shared_sales.json")
 HISTORY_SALES_FILE = os.path.join(BASE_DIR, "sales_history.json")
+
+def cloud_get(endpoint, default_val):
+    if FIREBASE_DB_URL and not "your-project" in FIREBASE_DB_URL and not "edstore-default" in FIREBASE_DB_URL:
+        try:
+            url = f"{FIREBASE_DB_URL.rstrip('/')}/{endpoint}.json"
+            r = requests.get(url, timeout=3.5)
+            if r.status_code == 200 and r.json() is not None:
+                return r.json()
+        except Exception:
+            pass
+    return default_val
+
+def cloud_put(endpoint, data):
+    if FIREBASE_DB_URL and not "your-project" in FIREBASE_DB_URL and not "edstore-default" in FIREBASE_DB_URL:
+        try:
+            url = f"{FIREBASE_DB_URL.rstrip('/')}/{endpoint}.json"
+            requests.put(url, json=data, timeout=3.5)
+        except Exception:
+            pass
 
 def load_json(file_path, default_data):
     if os.path.exists(file_path):
@@ -62,36 +88,58 @@ def save_json(file_path, data):
     try:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        st.error(f"خطأ في حفظ البيانات: {e}")
+    except Exception:
+        pass
 
 def load_shared_inventory():
-    return load_json(SHARED_INV_FILE, {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}})
+    default_inv = {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}}
+    cloud_data = cloud_get("active_inventory", None)
+    if cloud_data is not None:
+        save_json(SHARED_INV_FILE, cloud_data)
+        return cloud_data
+    return load_json(SHARED_INV_FILE, default_inv)
 
 def save_shared_inventory(data):
     save_json(SHARED_INV_FILE, data)
+    cloud_put("active_inventory", data)
 
 def load_inv_history():
+    cloud_data = cloud_get("inventory_history", None)
+    if cloud_data is not None:
+        save_json(HISTORY_INV_FILE, cloud_data)
+        return cloud_data
     return load_json(HISTORY_INV_FILE, [])
 
 def save_to_inv_history(record):
     history = load_inv_history()
     history.append(record)
     save_json(HISTORY_INV_FILE, history)
+    cloud_put("inventory_history", history)
 
 def load_shared_sales():
-    return load_json(SHARED_SALES_FILE, {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}})
+    default_sales = {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}}
+    cloud_data = cloud_get("active_sales", None)
+    if cloud_data is not None:
+        save_json(SHARED_SALES_FILE, cloud_data)
+        return cloud_data
+    return load_json(SHARED_SALES_FILE, default_sales)
 
 def save_shared_sales(data):
     save_json(SHARED_SALES_FILE, data)
+    cloud_put("active_sales", data)
 
 def load_sales_history():
+    cloud_data = cloud_get("sales_history", None)
+    if cloud_data is not None:
+        save_json(HISTORY_SALES_FILE, cloud_data)
+        return cloud_data
     return load_json(HISTORY_SALES_FILE, [])
 
 def save_to_sales_history(record):
     history = load_sales_history()
     history.append(record)
     save_json(HISTORY_SALES_FILE, history)
+    cloud_put("sales_history", history)
 
 def get_image_base64(img_path):
     try:
@@ -725,7 +773,6 @@ def render_live_scanner_component(target_placeholder_keyword, component_height=4
                 if (codeReader) {{ try {{ codeReader.reset(); }} catch(e) {{}} }}
                 if (activeStream) {{ try {{ activeStream.getTracks().forEach(t => t.stop()); }} catch(e) {{}} }}
 
-                // الحقن الفوري المباشر داخل حقل Streamlit المستهدف
                 var targetKeyword = "{target_placeholder_keyword}";
                 try {{
                     var doc = window.parent.document;
@@ -875,7 +922,7 @@ tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التش
 main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
 
 # ==========================================
-# 1. تبويب البحث الذكي (شامل الإسكانر اللايف والكتابة والبحث البصري)
+# 1. تبويب البحث الذكي
 # ==========================================
 with main_tab1:
     search_query = st.text_input(
@@ -896,7 +943,6 @@ with main_tab1:
             st.warning("⚠️ لم يتم العثور على أي منتج يطابق هذا البحث.")
 
     st.markdown("<br><hr>", unsafe_allow_html=True)
-    
     sub_tab_scan, sub_tab_vision = st.tabs(["📹 إسكانر الباركود السريع (لايف)", "🧠 البحث البصري بالصورة (ذكاء اصطناعي)"])
     
     with sub_tab_scan:
@@ -1012,7 +1058,6 @@ with main_tab2:
             if "current_scanned_code" not in st.session_state:
                 st.session_state.current_scanned_code = None
 
-            # الحالة 1: تم مسح كود بنجاح -> إظهار كارت الصنف وخانة الكمية
             if st.session_state.current_scanned_code:
                 active_c = st.session_state.current_scanned_code
                 item_info = system_inventory[active_c]
@@ -1072,7 +1117,6 @@ with main_tab2:
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-            # الحالة 2: انتظار مسح باركود جديد -> إظهار الكاميرا وحقل الإدخال
             else:
                 barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
                 scanned_raw = st.text_input(
@@ -1174,7 +1218,7 @@ with main_tab2:
                     st.rerun()
 
 # ==========================================
-# 3. تبويب فواتير الجملة (ضرب الفواتير بالإسكانر اللايف والكاميرا)
+# 3. تبويب فواتير الجملة
 # ==========================================
 with main_tab3:
     shared_sales = load_shared_sales()
@@ -1222,7 +1266,6 @@ with main_tab3:
         else:
             st.markdown(f"### 🧾 العميل الحالي: <span style='color:#1C65A6;'>{st.session_state.active_cust}</span>", unsafe_allow_html=True)
             
-            # حقل استقبال الباركود للفاتورة
             pos_code_key = f"pos_barcode_in_{st.session_state.pos_scan_counter}"
             scan_pos = st.text_input(
                 "🔫 باركود الصنف للفاتورة (استقبال تلقائي من الكاميرا أو كتابة يدوية):",
@@ -1232,7 +1275,6 @@ with main_tab3:
             
             matched_pos_code = match_product_code(scan_pos) if scan_pos else None
 
-            # إذا تم لقط كود الصنف بنجاح
             if matched_pos_code:
                 p_c = matched_pos_code
                 p_data = system_inventory[p_c]
@@ -1294,11 +1336,9 @@ with main_tab3:
             elif scan_pos:
                 st.error(f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام.")
 
-            # إسكانر الكاميرا اللايف داخل شاشة الفاتورة
             st.markdown("##### 📹 وجّه الكاميرا نحو علبة الحذاء لإضافته للفاتورة فوراً:")
             render_live_scanner_component("امسح باركود الصنف للفاتورة", component_height=420)
 
-            # سلة الأصناف بالفاتورة الحالية
             if st.session_state.cart:
                 st.markdown("<br>#### 🛒 الأصناف المضافة بالفاتورة حتى الآن:", unsafe_allow_html=True)
                 df_c = pd.DataFrame(st.session_state.cart)
