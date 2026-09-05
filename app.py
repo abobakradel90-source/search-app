@@ -585,6 +585,13 @@ def match_product_code(raw_code):
     for k in system_inventory.keys():
         if k == code_clean or (stripped and k.lstrip('0') == stripped):
             return k
+            
+    # مطابقة مرنة للباركود الطويل (مثل EAN-13 مع الأكواد القصيرة المخزنة)
+    for k in system_inventory.keys():
+        k_clean = str(k).strip().upper()
+        if k_clean in code_clean or code_clean.endswith(k_clean) or k_clean.endswith(code_clean):
+            return k
+            
     return None
 
 def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
@@ -741,8 +748,11 @@ elif selected_main_tab == nav_options[1]:
                 st.session_state.current_scanned_code = matched_k
                 st.query_params.clear()
                 st.rerun()
+            else:
+                st.error(f"❌ الباركود الممسوح '{param_code}' غير موجود في قاعدة بيانات النظام الدفترية!")
+                st.query_params.clear()
 
-        # 👉 وضع كارت الصنف وخلية الكمية في أعلى الصفحة فوراً قبل أي تبويبات فرعية لضمان ظهورها
+        # عرض كارت الصنف وخلية الكمية فوراً في أعلى الصفحة
         if st.session_state.current_scanned_code:
             active_c = st.session_state.current_scanned_code
             item_info = system_inventory[active_c]
@@ -841,7 +851,6 @@ elif selected_main_tab == nav_options[1]:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأكثر استقراراً وفعالية لفتح الكاميرا وقراءة الباركود للجميع
                 stable_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
