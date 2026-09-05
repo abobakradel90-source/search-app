@@ -304,7 +304,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية وضبط الإطارات ---
+# --- 2. الهوية البصرية ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -318,15 +318,18 @@ st.markdown(f"""
         [data-testid="stSidebarResizerRoot"], [data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
         .block-container {{ padding-top: 1.5rem !important; padding-bottom: 5rem !important; max-width: 1300px; }}
         
-        div.stRadio > div {{
+        .stTabs [data-baseweb="tab-list"] {{
             gap: 12px;
             justify-content: center;
             background: transparent !important;
             padding: 5px;
             margin-bottom: 25px;
+            border-bottom: none !important;
             flex-wrap: wrap;
         }}
-        div.stRadio > div > label {{
+        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{ display: none !important; }}
+        
+        .stTabs [data-baseweb="tab"] {{
             background-color: #FFFFFF !important;
             border: 2px solid #CBD5E1 !important;
             border-radius: 12px !important;
@@ -335,14 +338,20 @@ st.markdown(f"""
             font-weight: 800 !important;
             color: #475569 !important;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04) !important;
-            cursor: pointer;
+            transition: all 0.2s ease !important;
         }}
-        div.stRadio > div > label:hover {{
+        .stTabs [data-baseweb="tab"]:hover {{
             border-color: #1C65A6 !important;
             color: #1C65A6 !important;
             background-color: #F8FAFC !important;
+            transform: translateY(-1px);
         }}
-        div.stRadio input[type="radio"] {{ display: none; }}
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+            background-color: #1C65A6 !important;
+            border: 2px solid #1C65A6 !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 4px 12px rgba(28, 101, 166, 0.25) !important;
+        }}
         
         div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="select"] > div {{
             background-color: #FFFFFF !important;
@@ -609,29 +618,14 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
         </div>
     </div>""", unsafe_allow_html=True)
 
-# ==========================================
-# 🌟 إدارة التبويبات المدارة بالذاكرة
-# ==========================================
-nav_options = ["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"]
-if "main_nav_tab" not in st.session_state:
-    st.session_state.main_nav_tab = nav_options[0]
-
-# فحص كود الباركود عند إعادة التحميل وتحويل التبويب تلقائياً
-params = st.query_params
-if "scanned_code" in params:
-    scanned_val = str(params["scanned_code"]).strip().upper()
-    matched_k = match_product_code(scanned_val)
-    if matched_k:
-        st.session_state.current_scanned_code = matched_k
-        st.session_state.main_nav_tab = "📦 الجرد التشاركي"
-        st.query_params.clear()
-
-selected_main_tab = st.radio("التنقل الرئيسي", nav_options, horizontal=True, key="main_nav_tab", label_visibility="collapsed")
+# 🌟 التبويبات الرئيسية 🌟
+tabs = st.tabs(["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"])
+main_tab1, main_tab2, main_tab3, main_tab_cat, main_tab4 = tabs
 
 # ==========================================
 # 1. تبويب البحث الذكي
 # ==========================================
-if selected_main_tab == nav_options[0]:
+with main_tab1:
     search_query = st.text_input(
         "🔍 ابحث هنا بالاسم أو الكود:",
         placeholder="اكتب الكود أو اسم الصنف هنا...",
@@ -687,7 +681,7 @@ if selected_main_tab == nav_options[0]:
 # ==========================================
 # 2. تبويب الجرد التشاركي
 # ==========================================
-elif selected_main_tab == nav_options[1]:
+with main_tab2:
     shared_inv = load_shared_inventory()
     
     if not shared_inv.get("is_active", False):
@@ -730,121 +724,112 @@ elif selected_main_tab == nav_options[1]:
     else:
         st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد نشطة ومحفوظة:</b> {shared_inv.get("name")} | <b>السبب:</b> {shared_inv.get("reason")} | <b>التاريخ:</b> {shared_inv.get("date")}</div>', unsafe_allow_html=True)
         
+        tab_sum, tab_scan, tab_edit, tab_rep = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود", "📝 مراجعة وتعديل المجرد", "⚖️ تقرير الفروقات"])
         scanned_map = shared_inv.get("scanned_items", {})
 
-        if "inv_scan_counter" not in st.session_state:
-            st.session_state.inv_scan_counter = 0
-        if "current_scanned_code" not in st.session_state:
-            st.session_state.current_scanned_code = None
-
-        param_code = st.query_params.get("scanned_code")
-        if param_code:
-            matched_k = match_product_code(param_code)
-            if matched_k:
-                st.session_state.current_scanned_code = matched_k
-                st.query_params.clear()
-                st.rerun()
-
-        if st.session_state.current_scanned_code:
-            active_c = st.session_state.current_scanned_code
-            item_info = system_inventory[active_c]
-            already_counted = scanned_map.get(active_c, 0)
+        with tab_sum:
+            total_qty = sum(info.get('sys_stock', 0) for info in system_inventory.values())
+            c1, c2, c3 = st.columns(3)
+            with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(system_inventory)}</div></div>', unsafe_allow_html=True)
+            with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي القطع</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
+            with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي المجرد فعلياً</div><div class="metric-value" style="color:#F59E0B;">{int(sum(scanned_map.values()))}</div></div>', unsafe_allow_html=True)
             
-            st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:12px 18px; border-radius:12px; margin-bottom:15px; font-weight:900; font-size:17px;'>🎯 تم لقط الباركود بنجاح! إجمالي المجرد لهذا الموديل: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
-            
-            render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_rf, col_bk = st.columns(2)
+            with col_rf:
+                if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
+            with col_bk:
+                json_bytes = json.dumps(shared_inv, ensure_ascii=False, indent=4).encode('utf-8')
+                st.download_button(
+                    "💾 تحميل نسخة احتياطية للجلسة الحالية (JSON)",
+                    data=json_bytes,
+                    file_name=f"Active_Inventory_{shared_inv.get('name')}.json",
+                    mime="application/json"
+                )
 
-            with st.form(key=f"inv_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
-                col_q, col_s = st.columns([3, 2])
-                with col_q:
-                    add_q = st.number_input(
-                        "🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):",
-                        min_value=1,
-                        value=1,
-                        step=1,
-                        key=f"qty_field_{st.session_state.inv_scan_counter}"
-                    )
-                with col_s:
-                    st.write("")
-                    st.write("")
-                    confirm_sub = st.form_submit_button("✅ حفظ وإضافة الصنف (Enter)", type="primary", use_container_width=True)
+        with tab_scan:
+            if "inv_scan_counter" not in st.session_state:
+                st.session_state.inv_scan_counter = 0
+            if "current_scanned_code" not in st.session_state:
+                st.session_state.current_scanned_code = None
 
-                if confirm_sub:
-                    l_inv = load_shared_inventory()
-                    if "scanned_items" not in l_inv:
-                        l_inv["scanned_items"] = {}
-                    l_inv["scanned_items"][active_c] = max(0, l_inv["scanned_items"].get(active_c, 0) + add_q)
-                    save_shared_inventory(l_inv)
-                    
-                    st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
+            barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
+            scanned_raw = st.text_input(
+                "🔫 باركود الصنف (استقبال تلقائي من الكاميرا أو كتابة يدوية):",
+                key=barcode_field_key,
+                placeholder="وجّه الكاميرا نحو الباركود أو مرر الإسكانر..."
+            )
+
+            if scanned_raw:
+                matched_k = match_product_code(scanned_raw)
+                if matched_k:
+                    st.session_state.current_scanned_code = matched_k
+                    st.rerun()
+                else:
+                    st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
+
+            if st.session_state.current_scanned_code:
+                active_c = st.session_state.current_scanned_code
+                item_info = system_inventory[active_c]
+                already_counted = scanned_map.get(active_c, 0)
+                
+                st.markdown(f"<div style='background:#E8F0F8; color:#1C65A6; padding:10px 16px; border-radius:10px; margin-bottom:12px; font-weight:800; font-size:16px;'>🎯 تم لقط الباركود بنجاح! إجمالي المجرد لهذا الموديل: {int(already_counted)} قطعة</div>", unsafe_allow_html=True)
+                
+                render_product_card(active_c, item_info.get('name', ''), item_info.get('sys_stock', 0))
+
+                with st.form(key=f"inv_form_{active_c}_{st.session_state.inv_scan_counter}", clear_on_submit=True):
+                    col_q, col_s = st.columns([3, 2])
+                    with col_q:
+                        add_q = st.number_input(
+                            "🔢 الكمية الفعلية المضافة (اكتب العدد واضغط Enter):",
+                            min_value=1,
+                            value=1,
+                            step=1,
+                            key=f"qty_field_{st.session_state.inv_scan_counter}"
+                        )
+                    with col_s:
+                        st.write("")
+                        st.write("")
+                        confirm_sub = st.form_submit_button("✅ حفظ وإضافة الصنف (Enter)", type="primary", use_container_width=True)
+
+                    if confirm_sub:
+                        l_inv = load_shared_inventory()
+                        if "scanned_items" not in l_inv:
+                            l_inv["scanned_items"] = {}
+                        l_inv["scanned_items"][active_c] = max(0, l_inv["scanned_items"].get(active_c, 0) + add_q)
+                        save_shared_inventory(l_inv)
+                        
+                        st.toast(f"✅ تم حفظ إضافة ({add_q}) قطعة للكود [{active_c}]", icon="📦")
+                        st.session_state.current_scanned_code = None
+                        st.session_state.inv_scan_counter += 1
+                        st.rerun()
+
+                focus_qty_js = """
+                <script>
+                (function() {
+                    var tries = 0;
+                    var interval = setInterval(function() {
+                        tries++;
+                        try {
+                            var doc = window.parent.document;
+                            var qInp = doc.querySelector('input[type="number"]');
+                            if (qInp) { qInp.focus(); qInp.select(); clearInterval(interval); }
+                        } catch(e) {}
+                        if (tries > 30) clearInterval(interval);
+                    }, 40);
+                })();
+                </script>
+                """
+                components.html(focus_qty_js, height=0, width=0)
+
+                if st.button("⏭️ تخطي والصنف التالي (إلغاء)", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
                     st.session_state.current_scanned_code = None
                     st.session_state.inv_scan_counter += 1
                     st.rerun()
 
-            focus_qty_js = """
-            <script>
-            (function() {
-                var tries = 0;
-                var interval = setInterval(function() {
-                    tries++;
-                    try {
-                        var doc = window.parent.document;
-                        var qInp = doc.querySelector('input[type="number"]');
-                        if (qInp) { qInp.focus(); qInp.select(); clearInterval(interval); }
-                    } catch(e) {}
-                    if (tries > 30) clearInterval(interval);
-                }, 40);
-            })();
-            </script>
-            """
-            components.html(focus_qty_js, height=0, width=0)
-
-            if st.button("⏭️ تخطي والصنف التالي (إلغاء)", key=f"skip_btn_{st.session_state.inv_scan_counter}"):
-                st.session_state.current_scanned_code = None
-                st.session_state.inv_scan_counter += 1
-                st.rerun()
-
-        else:
-            tab_sum, tab_scan, tab_edit, tab_rep = st.tabs(["📊 ملخص الأرصدة", "🔫 مسح الباركود", "📝 مراجعة وتعديل المجرد", "⚖️ تقرير الفروقات"])
-
-            with tab_sum:
-                total_qty = sum(info.get('sys_stock', 0) for info in system_inventory.values())
-                c1, c2, c3 = st.columns(3)
-                with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(system_inventory)}</div></div>', unsafe_allow_html=True)
-                with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي القطع</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
-                with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي المجرد فعلياً</div><div class="metric-value" style="color:#F59E0B;">{int(sum(scanned_map.values()))}</div></div>', unsafe_allow_html=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_rf, col_bk = st.columns(2)
-                with col_rf:
-                    if st.button("🔄 تحديث البيانات اللحظية", key="ref_inv"): st.rerun()
-                with col_bk:
-                    json_bytes = json.dumps(shared_inv, ensure_ascii=False, indent=4).encode('utf-8')
-                    st.download_button(
-                        "💾 تحميل نسخة احتياطية للجلسة الحالية (JSON)",
-                        data=json_bytes,
-                        file_name=f"Active_Inventory_{shared_inv.get('name')}.json",
-                        mime="application/json"
-                    )
-
-            with tab_scan:
-                barcode_field_key = f"barcode_scanner_input_{st.session_state.inv_scan_counter}"
-                scanned_raw = st.text_input(
-                    "🔫 باركود الصنف (استقبال تلقائي من الكاميرا أو كتابة يدوية):",
-                    key=barcode_field_key,
-                    placeholder="وجّه الكاميرا نحو الباركود أو مرر الإسكانر..."
-                )
-
-                if scanned_raw:
-                    matched_k = match_product_code(scanned_raw)
-                    if matched_k:
-                        st.session_state.current_scanned_code = matched_k
-                        st.rerun()
-                    else:
-                        st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
-
-                # محرك دقيق ومضمون تماماً لقراءة الباركود المتوافق مع جميع الهواتف
-                reliable_scanner_html = """
+            else:
+                # محرك الحقن المباشر لخانة الإدخال (DOM Injection) لتفعيل الكارت فوراً مثل الكتابة اليدوية
+                dom_injection_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -864,7 +849,7 @@ elif selected_main_tab == nav_options[1]:
                         }
                         .video-container {
                             width: 100%;
-                            height: 260px;
+                            height: 250px;
                             background: #000000;
                             position: relative;
                             border-radius: 8px;
@@ -880,9 +865,9 @@ elif selected_main_tab == nav_options[1]:
                             top: 50%;
                             left: 5%;
                             width: 90%;
-                            height: 2.5px;
+                            height: 2px;
                             background: #EF4444;
-                            box-shadow: 0 0 10px #EF4444;
+                            box-shadow: 0 0 8px #EF4444;
                             pointer-events: none;
                         }
                         .action-btn {
@@ -915,9 +900,9 @@ elif selected_main_tab == nav_options[1]:
                             <div class="laser-line"></div>
                         </div>
                         
-                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الإسكانر الفوري</button>
+                        <button id="start-btn" class="action-btn" onclick="startScanner()">📸 تشغيل الكاميرا الفوري</button>
 
-                        <div id="status-bar">اضغط للتشغيل الفوري وقراءة الباركود</div>
+                        <div id="status-bar">اضغط لتشغيل الإسكانر وقراءة الباركود</div>
                     </div>
 
                     <script>
@@ -948,15 +933,32 @@ elif selected_main_tab == nav_options[1]:
                             var cleanCode = code.trim().toUpperCase();
                             document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف: <b>" + cleanCode + "</b>";
 
-                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+                            // حقن الكود مباشرة في خانة الإدخال في Streamlit لتفعيل الكارت فوراً مثل الكتابة اليدوية
+                            try {
+                                var doc = window.parent.document;
+                                var inputs = doc.querySelectorAll('input[type="text"]');
+                                var targetInput = null;
+                                for (var i = 0; i < inputs.length; i++) {
+                                    if (inputs[i].placeholder && (inputs[i].placeholder.includes("وجّه الكاميرا") || inputs[i].placeholder.includes("باركود"))) {
+                                        targetInput = inputs[i];
+                                        break;
+                                    }
+                                }
+                                if (!targetInput && inputs.length > 0) {
+                                    targetInput = inputs[0];
+                                }
+
+                                if (targetInput) {
+                                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
+                                    nativeInputValueSetter.call(targetInput, cleanCode);
+                                    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            } catch(e) {}
 
                             setTimeout(function() {
-                                try {
-                                    var url = new URL(window.parent.location.href);
-                                    url.searchParams.set("scanned_code", cleanCode);
-                                    window.parent.location.href = url.href;
-                                } catch(e) {}
-                            }, 120);
+                                isLocked = false;
+                            }, 1500);
                         }
 
                         async function startScanner() {
@@ -966,14 +968,29 @@ elif selected_main_tab == nav_options[1]:
                             btnEl.style.display = "none";
 
                             try {
+                                const constraints = {
+                                    audio: false,
+                                    video: {
+                                        facingMode: { ideal: "environment" },
+                                        width: { ideal: 1280 },
+                                        height: { ideal: 720 }
+                                    }
+                                };
+
+                                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                                activeStream = stream;
+                                var v = document.getElementById("scanner-feed");
+                                v.srcObject = stream;
+                                await v.play();
+                                statusEl.innerHTML = "🟢 الإسكانر يعمل - مرر الباركود أمام الخط الأحمر";
+
                                 codeReader = new ZXing.BrowserMultiFormatReader();
-                                // استخدام decodeFromVideoDevice الافتراضي الذي يعالج الكاميرا والباركود بسلاسة تامة
-                                codeReader.decodeFromVideoDevice(undefined, 'scanner-feed', (result, err) => {
+                                codeReader.decodeFromVideoElement(v, (result, err) => {
                                     if (result && result.text) {
                                         sendCode(result.text);
                                     }
                                 });
-                                statusEl.innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود أمام الخط الأحمر";
+
                             } catch(err) {
                                 statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تحقق من الأذونات.";
                                 btnEl.style.display = "block";
@@ -983,94 +1000,94 @@ elif selected_main_tab == nav_options[1]:
                 </body>
                 </html>
                 """
-                components.html(reliable_scanner_html, height=360)
+                components.html(dom_injection_scanner_html, height=360)
 
-            # 📝 مراجعة وتعديل الجلسة
-            with tab_edit:
-                st.markdown("### 📝 قائمة الأصناف المجرودة بالجلسة الحالية (تعديل وحذف مباشر)")
-                if scanned_map:
-                    active_list = []
-                    for c, q in scanned_map.items():
-                        active_list.append({
-                            "كود الصنف": c,
-                            "اسم الصنف": system_inventory.get(c, {}).get('name', 'غير مسجل'),
-                            "الكمية المجردة": int(q)
-                        })
-                    
-                    df_active = pd.DataFrame(active_list)
-                    edited_df = st.data_editor(
-                        df_active,
-                        column_config={
-                            "كود الصنف": st.column_config.TextColumn("كود الصنف", disabled=True),
-                            "اسم الصنف": st.column_config.TextColumn("اسم الصنف", disabled=True),
-                            "الكمية المجردة": st.column_config.NumberColumn("الكمية الفعلية المجردة", min_value=0, step=1, required=True)
-                        },
-                        num_rows="dynamic",
-                        use_container_width=True,
-                        key="active_session_data_editor"
-                    )
-                    
-                    if st.button("💾 تطبيق وحفظ تعديلات الجلسة", type="primary", key="save_edited_session_btn"):
-                        new_scanned_map = {}
-                        for _, r in edited_df.iterrows():
-                            c_k = str(r["كود الصنف"]).strip().upper()
-                            q_v = int(r["الكمية المجردة"])
-                            if c_k and q_v > 0:
-                                new_scanned_map[c_k] = q_v
-                        
-                        l_inv = load_shared_inventory()
-                        l_inv["scanned_items"] = new_scanned_map
-                        save_shared_inventory(l_inv)
-                        st.success("🎉 تم تحديث وحفظ بيانات الجلسة بنجاح!")
-                        time.sleep(0.4)
-                        st.rerun()
-                else:
-                    st.warning("⚠️ لم يتم مسح أي صنف في هذه الجلسة حتى الآن.")
-
-            # ⚖️ تقرير الفروقات
-            with tab_rep:
-                rep_data = [
-                    {
+        # 📝 مراجعة وتعديل الجلسة
+        with tab_edit:
+            st.markdown("### 📝 قائمة الأصناف المجرودة بالجلسة الحالية (تعديل وحذف مباشر)")
+            if scanned_map:
+                active_list = []
+                for c, q in scanned_map.items():
+                    active_list.append({
                         "كود الصنف": c,
-                        "اسم الصنف": i.get('name', ''),
-                        "الرصيد الدفتري": i.get('sys_stock', 0),
-                        "الرصيد الفعلي": scanned_map.get(c, 0),
-                        "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock', 0)
-                    }
-                    for c, i in system_inventory.items()
-                ]
+                        "اسم الصنف": system_inventory.get(c, {}).get('name', 'غير مسجل'),
+                        "الكمية المجردة": int(q)
+                    })
                 
-                filter_rep = st.text_input("🔍 تصفية سريعة بتقرير الفروقات:", placeholder="ابحث بكود أو اسم الموديل...", key="rep_filter_input")
-                filtered_rep = rep_data
-                if filter_rep:
-                    fr = filter_rep.strip().lower()
-                    filtered_rep = [r for r in rep_data if fr in str(r.get("كود الصنف", "")).lower() or fr in str(r.get("اسم الصنف", "")).lower()]
+                df_active = pd.DataFrame(active_list)
+                edited_df = st.data_editor(
+                    df_active,
+                    column_config={
+                        "كود الصنف": st.column_config.TextColumn("كود الصنف", disabled=True),
+                        "اسم الصنف": st.column_config.TextColumn("اسم الصنف", disabled=True),
+                        "الكمية المجردة": st.column_config.NumberColumn("الكمية الفعلية المجردة", min_value=0, step=1, required=True)
+                    },
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    key="active_session_data_editor"
+                )
                 
-                df_rep = pd.DataFrame(filtered_rep)
-                st.dataframe(df_rep, use_container_width=True, hide_index=True)
-                
-                buf = io.BytesIO()
-                with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
-                st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
-                
-                st.markdown("---")
-                if st.session_state.current_user == "abobakr":
-                    if st.button("🛑 إغلاق وإنهاء جلسة الجرد نهائياً (ترحيل للأرشيف)", type="primary", key="close_inv_session"):
-                        save_to_inv_history({
-                            "timestamp": str(datetime.datetime.now()),
-                            "name": shared_inv.get('name'),
-                            "date": shared_inv.get('date'),
-                            "report": rep_data
-                        })
-                        save_shared_inventory({"is_active": False, "scanned_items": {}})
-                        st.success("✅ تم إنهاء الجلسة وحفظها في الأرشيف بنجاح!")
-                        time.sleep(0.5)
-                        st.rerun()
+                if st.button("💾 تطبيق وحفظ تعديلات الجلسة", type="primary", key="save_edited_session_btn"):
+                    new_scanned_map = {}
+                    for _, r in edited_df.iterrows():
+                        c_k = str(r["كود الصنف"]).strip().upper()
+                        q_v = int(r["الكمية المجردة"])
+                        if c_k and q_v > 0:
+                            new_scanned_map[c_k] = q_v
+                    
+                    l_inv = load_shared_inventory()
+                    l_inv["scanned_items"] = new_scanned_map
+                    save_shared_inventory(l_inv)
+                    st.success("🎉 تم تحديث وحفظ بيانات الجلسة بنجاح!")
+                    time.sleep(0.4)
+                    st.rerun()
+            else:
+                st.warning("⚠️ لم يتم مسح أي صنف في هذه الجلسة حتى الآن.")
+
+        # ⚖️ تقرير الفروقات
+        with tab_rep:
+            rep_data = [
+                {
+                    "كود الصنف": c,
+                    "اسم الصنف": i.get('name', ''),
+                    "الرصيد الدفتري": i.get('sys_stock', 0),
+                    "الرصيد الفعلي": scanned_map.get(c, 0),
+                    "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock', 0)
+                }
+                for c, i in system_inventory.items()
+            ]
+            
+            filter_rep = st.text_input("🔍 تصفية سريعة بتقرير الفروقات:", placeholder="ابحث بكود أو اسم الموديل...", key="rep_filter_input")
+            filtered_rep = rep_data
+            if filter_rep:
+                fr = filter_rep.strip().lower()
+                filtered_rep = [r for r in rep_data if fr in str(r.get("كود الصنف", "")).lower() or fr in str(r.get("اسم الصنف", "")).lower()]
+            
+            df_rep = pd.DataFrame(filtered_rep)
+            st.dataframe(df_rep, use_container_width=True, hide_index=True)
+            
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine='openpyxl') as w: df_rep.to_excel(w, index=False)
+            st.download_button("📥 تحميل تقرير الجرد (Excel)", buf.getvalue(), f"Inventory_{shared_inv.get('name')}.xlsx")
+            
+            st.markdown("---")
+            if st.session_state.current_user == "abobakr":
+                if st.button("🛑 إغلاق وإنهاء جلسة الجرد نهائياً (ترحيل للأرشيف)", type="primary", key="close_inv_session"):
+                    save_to_inv_history({
+                        "timestamp": str(datetime.datetime.now()),
+                        "name": shared_inv.get('name'),
+                        "date": shared_inv.get('date'),
+                        "report": rep_data
+                    })
+                    save_shared_inventory({"is_active": False, "scanned_items": {}})
+                    st.success("✅ تم إنهاء الجلسة وحفظها في الأرشيف بنجاح!")
+                    time.sleep(0.5)
+                    st.rerun()
 
 # ==========================================
 # 3. تبويب فواتير الجملة
 # ==========================================
-elif selected_main_tab == nav_options[2]:
+with main_tab3:
     shared_sales = load_shared_sales()
     
     if not shared_sales.get("is_active", False):
@@ -1235,7 +1252,7 @@ elif selected_main_tab == nav_options[2]:
 # ==========================================
 # 4. تبويب الكاتالوج الشامل
 # ==========================================
-elif selected_main_tab == nav_options[3]:
+with main_tab_cat:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
     shared_s_cat = load_shared_sales()
     deductions = shared_s_cat.get("deductions", {})
@@ -1307,7 +1324,7 @@ elif selected_main_tab == nav_options[3]:
 # ==========================================
 # 5. تبويب لوحة تحكم الإدارة
 # ==========================================
-elif selected_main_tab == nav_options[4]:
+with main_tab4:
     st.markdown("## 📈 لوحة تحكم الإدارة (Live Dashboard)")
     master_sales = []
     for rec in load_sales_history():
