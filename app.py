@@ -37,16 +37,8 @@ st.set_page_config(
 
 USERS = {
     "abobakr": "admin2026",    
-    "gomaa": "123456",       
-    "hytham": "123456",
-    "sawy": "123456",
-    "ahmed": "123456",
-    "zidan": "123456",
-    "sheded": "123456",
-    "ali": "123456",
-    "yahia": "123456",
-    "shymaa": "123456",
-    "abdallah": "123456"         
+    "mohamed": "123456",       
+    "ahmed": "edstore"         
 }
 
 if 'logged_in' not in st.session_state:
@@ -1143,11 +1135,7 @@ with main_tab2:
                 </body>
                 </html>
                 """
-                components.html(
-    pro_live_scanner_html,
-    height=440,
-    key=f"scanner_iframe_{st.session_state.current_user}_{st.session_state.inv_scan_counter}"
-)
+                components.html(pro_live_scanner_html, height=440)
 
         # 📝 مراجعة وتعديل الجلسة
         with tab_edit:
