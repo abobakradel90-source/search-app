@@ -830,8 +830,8 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # مشغل الكاميرا الاحترافي المحمي من الشاشة السوداء
-                pro_live_scanner_html = f"""
+                # مشغل الكاميرا الاحترافي بنص قياسي دون أخطاء f-string
+                pro_live_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
@@ -839,8 +839,8 @@ with main_tab2:
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                     <script src="https://unpkg.com/@zxing/library@latest"></script>
                     <style>
-                        body {{ margin: 0; padding: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }}
-                        .scanner-box {{
+                        body { margin: 0; padding: 4px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: transparent; }
+                        .scanner-box {
                             background: #FFFFFF;
                             border: 2.5px solid #1C65A6;
                             border-radius: 14px;
@@ -848,19 +848,19 @@ with main_tab2:
                             max-width: 480px;
                             margin: 0 auto;
                             box-shadow: 0 4px 15px rgba(28, 101, 166, 0.15);
-                        }}
-                        .video-container {{
+                        }
+                        .video-container {
                             width: 100%;
                             height: 250px;
                             background: #000000;
                             position: relative;
-                        }}
-                        video {{
+                        }
+                        video {
                             width: 100%;
                             height: 100%;
                             object-fit: cover;
-                        }}
-                        .laser-line {{
+                        }
+                        .laser-line {
                             position: absolute;
                             top: 50%;
                             left: 5%;
@@ -869,15 +869,15 @@ with main_tab2:
                             background: #EF4444;
                             box-shadow: 0 0 8px #EF4444;
                             pointer-events: none;
-                        }}
-                        .lens-bar {{
+                        }
+                        .lens-bar {
                             display: flex;
                             gap: 6px;
                             justify-content: center;
                             flex-wrap: wrap;
                             margin-top: 8px;
-                        }}
-                        .lens-btn {{
+                        }
+                        .lens-btn {
                             background: #F1F5F9;
                             color: #1E293B;
                             border: 1.5px solid #CBD5E1;
@@ -886,20 +886,20 @@ with main_tab2:
                             font-size: 13px;
                             font-weight: 700;
                             cursor: pointer;
-                        }}
-                        .lens-btn.active {{
+                        }
+                        .lens-btn.active {
                             background: #1C65A6;
                             color: #FFFFFF;
                             border-color: #1C65A6;
-                        }}
-                        #status-bar {{
+                        }
+                        #status-bar {
                             margin-top: 8px;
                             font-size: 13.5px;
                             font-weight: 800;
                             color: #1C65A6;
                             min-height: 20px;
-                        }}
-                        .fallback-file-btn {{
+                        }
+                        .fallback-file-btn {
                             display: block;
                             background: #059669;
                             color: #FFFFFF;
@@ -910,11 +910,10 @@ with main_tab2:
                             margin-top: 8px;
                             cursor: pointer;
                             text-decoration: none;
-                        }}
+                        }
                     </style>
                 </head>
                 <body>
-                    <!-- User Instance: {st.session_state.current_user}_{st.session_state.inv_scan_counter} -->
                     <div class="scanner-box">
                         <div class="video-container">
                             <video id="scanner-feed" autoplay playsinline webkit-playsinline muted></video>
@@ -937,8 +936,8 @@ with main_tab2:
                         var isLocked = false;
                         var detector = null;
 
-                        function playBeep() {{
-                            try {{
+                        function playBeep() {
+                            try {
                                 var ctx = new (window.AudioContext || window.webkitAudioContext)();
                                 var osc = ctx.createOscillator();
                                 var gain = ctx.createGain();
@@ -950,85 +949,85 @@ with main_tab2:
                                 osc.start();
                                 osc.stop(ctx.currentTime + 0.12);
                                 if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
-                            }} catch(e) {{}}
-                        }}
+                            } catch(e) {}
+                        }
 
-                        function sendCode(code) {{
+                        function sendCode(code) {
                             if (isLocked) return;
                             isLocked = true;
                             playBeep();
                             var cleanCode = code.trim().toUpperCase();
                             document.getElementById("status-bar").innerHTML = "🎯 تم لقط الكود: <b>" + cleanCode + "</b><br>⏳ جاري فتح كارت الصنف...";
 
-                            if (codeReader) {{ try {{ codeReader.reset(); }} catch(e) {{}} }}
-                            if (activeStream) {{ try {{ activeStream.getTracks().forEach(t => t.stop()); }} catch(e) {{}} }}
+                            if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+                            if (activeStream) { try { activeStream.getTracks().forEach(t => t.stop()); } catch(e) {} }
 
-                            try {{
+                            try {
                                 var doc = window.parent.document;
                                 var targetInput = doc.querySelector('input[placeholder*="وجّه الكاميرا نحو الباركود"]') || doc.querySelector('input[data-testid="stTextInput"]');
-                                if (targetInput) {{
+                                if (targetInput) {
                                     var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
                                     nativeSetter.call(targetInput, cleanCode);
-                                    targetInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                    targetInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                    targetInput.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, cancelable: true, key: 'Enter', keyCode: 13 }}));
-                                }}
-                            }} catch(err) {{}}
-                        }}
+                                    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                    targetInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', keyCode: 13 }));
+                                }
+                            } catch(err) {}
+                        }
 
-                        async function initDetector() {{
-                            if ('BarcodeDetector' in window) {{
-                                try {{
-                                    detector = new BarcodeDetector({{ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] }});
-                                }} catch(e) {{ detector = null; }}
-                            }}
-                        }}
+                        async function initDetector() {
+                            if ('BarcodeDetector' in window) {
+                                try {
+                                    detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
+                                } catch(e) { detector = null; }
+                            }
+                        }
 
-                        function scanLoop(videoEl) {{
+                        function scanLoop(videoEl) {
                             if (isLocked) return;
-                            if (detector && videoEl.readyState >= 2) {{
-                                detector.detect(videoEl).then(barcodes => {{
-                                    if (barcodes.length > 0 && barcodes[0].rawValue) {{
+                            if (detector && videoEl.readyState >= 2) {
+                                detector.detect(videoEl).then(barcodes => {
+                                    if (barcodes.length > 0 && barcodes[0].rawValue) {
                                         sendCode(barcodes[0].rawValue.trim());
                                         return;
                                     }
                                     if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                }}).catch(() => {{
+                                }).catch(() => {
                                     if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                                }});
-                            }} else {{
+                                });
+                            } else {
                                 if (!isLocked) requestAnimationFrame(() => scanLoop(videoEl));
-                            }}
-                        }}
+                            }
+                        }
 
-                        async function startCamera(deviceId, btnElement) {{
+                        async function startCamera(deviceId, btnElement) {
                             var statusEl = document.getElementById("status-bar");
                             statusEl.innerHTML = "⏳ جاري تشغيل العدسة...";
 
                             document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
                             if (btnElement) btnElement.classList.add('active');
 
-                            if (activeStream) {{
+                            if (activeStream) {
                                 activeStream.getTracks().forEach(t => t.stop());
                                 activeStream = null;
-                            }}
-                            if (codeReader) {{
-                                try {{ codeReader.reset(); }} catch(e) {{}}
-                            }}
+                            }
+                            if (codeReader) {
+                                try { codeReader.reset(); } catch(e) {}
+                            }
 
-                            var videoConstraints = {{
-                                width: {{ ideal: 1280 }},
-                                height: {{ ideal: 720 }}
-                            }};
+                            var videoConstraints = {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            };
                             
-                            if (deviceId) {{
-                                videoConstraints.deviceId = {{ exact: deviceId }};
-                            }} else {{
-                                videoConstraints.facingMode = {{ ideal: "environment" }};
-                            }}
+                            if (deviceId) {
+                                videoConstraints.deviceId = { exact: deviceId };
+                            } else {
+                                videoConstraints.facingMode = { ideal: "environment" };
+                            }
 
-                            try {{
-                                const stream = await navigator.mediaDevices.getUserMedia({{ audio: false, video: videoConstraints }});
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
                                 activeStream = stream;
                                 var v = document.getElementById("scanner-feed");
                                 v.srcObject = stream;
@@ -1038,27 +1037,27 @@ with main_tab2:
                                 await v.play();
                                 statusEl.innerHTML = "🟢 الكاميرا تعمل - وجّه الباركود أمام العدسة";
 
-                                if (!deviceId) {{
+                                if (!deviceId) {
                                     populateLensButtons();
-                                }}
+                                }
 
-                                if (detector) {{
+                                if (detector) {
                                     scanLoop(v);
-                                }} else {{
+                                } else {
                                     codeReader = new ZXing.BrowserMultiFormatReader();
-                                    codeReader.decodeFromVideoElement(v, (result, err) => {{
-                                        if (result && result.text) {{
+                                    codeReader.decodeFromVideoElement(v, (result, err) => {
+                                        if (result && result.text) {
                                             sendCode(result.text);
-                                        }}
-                                    }});
-                                }}
-                            }} catch(err) {{
+                                        }
+                                    });
+                                }
+                            } catch(err) {
                                 statusEl.innerHTML = "⚠️ اضغط على زر عدسة أخرى أعلاه للتبديل.";
-                            }}
-                        }}
+                            }
+                        }
 
-                        async function populateLensButtons() {{
-                            try {{
+                        async function populateLensButtons() {
+                            try {
                                 const devices = await navigator.mediaDevices.enumerateDevices();
                                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                                 const lensContainer = document.getElementById("lens-buttons");
@@ -1066,55 +1065,55 @@ with main_tab2:
                                 lensContainer.innerHTML = "";
 
                                 let backIdx = 0;
-                                videoDevices.forEach((dev, idx) => {{
+                                videoDevices.forEach((dev, idx) => {
                                     const lbl = (dev.label || "").toLowerCase();
                                     
-                                    if (lbl.includes("depth") || lbl.includes("ir") || lbl.includes("tof")) {{
+                                    if (lbl.includes("depth") || lbl.includes("ir") || lbl.includes("tof")) {
                                         return;
-                                    }}
+                                    }
 
                                     const isBack = lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('خلف');
                                     const b = document.createElement("button");
                                     b.className = "lens-btn";
                                     
-                                    if (isBack) {{
+                                    if (isBack) {
                                         backIdx++;
                                         b.innerText = "📸 خلفية " + backIdx;
                                         if (backIdx === 1) b.classList.add('active');
-                                    }} else {{
+                                    } else {
                                         b.innerText = "🤳 أمامية";
-                                    }}
+                                    }
 
-                                    b.onclick = function() {{ startCamera(dev.deviceId, b); }};
+                                    b.onclick = function() { startCamera(dev.deviceId, b); };
                                     lensContainer.appendChild(b);
-                                }});
-                            }} catch(e) {{}}
-                        }}
+                                });
+                            } catch(e) {}
+                        }
 
-                        function readBarcodeFromImage(input) {{
-                            if (input.files && input.files[0]) {{
+                        function readBarcodeFromImage(input) {
+                            if (input.files && input.files[0]) {
                                 document.getElementById("status-bar").innerHTML = "🔍 جاري قراءة الكود من الصورة...";
                                 var reader = new FileReader();
-                                reader.onload = function(e) {{
+                                reader.onload = function(e) {
                                     var img = new Image();
-                                    img.onload = function() {{
+                                    img.onload = function() {
                                         var z = new ZXing.BrowserMultiFormatReader();
-                                        z.decodeFromImage(img).then(res => {{
+                                        z.decodeFromImage(img).then(res => {
                                             if (res && res.text) sendCode(res.text);
-                                        }}).catch(() => {{
+                                        }).catch(() => {
                                             document.getElementById("status-bar").innerHTML = "⚠️ لم يتم لقط الباركود، التقط صورة أقرب.";
-                                        }});
-                                    }};
+                                        });
+                                    };
                                     img.src = e.target.result;
-                                }};
+                                };
                                 reader.readAsDataURL(input.files[0]);
-                            }}
-                        }}
+                            }
+                        }
 
-                        window.addEventListener('load', () => {{
+                        window.addEventListener('load', () => {
                             initDetector();
-                            setTimeout(() => {{ startCamera(null, null); }}, 150);
-                        }});
+                            setTimeout(() => { startCamera(null, null); }, 150);
+                        });
                     </script>
                 </body>
                 </html>
