@@ -837,7 +837,7 @@ with main_tab2:
                     else:
                         st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات.")
 
-                # الكود الأصلي والمضبوط تماماً الذي يختار الكاميرا الخلفية ويدعم BarcodeDetector و ZXing
+                # الكود الأصلي المضبوط تماماً الذي يختار الكاميرا الخلفية ويدعم BarcodeDetector و ZXing
                 original_working_scanner_html = """
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
