@@ -228,7 +228,7 @@ def get_thumbnail_base64(img_path):
 def generate_catalog_excel(catalog_items):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "الكاتالوج"
+    ws.title = "الكاتالوج المفلتر"
     try: ws.sheet_view.rightToLeft = True
     except: pass
     
@@ -605,7 +605,7 @@ else:
         process_df(df_p)
     except: pass
 
-# جلب قائمة المخازن المتاحة من الداتا
+# جلب قائمة المخازن المتاحة
 available_stores = sorted(list(set(v.get('warehouse', 'غير محدد') for v in system_inventory.values())))
 if not available_stores: available_stores = ["غير محدد"]
 
@@ -661,7 +661,6 @@ if "scan_error" not in st.session_state: st.session_state.scan_error = None
 if "current_scanned_code" not in st.session_state: st.session_state.current_scanned_code = None
 if "pos_scanned_code" not in st.session_state: st.session_state.pos_scanned_code = None
 
-# تحميل بيانات الجلسات لفحص المخزن قبل التنقل
 shared_inv = load_shared_inventory()
 shared_sales = load_shared_sales()
 
@@ -680,13 +679,13 @@ if "scanned_code" in params:
     if matched_k:
         item_store = system_inventory[matched_k].get('warehouse', 'غير محدد')
         
-        if st.session_state.main_nav_tab == nav_options[2]: # لو فواتير المبيعات
+        if st.session_state.main_nav_tab == nav_options[2]: # POS
             active_store = shared_sales.get("store")
             if shared_sales.get("is_active") and active_store and item_store != active_store:
                 st.session_state.scan_error = f"❌ الصنف '{matched_k}' موجود في فرع/مخزن ({item_store}) ولا يمكنك بيعه من الوردية الحالية ({active_store})."
             else:
                 st.session_state.pos_scanned_code = matched_k
-        else: # الجرد
+        else: # Inventory
             active_store = shared_inv.get("store")
             if shared_inv.get("is_active") and active_store and item_store != active_store:
                 st.session_state.scan_error = f"❌ الصنف '{matched_k}' ينتمي لفرع/مخزن ({item_store}) وليس مخزن الجرد الحالي ({active_store})."
@@ -894,13 +893,11 @@ elif selected_main_tab == nav_options[1]:
         scanned_map = shared_inv.get("scanned_items", {})
         active_store = shared_inv.get("store", "غير محدد")
 
-        # عزل الأرصدة للمخزن المختار فقط
         store_inventory = {k: v for k, v in system_inventory.items() if v.get('warehouse', 'غير محدد') == active_store}
 
         if "inv_scan_counter" not in st.session_state:
             st.session_state.inv_scan_counter = 0
 
-        # 👉 الكارت يظهر هنا فوراً ويختفي الإسكانر
         if st.session_state.current_scanned_code:
             active_c = st.session_state.current_scanned_code
             item_info = system_inventory[active_c]
@@ -941,7 +938,6 @@ elif selected_main_tab == nav_options[1]:
                 st.rerun()
 
         else:
-            # 👉 الإسكانر يظهر لأنه جاهز
             tab_scan, tab_sum, tab_edit, tab_rep = st.tabs(["🔫 مسح الباركود", "📊 ملخص الأرصدة", "📝 مراجعة وتعديل", "⚖️ تقرير الفروقات"])
 
             with tab_scan:
@@ -1219,7 +1215,7 @@ elif selected_main_tab == nav_options[2]:
                 st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل
+# 4. تبويب الكاتالوج الشامل (الجديد مع الفلترة الذكية)
 # ==========================================
 elif selected_main_tab == nav_options[3]:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
@@ -1258,13 +1254,34 @@ elif selected_main_tab == nav_options[3]:
             
     if cat_rows:
         cat_rows.sort(key=lambda x: str(x.get("كود الصنف", "")).upper())
-        filter_q = st.text_input("🔍 تصفية سريعة بالكاتالوج:", placeholder="ابحث بكود أو اسم الموديل...", key="cat_filter")
         
-        filtered_rows = cat_rows
-        if filter_q:
-            fq = filter_q.strip().lower()
-            filtered_rows = [r for r in cat_rows if fq in str(r.get("كود الصنف","")).lower() or fq in str(r.get("اسم الصنف","")).lower()]
+        st.markdown("#### 🔍 فلاتر البحث المتقدم:")
+        
+        # استخراج القيم الفريدة للفلاتر
+        all_stores_cat = ["الكل"] + sorted(list(set(r.get("المخزن", "غير محدد") for r in cat_rows)))
+        all_types_cat = ["الكل"] + sorted(list(set(r.get("النوع", "غير محدد") for r in cat_rows)))
+        
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            filter_q = st.text_input("بحث بالكود أو الاسم:", placeholder="اكتب للبحث...", key="cat_filter_q")
+        with fc2:
+            filter_store = st.selectbox("تصفية بالمخزن:", all_stores_cat, key="cat_filter_store")
+        with fc3:
+            filter_type = st.selectbox("تصفية بالنوع:", all_types_cat, key="cat_filter_type")
             
+        # تطبيق الفلاتر
+        filtered_rows = []
+        fq = filter_q.strip().lower() if filter_q else ""
+        for r in cat_rows:
+            m_text = not fq or (fq in str(r.get("كود الصنف","")).lower() or fq in str(r.get("اسم الصنف","")).lower())
+            m_store = (filter_store == "الكل") or (r.get("المخزن", "غير محدد") == filter_store)
+            m_type = (filter_type == "الكل") or (r.get("النوع", "غير محدد") == filter_type)
+            
+            if m_text and m_store and m_type:
+                filtered_rows.append(r)
+                
+        st.info(f"📊 عدد الأصناف المطابقة للفلتر: **{len(filtered_rows)}** صنف")
+        
         df_display = pd.DataFrame(filtered_rows).drop(columns=["img_path"], errors="ignore")
         
         st.dataframe(
@@ -1286,9 +1303,9 @@ elif selected_main_tab == nav_options[3]:
         
         excel_catalog_bytes = generate_catalog_excel(filtered_rows)
         st.download_button(
-            label="📥 تحميل الكاتالوج الكامل بالصور (Excel)",
+            label="📥 تحميل الكاتالوج (حسب الفلتر الحالي) (Excel)",
             data=excel_catalog_bytes,
-            file_name=f"Live_Catalog_Images_{datetime.date.today()}.xlsx",
+            file_name=f"Filtered_Catalog_Images_{datetime.date.today()}.xlsx",
             type="primary"
         )
     else:
