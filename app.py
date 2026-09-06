@@ -232,7 +232,7 @@ def generate_catalog_excel(catalog_items):
     try: ws.sheet_view.rightToLeft = True
     except: pass
     
-    headers = ["صورة المنتج", "كود الصنف", "اسم الصنف", "سعر القطعة (ج.م)", "الرصيد الدفتري (قبل البيع)", "كمية المبيعات بالوردية", "الرصيد اللحظي المتاح"]
+    headers = ["صورة المنتج", "كود الصنف", "اسم الصنف", "النوع", "المخزن", "سعر القطعة (ج.م)", "الرصيد الدفتري (قبل البيع)", "كمية المبيعات بالوردية", "الرصيد اللحظي المتاح"]
     ws.append(headers)
     
     header_fill = PatternFill(start_color="1C65A6", end_color="1C65A6", fill_type="solid")
@@ -254,9 +254,11 @@ def generate_catalog_excel(catalog_items):
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 34
     ws.column_dimensions['D'].width = 20
-    ws.column_dimensions['E'].width = 25
-    ws.column_dimensions['F'].width = 25
+    ws.column_dimensions['E'].width = 20
+    ws.column_dimensions['F'].width = 20
     ws.column_dimensions['G'].width = 25
+    ws.column_dimensions['H'].width = 25
+    ws.column_dimensions['I'].width = 25
     
     for row_idx, item in enumerate(catalog_items, start=2):
         ws.row_dimensions[row_idx].height = 105
@@ -264,24 +266,29 @@ def generate_catalog_excel(catalog_items):
         
         c_code = item.get("كود الصنف", "")
         c_name = item.get("اسم الصنف", "")
+        c_type = item.get("النوع", "")
+        c_store = item.get("المخزن", "")
+        
         ws.cell(row=row_idx, column=2, value=str(c_code if pd.notna(c_code) else "")).alignment = center_align
         ws.cell(row=row_idx, column=3, value=str(c_name if pd.notna(c_name) else "")).alignment = center_align
+        ws.cell(row=row_idx, column=4, value=str(c_type if pd.notna(c_type) else "")).alignment = center_align
+        ws.cell(row=row_idx, column=5, value=str(c_store if pd.notna(c_store) else "")).alignment = center_align
         
         try: p_val = float(item.get("سعر القطعة (ج.م)", 0.0))
         except: p_val = 0.0
-        ws.cell(row=row_idx, column=4, value=p_val if pd.notna(p_val) else 0.0).alignment = center_align
+        ws.cell(row=row_idx, column=6, value=p_val if pd.notna(p_val) else 0.0).alignment = center_align
         
         try: s_val = float(item.get("الرصيد الدفتري (قبل البيع)", 0.0))
         except: s_val = 0.0
-        ws.cell(row=row_idx, column=5, value=s_val if pd.notna(s_val) else 0.0).alignment = center_align
+        ws.cell(row=row_idx, column=7, value=s_val if pd.notna(s_val) else 0.0).alignment = center_align
         
         try: m_val = float(item.get("كمية المبيعات بالوردية", 0.0))
         except: m_val = 0.0
-        ws.cell(row=row_idx, column=6, value=m_val if pd.notna(m_val) else 0.0).alignment = center_align
+        ws.cell(row=row_idx, column=8, value=m_val if pd.notna(m_val) else 0.0).alignment = center_align
         
         try: a_val = float(item.get("الرصيد اللحظي المتاح", 0.0))
         except: a_val = 0.0
-        ws.cell(row=row_idx, column=7, value=a_val if pd.notna(a_val) else 0.0).alignment = center_align
+        ws.cell(row=row_idx, column=9, value=a_val if pd.notna(a_val) else 0.0).alignment = center_align
         
         for col_num in range(1, len(headers) + 1):
             ws.cell(row=row_idx, column=col_num).border = thin_border
@@ -304,7 +311,7 @@ def generate_catalog_excel(catalog_items):
 
 logo_base64 = get_image_base64("edstore.jpg")
 
-# --- 2. الهوية البصرية ---
+# --- 2. الهوية البصرية وضبط الإطارات ---
 st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
@@ -507,7 +514,7 @@ def get_color_histogram(image):
 def compare_histograms(h1, h2): return sum(abs(a - b) for a, b in zip(h1, h2))
 
 # ==========================================
-# 🚀 محرك استخراج البيانات الموحد
+# 🚀 محرك استخراج البيانات الموحد (مع النوع والمخزن)
 # ==========================================
 system_inventory = {}
 
@@ -520,7 +527,7 @@ def parse_val(val):
 def process_df(df):
     if df is None or df.empty: return
     cols_map = {c: str(c).lower().strip() for c in df.columns}
-    code_col, name_col, stock_col, price_col = None, None, None, None
+    code_col, name_col, stock_col, price_col, type_col, store_col = None, None, None, None, None, None
     
     for orig, low in cols_map.items():
         if any(k in low for k in ['كود الصنف', 'كود', 'code', 'باركود', 'barcode', 'item_code', 'رمز', 'رقم الصنف']):
@@ -537,6 +544,14 @@ def process_df(df):
     for orig, low in cols_map.items():
         if orig not in [code_col, name_col, stock_col] and any(k in low for k in ['سعر الجملة', 'سعر القطعة', 'سعر', 'price', 'ثمن', 'جملة', 'بيع', 'قيمة', 'قطاعي']):
             price_col = orig; break
+
+    for orig, low in cols_map.items():
+        if orig not in [code_col, name_col, stock_col, price_col] and any(k in low for k in ['النوع', 'نوع', 'type', 'category', 'الفئة', 'القسم']):
+            type_col = orig; break
+            
+    for orig, low in cols_map.items():
+        if orig not in [code_col, name_col, stock_col, price_col, type_col] and any(k in low for k in ['المخزن', 'مخزن', 'store', 'warehouse', 'الفرع', 'مكان']):
+            store_col = orig; break
             
     if not code_col and len(df.columns) > 0: code_col = df.columns[0]
     if not name_col and len(df.columns) > 1: name_col = df.columns[1]
@@ -558,6 +573,12 @@ def process_df(df):
         
         p_stock = parse_val(row.get(stock_col, 0)) if stock_col else 0.0
         p_price = parse_val(row.get(price_col, 0)) if price_col else 0.0
+
+        p_type = str(row.get(type_col, "غير محدد")).strip() if type_col else "غير محدد"
+        if pd.isna(p_type) or p_type.lower() in ['nan', 'none', '']: p_type = "غير محدد"
+        
+        p_store = str(row.get(store_col, "غير محدد")).strip() if store_col else "غير محدد"
+        if pd.isna(p_store) or p_store.lower() in ['nan', 'none', '']: p_store = "غير محدد"
         
         if p_price == 0.0:
             for c in df.columns:
@@ -565,7 +586,13 @@ def process_df(df):
                     t_p = parse_val(row[c])
                     if t_p > 0: p_price = t_p; break
                     
-        system_inventory[p_code] = {'name': p_name, 'sys_stock': p_stock, 'price': p_price}
+        system_inventory[p_code] = {
+            'name': p_name, 
+            'sys_stock': p_stock, 
+            'price': p_price,
+            'type': p_type,
+            'warehouse': p_store
+        }
 
 if os.path.exists(MASTER_DB_FILE):
     try:
@@ -603,11 +630,20 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price and float(p_price) > 0 else " &nbsp;|&nbsp; ⚠️ السعر غير مسجل"
     stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}" if is_sales else f"📦 الرصيد الدفتري: {p_stock}"
 
+    # جلب بيانات النوع والمخزن للعرض
+    p_data = system_inventory.get(p_code, {})
+    p_type = p_data.get('type', 'غير محدد')
+    p_store = p_data.get('warehouse', 'غير محدد')
+
     st.markdown(f"""<div class="product-card">
         {img_html}
         <div style="flex-grow: 1;">
             <div class="code-badge">الكود: {p_code}</div>
             <h3 class="product-title">{p_name}</h3>
+            <div style="margin-bottom: 8px; font-size: 14px; color: #475569; font-weight: 600;">
+                <span style="background:#F1F5F9; padding:4px 10px; border-radius:8px; margin-left:8px; border: 1px solid #E2E8F0;">🏷️ {p_type}</span>
+                <span style="background:#F1F5F9; padding:4px 10px; border-radius:8px; border: 1px solid #E2E8F0;">🏢 {p_store}</span>
+            </div>
             <div class="{stock_class}">{stock_text}</div>
         </div>
     </div>""", unsafe_allow_html=True)
@@ -641,10 +677,10 @@ if "scanned_code" in params:
             st.session_state.current_scanned_code = matched_k
             st.session_state.main_nav_tab = nav_options[1]
     else:
-        st.session_state.scan_error = f"❌ الباركود '{sc_val}' غير مسجل في قاعدة البيانات. برجاء إعادة المحاولة."
+        st.session_state.scan_error = f"❌ الباركود الممسوح '{sc_val}' غير مسجل في قاعدة البيانات. برجاء إعادة المحاولة."
     st.rerun()
 
-# الدالة المساعدة لإنشاء إسكانر يبعث أي كود ليتفاعل مع Streamlit فوراً
+# الدالة المساعدة لإنشاء إسكانر يبعث أي كود ليتفاعل مع Streamlit فوراً (بدون فلترة)
 def get_scanner_html():
     return """
     <!DOCTYPE html>
@@ -856,9 +892,10 @@ elif selected_main_tab == nav_options[1]:
         
         scanned_map = shared_inv.get("scanned_items", {})
 
-        if "inv_scan_counter" not in st.session_state: st.session_state.inv_scan_counter = 0
+        if "inv_scan_counter" not in st.session_state:
+            st.session_state.inv_scan_counter = 0
 
-        # 👉 طباعة رسالة الخطأ هنا بوضوح إن وجدت
+        # 👉 طباعة رسالة الخطأ هنا بوضوح إن وجدت لكي تراها وتدوس على الاسكانر تاني
         if st.session_state.scan_error:
             st.error(st.session_state.scan_error)
             st.session_state.scan_error = None
@@ -904,7 +941,7 @@ elif selected_main_tab == nav_options[1]:
                 st.rerun()
 
         else:
-            # 👉 الإسكانر يظهر لأنه جاهز
+            # 👉 الإسكانر يظهر لأنه جاهز للمسح من جديد
             tab_scan, tab_sum, tab_edit, tab_rep = st.tabs(["🔫 مسح الباركود", "📊 ملخص الأرصدة", "📝 مراجعة وتعديل", "⚖️ تقرير الفروقات"])
 
             with tab_scan:
@@ -915,14 +952,14 @@ elif selected_main_tab == nav_options[1]:
                     placeholder="اكتب الباركود هنا لو أردت..."
                 )
 
-                # إذا تلقينا أي شيء سواء باليد أو بالحقن المباشر
                 if scanned_raw:
                     matched_k = match_product_code(scanned_raw)
                     if matched_k:
                         st.session_state.current_scanned_code = matched_k
                         st.rerun()
                     else:
-                        st.error(f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في قاعدة البيانات. برجاء المحاولة مرة أخرى.")
+                        st.session_state.scan_error = f"❌ الباركود الممسوح '{scanned_raw.strip()}' غير مسجل في النظام. برجاء إعادة المحاولة."
+                        st.rerun()
 
                 components.html(get_scanner_html(), height=360)
 
@@ -1123,7 +1160,8 @@ elif selected_main_tab == nav_options[2]:
                         st.session_state.pos_scanned_code = matched_pos_code
                         st.rerun()
                     else:
-                        st.error(f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام. برجاء المحاولة مرة أخرى.")
+                        st.session_state.scan_error = f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام. برجاء المحاولة مرة أخرى."
+                        st.rerun()
 
                 components.html(get_scanner_html(), height=360)
 
@@ -1202,6 +1240,8 @@ elif selected_main_tab == nav_options[3]:
                 "صورة المنتج": thumb_val,
                 "كود الصنف": p_c,
                 "اسم الصنف": p_inf.get('name', ''),
+                "النوع": p_inf.get('type', 'غير محدد'),
+                "المخزن": p_inf.get('warehouse', 'غير محدد'),
                 "سعر القطعة (ج.م)": price_val,
                 "الرصيد الدفتري (قبل البيع)": stk_before,
                 "كمية المبيعات بالوردية": sold_amt,
@@ -1226,6 +1266,8 @@ elif selected_main_tab == nav_options[3]:
                 "صورة المنتج": st.column_config.ImageColumn("صورة المنتج", help="صورة الصنف واضحة"),
                 "كود الصنف": st.column_config.TextColumn("كود الصنف"),
                 "اسم الصنف": st.column_config.TextColumn("اسم الصنف"),
+                "النوع": st.column_config.TextColumn("النوع"),
+                "المخزن": st.column_config.TextColumn("المخزن"),
                 "سعر القطعة (ج.م)": st.column_config.NumberColumn("سعر القطعة (ج.م)", format="%.2f"),
                 "الرصيد الدفتري (قبل البيع)": st.column_config.NumberColumn("الرصيد الدفتري"),
                 "كمية المبيعات بالوردية": st.column_config.NumberColumn("المبيعات"),
