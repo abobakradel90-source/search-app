@@ -689,12 +689,11 @@ if "scanned_code" in params:
             active_store = shared_inv.get("store")
             if shared_inv.get("is_active") and active_store and item_store != active_store:
                 st.session_state.scan_error = f"❌ الصنف '{matched_k}' ينتمي لفرع/مخزن ({item_store}) وليس مخزن الجرد الحالي ({active_store})."
-                st.session_state.main_nav_tab = nav_options[1]
             else:
                 st.session_state.current_scanned_code = matched_k
-                st.session_state.main_nav_tab = nav_options[1]
+            st.session_state.main_nav_tab = nav_options[1]
     else:
-        st.session_state.scan_error = f"❌ الباركود '{sc_val}' غير مسجل في قاعدة البيانات. برجاء إعادة المحاولة."
+        st.session_state.scan_error = f"❌ الباركود '{sc_val}' غير مسجل في قاعدة البيانات. برجاء إضافة الصنف أو التأكد من الكود."
     st.rerun()
 
 def get_scanner_html():
@@ -753,6 +752,7 @@ def get_scanner_html():
                     try {
                         var url = new URL(window.parent.location.href);
                         url.searchParams.set("scanned_code", cleanCode);
+                        url.searchParams.set("t", new Date().getTime()); // لضمان التحديث الفوري
                         window.parent.location.href = url.href;
                     } catch(e) {}
                 }, 100);
@@ -796,10 +796,6 @@ def get_scanner_html():
     """
 
 selected_main_tab = st.radio("التنقل الرئيسي", nav_options, horizontal=True, key="main_nav_tab", label_visibility="collapsed")
-
-if st.session_state.scan_error:
-    st.error(st.session_state.scan_error)
-    st.session_state.scan_error = None
 
 # ==========================================
 # 1. تبويب البحث الذكي
@@ -892,13 +888,22 @@ elif selected_main_tab == nav_options[1]:
         
         scanned_map = shared_inv.get("scanned_items", {})
         active_store = shared_inv.get("store", "غير محدد")
-
         store_inventory = {k: v for k, v in system_inventory.items() if v.get('warehouse', 'غير محدد') == active_store}
 
         if "inv_scan_counter" not in st.session_state:
             st.session_state.inv_scan_counter = 0
 
-        if st.session_state.current_scanned_code:
+        # 👉 1. معالجة الخطأ أولاً وإخفاء الكاميرا حتى الإلغاء
+        if st.session_state.scan_error:
+            st.markdown(f"<div style='background:#FEF2F2; color:#DC2626; padding:18px; border-radius:12px; margin-bottom:20px; border: 2px solid #FECACA; text-align:center; font-size: 18px; font-weight: 800;'>{st.session_state.scan_error}</div>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1,2,1])
+            with col2:
+                if st.button("🔄 إلغاء ومسح صنف آخر", type="primary", use_container_width=True, key="clear_inv_err"):
+                    st.session_state.scan_error = None
+                    st.rerun()
+
+        # 👉 2. عرض الكارت في حالة النجاح وإخفاء الكاميرا
+        elif st.session_state.current_scanned_code:
             active_c = st.session_state.current_scanned_code
             item_info = system_inventory[active_c]
             already_counted = scanned_map.get(active_c, 0)
@@ -937,6 +942,7 @@ elif selected_main_tab == nav_options[1]:
                 st.session_state.inv_scan_counter += 1
                 st.rerun()
 
+        # 👉 3. عرض الكاميرا فقط إذا لم يكن هناك خطأ ولا صنف ممسوح
         else:
             tab_scan, tab_sum, tab_edit, tab_rep = st.tabs(["🔫 مسح الباركود", "📊 ملخص الأرصدة", "📝 مراجعة وتعديل", "⚖️ تقرير الفروقات"])
 
@@ -1096,7 +1102,17 @@ elif selected_main_tab == nav_options[2]:
         else:
             st.markdown(f"### 🧾 العميل الحالي: <span style='color:#1C65A6;'>{st.session_state.active_cust}</span>", unsafe_allow_html=True)
 
-            if st.session_state.pos_scanned_code:
+            # 👉 1. معالجة الخطأ
+            if st.session_state.scan_error:
+                st.markdown(f"<div style='background:#FEF2F2; color:#DC2626; padding:18px; border-radius:12px; margin-bottom:20px; border: 2px solid #FECACA; text-align:center; font-size: 18px; font-weight: 800;'>{st.session_state.scan_error}</div>", unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([1,2,1])
+                with col2:
+                    if st.button("🔄 إلغاء ومسح صنف آخر", type="primary", use_container_width=True, key="clear_pos_err"):
+                        st.session_state.scan_error = None
+                        st.rerun()
+
+            # 👉 2. الكارت المفتوح
+            elif st.session_state.pos_scanned_code:
                 p_c = st.session_state.pos_scanned_code
                 p_data = system_inventory[p_c]
                 s_qty = float(p_data.get('sys_stock', 0.0))
@@ -1144,6 +1160,7 @@ elif selected_main_tab == nav_options[2]:
                     st.session_state.pos_scan_counter += 1
                     st.rerun()
 
+            # 👉 3. فتح الكاميرا
             else:
                 pos_code_key = f"pos_barcode_in_{st.session_state.pos_scan_counter}"
                 scan_pos = st.text_input(
@@ -1162,7 +1179,7 @@ elif selected_main_tab == nav_options[2]:
                             st.session_state.pos_scanned_code = matched_pos_code
                         st.rerun()
                     else:
-                        st.session_state.scan_error = f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام."
+                        st.session_state.scan_error = f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام. برجاء المحاولة مرة أخرى."
                         st.rerun()
 
                 components.html(get_scanner_html(), height=360)
