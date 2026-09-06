@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # ==============================================================================
 # 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
 # ==============================================================================
-FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
+FIREBASE_DB_URL = "https://edstore-default-rtdb.firebaseio.com"
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(
@@ -1215,7 +1215,7 @@ elif selected_main_tab == nav_options[2]:
                 st.rerun()
 
 # ==========================================
-# 4. تبويب الكاتالوج الشامل (الجديد مع الفلترة الذكية)
+# 4. تبويب الكاتالوج الشامل
 # ==========================================
 elif selected_main_tab == nav_options[3]:
     st.markdown("### 📖 الكاتالوج الشامل للأصناف المتوفرة (Live Catalog)")
@@ -1257,25 +1257,23 @@ elif selected_main_tab == nav_options[3]:
         
         st.markdown("#### 🔍 فلاتر البحث المتقدم:")
         
-        # استخراج القيم الفريدة للفلاتر
-        all_stores_cat = ["الكل"] + sorted(list(set(r.get("المخزن", "غير محدد") for r in cat_rows)))
-        all_types_cat = ["الكل"] + sorted(list(set(r.get("النوع", "غير محدد") for r in cat_rows)))
+        all_stores_cat = sorted(list(set(r.get("المخزن", "غير محدد") for r in cat_rows)))
+        all_types_cat = sorted(list(set(r.get("النوع", "غير محدد") for r in cat_rows)))
         
         fc1, fc2, fc3 = st.columns(3)
         with fc1:
             filter_q = st.text_input("بحث بالكود أو الاسم:", placeholder="اكتب للبحث...", key="cat_filter_q")
         with fc2:
-            filter_store = st.selectbox("تصفية بالمخزن:", all_stores_cat, key="cat_filter_store")
+            filter_store = st.multiselect("تصفية بالمخزن (يمكن اختيار أكثر من مخزن):", all_stores_cat, default=[], key="cat_filter_store")
         with fc3:
-            filter_type = st.selectbox("تصفية بالنوع:", all_types_cat, key="cat_filter_type")
+            filter_type = st.multiselect("تصفية بالنوع (يمكن اختيار أكثر من نوع):", all_types_cat, default=[], key="cat_filter_type")
             
-        # تطبيق الفلاتر
         filtered_rows = []
         fq = filter_q.strip().lower() if filter_q else ""
         for r in cat_rows:
             m_text = not fq or (fq in str(r.get("كود الصنف","")).lower() or fq in str(r.get("اسم الصنف","")).lower())
-            m_store = (filter_store == "الكل") or (r.get("المخزن", "غير محدد") == filter_store)
-            m_type = (filter_type == "الكل") or (r.get("النوع", "غير محدد") == filter_type)
+            m_store = (len(filter_store) == 0) or (r.get("المخزن", "غير محدد") in filter_store)
+            m_type = (len(filter_type) == 0) or (r.get("النوع", "غير محدد") in filter_type)
             
             if m_text and m_store and m_type:
                 filtered_rows.append(r)
