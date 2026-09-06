@@ -91,7 +91,7 @@ def save_json(file_path, data):
         pass
 
 def load_shared_inventory():
-    default_inv = {"is_active": False, "name": "", "reason": "", "date": "", "scanned_items": {}}
+    default_inv = {"is_active": False, "name": "", "reason": "", "date": "", "store": "الرئيسي", "scanned_items": {}}
     cloud_data = cloud_get("active_inventory", None)
     if cloud_data is not None:
         save_json(SHARED_INV_FILE, cloud_data)
@@ -116,7 +116,7 @@ def save_to_inv_history(record):
     cloud_put("inventory_history", history)
 
 def load_shared_sales():
-    default_sales = {"is_active": False, "name": "", "date": "", "invoices": [], "deductions": {}}
+    default_sales = {"is_active": False, "name": "", "date": "", "store": "الرئيسي", "invoices": [], "deductions": {}}
     cloud_data = cloud_get("active_sales", None)
     if cloud_data is not None:
         save_json(SHARED_SALES_FILE, cloud_data)
@@ -605,6 +605,10 @@ else:
         process_df(df_p)
     except: pass
 
+# جلب قائمة المخازن المتاحة من الداتا
+available_stores = sorted(list(set(v.get('warehouse', 'غير محدد') for v in system_inventory.values())))
+if not available_stores: available_stores = ["غير محدد"]
+
 def match_product_code(raw_code):
     if not raw_code: return None
     code_clean = str(raw_code).strip().upper()
@@ -630,7 +634,6 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     price_str = f" &nbsp;|&nbsp; 💰 السعر: {p_price} ج.م" if p_price and float(p_price) > 0 else " &nbsp;|&nbsp; ⚠️ السعر غير مسجل"
     stock_text = f"🛒 الرصيد المتاح: {p_stock}{price_str}" if is_sales else f"📦 الرصيد الدفتري: {p_stock}"
 
-    # جلب بيانات النوع والمخزن للعرض
     p_data = system_inventory.get(p_code, {})
     p_type = p_data.get('type', 'غير محدد')
     p_store = p_data.get('warehouse', 'غير محدد')
@@ -649,7 +652,7 @@ def render_product_card(p_code, p_name, p_stock, p_price=None, is_sales=False):
     </div>""", unsafe_allow_html=True)
 
 # ==========================================
-# 🌟 التحكم الفوري في الروابط والاستجابة (Fallback)
+# 🌟 الإدارة الفورية للاستجابة والروابط
 # ==========================================
 nav_options = ["🔍 محرك البحث الذكي", "📦 الجرد التشاركي", "🛒 فواتير الجملة", "📖 الكاتالوج", "📈 لوحة تحكم الإدارة"]
 
@@ -657,6 +660,10 @@ if "main_nav_tab" not in st.session_state: st.session_state.main_nav_tab = nav_o
 if "scan_error" not in st.session_state: st.session_state.scan_error = None
 if "current_scanned_code" not in st.session_state: st.session_state.current_scanned_code = None
 if "pos_scanned_code" not in st.session_state: st.session_state.pos_scanned_code = None
+
+# تحميل بيانات الجلسات لفحص المخزن قبل التنقل
+shared_inv = load_shared_inventory()
+shared_sales = load_shared_sales()
 
 try: params = st.query_params
 except: params = st.experimental_get_query_params()
@@ -671,16 +678,26 @@ if "scanned_code" in params:
     
     matched_k = match_product_code(sc_val)
     if matched_k:
-        if st.session_state.main_nav_tab == nav_options[2]: # POS
-            st.session_state.pos_scanned_code = matched_k
-        else: # Inventory
-            st.session_state.current_scanned_code = matched_k
-            st.session_state.main_nav_tab = nav_options[1]
+        item_store = system_inventory[matched_k].get('warehouse', 'غير محدد')
+        
+        if st.session_state.main_nav_tab == nav_options[2]: # لو فواتير المبيعات
+            active_store = shared_sales.get("store")
+            if shared_sales.get("is_active") and active_store and item_store != active_store:
+                st.session_state.scan_error = f"❌ الصنف '{matched_k}' موجود في فرع/مخزن ({item_store}) ولا يمكنك بيعه من الوردية الحالية ({active_store})."
+            else:
+                st.session_state.pos_scanned_code = matched_k
+        else: # الجرد
+            active_store = shared_inv.get("store")
+            if shared_inv.get("is_active") and active_store and item_store != active_store:
+                st.session_state.scan_error = f"❌ الصنف '{matched_k}' ينتمي لفرع/مخزن ({item_store}) وليس مخزن الجرد الحالي ({active_store})."
+                st.session_state.main_nav_tab = nav_options[1]
+            else:
+                st.session_state.current_scanned_code = matched_k
+                st.session_state.main_nav_tab = nav_options[1]
     else:
-        st.session_state.scan_error = f"❌ الباركود الممسوح '{sc_val}' غير مسجل في قاعدة البيانات. برجاء إعادة المحاولة."
+        st.session_state.scan_error = f"❌ الباركود '{sc_val}' غير مسجل في قاعدة البيانات. برجاء إعادة المحاولة."
     st.rerun()
 
-# الدالة المساعدة لإنشاء إسكانر يبعث أي كود ليتفاعل مع Streamlit فوراً (بدون فلترة)
 def get_scanner_html():
     return """
     <!DOCTYPE html>
@@ -733,26 +750,6 @@ def get_scanner_html():
                 var cleanCode = code.trim().toUpperCase();
                 document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف! جاري التحقق...";
 
-                try {
-                    var doc = window.parent.document;
-                    var inputs = doc.querySelectorAll('input[type="text"]');
-                    var targetInput = null;
-                    for (var i = 0; i < inputs.length; i++) {
-                        if (inputs[i].placeholder && inputs[i].placeholder.includes("اكتب الباركود")) {
-                            targetInput = inputs[i];
-                            break;
-                        }
-                    }
-                    if (targetInput) {
-                        var nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
-                        nativeSetter.call(targetInput, cleanCode);
-                        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        targetInput.dispatchEvent(new window.parent.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                        return; // Done using DOM
-                    }
-                } catch(e) {}
-
-                // Fallback to URL
                 setTimeout(function() {
                     try {
                         var url = new URL(window.parent.location.href);
@@ -800,6 +797,10 @@ def get_scanner_html():
     """
 
 selected_main_tab = st.radio("التنقل الرئيسي", nav_options, horizontal=True, key="main_nav_tab", label_visibility="collapsed")
+
+if st.session_state.scan_error:
+    st.error(st.session_state.scan_error)
+    st.session_state.scan_error = None
 
 # ==========================================
 # 1. تبويب البحث الذكي
@@ -861,44 +862,43 @@ if selected_main_tab == nav_options[0]:
 # 2. تبويب الجرد التشاركي
 # ==========================================
 elif selected_main_tab == nav_options[1]:
-    shared_inv = load_shared_inventory()
     
     if not shared_inv.get("is_active", False):
         st.markdown("### 🆕 إعداد جلسة جرد جديدة")
         col_i1, col_i2 = st.columns(2)
         with col_i1:
             inv_n = st.text_input("اسم/رقم الجرد (مثال: جرد مخزن رئيسي 1)", key="inv_n_in")
-            inv_r = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "نهاية العام"], key="inv_r_in")
+            inv_store = st.selectbox("المخزن المراد جرده", available_stores, key="inv_store_in")
         with col_i2:
+            inv_r = st.selectbox("سبب الجرد", ["جرد دوري", "جرد مفاجئ", "تسليم عهدة", "نهاية العام"], key="inv_r_in")
             inv_d = st.date_input("تاريخ الجرد", datetime.date.today(), key="inv_d_in")
-            st.write("")
-            st.write("")
-            if st.button("🚀 فتح جلسة الجرد وتثبيتها", key="open_inv_btn"):
-                if not inv_n.strip():
-                    st.error("⚠️ اكتب اسم الجرد أولاً للمتابعة!")
-                else:
-                    save_shared_inventory({
-                        "is_active": True,
-                        "name": inv_n.strip(),
-                        "reason": inv_r,
-                        "date": str(inv_d),
-                        "scanned_items": {}
-                    })
-                    st.success("✅ تم فتح الجلسة وتثبيتها بنجاح!")
-                    time.sleep(0.3)
-                    st.rerun()
+        
+        if st.button("🚀 فتح جلسة الجرد وتثبيتها", key="open_inv_btn"):
+            if not inv_n.strip():
+                st.error("⚠️ اكتب اسم الجرد أولاً للمتابعة!")
+            else:
+                save_shared_inventory({
+                    "is_active": True,
+                    "name": inv_n.strip(),
+                    "store": inv_store,
+                    "reason": inv_r,
+                    "date": str(inv_d),
+                    "scanned_items": {}
+                })
+                st.success(f"✅ تم فتح الجلسة لمخزن ({inv_store}) بنجاح!")
+                time.sleep(0.3)
+                st.rerun()
     else:
-        st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد نشطة ومحفوظة:</b> {shared_inv.get("name")} | <b>السبب:</b> {shared_inv.get("reason")} | <b>التاريخ:</b> {shared_inv.get("date")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="inv-active-bar">📌 <b>جلسة جرد:</b> {shared_inv.get("name")} | <b>المخزن:</b> {shared_inv.get("store")} | <b>السبب:</b> {shared_inv.get("reason")}</div>', unsafe_allow_html=True)
         
         scanned_map = shared_inv.get("scanned_items", {})
+        active_store = shared_inv.get("store", "غير محدد")
+
+        # عزل الأرصدة للمخزن المختار فقط
+        store_inventory = {k: v for k, v in system_inventory.items() if v.get('warehouse', 'غير محدد') == active_store}
 
         if "inv_scan_counter" not in st.session_state:
             st.session_state.inv_scan_counter = 0
-
-        # 👉 طباعة رسالة الخطأ هنا بوضوح إن وجدت لكي تراها وتدوس على الاسكانر تاني
-        if st.session_state.scan_error:
-            st.error(st.session_state.scan_error)
-            st.session_state.scan_error = None
 
         # 👉 الكارت يظهر هنا فوراً ويختفي الإسكانر
         if st.session_state.current_scanned_code:
@@ -941,7 +941,7 @@ elif selected_main_tab == nav_options[1]:
                 st.rerun()
 
         else:
-            # 👉 الإسكانر يظهر لأنه جاهز للمسح من جديد
+            # 👉 الإسكانر يظهر لأنه جاهز
             tab_scan, tab_sum, tab_edit, tab_rep = st.tabs(["🔫 مسح الباركود", "📊 ملخص الأرصدة", "📝 مراجعة وتعديل", "⚖️ تقرير الفروقات"])
 
             with tab_scan:
@@ -955,19 +955,23 @@ elif selected_main_tab == nav_options[1]:
                 if scanned_raw:
                     matched_k = match_product_code(scanned_raw)
                     if matched_k:
-                        st.session_state.current_scanned_code = matched_k
+                        item_store = system_inventory[matched_k].get('warehouse', 'غير محدد')
+                        if item_store != active_store:
+                            st.session_state.scan_error = f"❌ الصنف '{matched_k}' ينتمي لمخزن ({item_store}) وليس مخزن الجرد الحالي ({active_store})."
+                        else:
+                            st.session_state.current_scanned_code = matched_k
                         st.rerun()
                     else:
-                        st.session_state.scan_error = f"❌ الباركود الممسوح '{scanned_raw.strip()}' غير مسجل في النظام. برجاء إعادة المحاولة."
+                        st.session_state.scan_error = f"❌ الباركود '{scanned_raw.strip()}' غير مسجل في النظام."
                         st.rerun()
 
                 components.html(get_scanner_html(), height=360)
 
             with tab_sum:
-                total_qty = sum(info.get('sys_stock', 0) for info in system_inventory.values())
+                total_qty = sum(info.get('sys_stock', 0) for info in store_inventory.values())
                 c1, c2, c3 = st.columns(3)
-                with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف الدفترية</div><div class="metric-value" style="color:#1C65A6;">{len(system_inventory)}</div></div>', unsafe_allow_html=True)
-                with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي القطع</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
+                with c1: st.markdown(f'<div class="metric-card"><div class="metric-title">الأصناف بفرع ({active_store})</div><div class="metric-value" style="color:#1C65A6;">{len(store_inventory)}</div></div>', unsafe_allow_html=True)
+                with c2: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي قطع الفرع</div><div class="metric-value" style="color:#10B981;">{int(total_qty)}</div></div>', unsafe_allow_html=True)
                 with c3: st.markdown(f'<div class="metric-card"><div class="metric-title">إجمالي المجرد فعلياً</div><div class="metric-value" style="color:#F59E0B;">{int(sum(scanned_map.values()))}</div></div>', unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1020,7 +1024,7 @@ elif selected_main_tab == nav_options[1]:
                         "الرصيد الفعلي": scanned_map.get(c, 0),
                         "الفروقات": scanned_map.get(c, 0) - i.get('sys_stock', 0)
                     }
-                    for c, i in system_inventory.items()
+                    for c, i in store_inventory.items()
                 ]
                 
                 filter_rep = st.text_input("🔍 تصفية سريعة بتقرير الفروقات:", placeholder="ابحث بكود أو اسم الموديل...", key="rep_filter_input")
@@ -1037,6 +1041,7 @@ elif selected_main_tab == nav_options[1]:
                         save_to_inv_history({
                             "timestamp": str(datetime.datetime.now()),
                             "name": shared_inv.get('name'),
+                            "store": active_store,
                             "date": shared_inv.get('date'),
                             "report": rep_data
                         })
@@ -1049,13 +1054,13 @@ elif selected_main_tab == nav_options[1]:
 # 3. تبويب فواتير الجملة
 # ==========================================
 elif selected_main_tab == nav_options[2]:
-    shared_sales = load_shared_sales()
     
     if not shared_sales.get("is_active", False):
-        st.markdown("### 🏬 فتح وردية مبيعات جملة جديدة")
+        st.markdown("### 🏬 فتح وردية مبيعات جديدة")
         col_s1, col_s2 = st.columns(2)
         with col_s1:
             s_name = st.text_input("اسم/رقم الوردية (مثال: وردية صباحية 1)", key="s_name_in")
+            s_store = st.selectbox("مخزن/فرع المبيعات", available_stores, key="s_store_in")
         with col_s2:
             s_date = st.date_input("تاريخ الوردية", datetime.date.today(), key="s_date_in")
             st.write("")
@@ -1063,12 +1068,13 @@ elif selected_main_tab == nav_options[2]:
             if st.button("🚀 فتح وردية البيع وتثبيتها", key="open_sales_btn"):
                 if not s_name.strip(): st.error("⚠️ اكتب اسم الوردية أولاً!")
                 else:
-                    save_shared_sales({"is_active": True, "name": s_name.strip(), "date": str(s_date), "invoices": [], "deductions": {}})
+                    save_shared_sales({"is_active": True, "name": s_name.strip(), "store": s_store, "date": str(s_date), "invoices": [], "deductions": {}})
                     st.rerun()
     else:
-        st.markdown(f'<div class="sales-active-bar">💳 <b>وردية الجملة النشطة:</b> {shared_sales.get("name")} | <b>التاريخ:</b> {shared_sales.get("date")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="sales-active-bar">💳 <b>وردية المبيعات:</b> {shared_sales.get("name")} | <b>الفرع/المخزن:</b> {shared_sales.get("store")}</div>', unsafe_allow_html=True)
         
         all_invs = shared_sales.get("invoices", [])
+        active_store = shared_sales.get("store", "غير محدد")
         total_rev = sum(float(inv.get("total", 0.0)) for inv in all_invs)
         my_rev = sum(float(inv.get("total", 0.0)) for inv in all_invs if inv.get("salesperson") == st.session_state.current_user)
         
@@ -1093,10 +1099,6 @@ elif selected_main_tab == nav_options[2]:
                 else: st.error("⚠️ اكتب اسم العميل للمتابعة.")
         else:
             st.markdown(f"### 🧾 العميل الحالي: <span style='color:#1C65A6;'>{st.session_state.active_cust}</span>", unsafe_allow_html=True)
-            
-            if st.session_state.scan_error:
-                st.error(st.session_state.scan_error)
-                st.session_state.scan_error = None
 
             if st.session_state.pos_scanned_code:
                 p_c = st.session_state.pos_scanned_code
@@ -1110,7 +1112,7 @@ elif selected_main_tab == nav_options[2]:
                 render_product_card(p_c, p_data.get('name',''), avail, p_price=price, is_sales=True)
                 
                 if avail <= 0:
-                    st.error("❌ تحذير: هذا الصنف غير متاح في المخزن حالياً (رصيده 0)!")
+                    st.error("❌ تحذير: هذا الصنف رصيده صفر، غير متاح للبيع!")
                 else:
                     with st.form(key=f"pos_add_form_{p_c}_{st.session_state.pos_scan_counter}", clear_on_submit=True):
                         c_q1, c_q2, c_q3 = st.columns([3, 2, 2])
@@ -1157,10 +1159,14 @@ elif selected_main_tab == nav_options[2]:
                 if scan_pos:
                     matched_pos_code = match_product_code(scan_pos)
                     if matched_pos_code:
-                        st.session_state.pos_scanned_code = matched_pos_code
+                        item_store = system_inventory[matched_pos_code].get('warehouse', 'غير محدد')
+                        if item_store != active_store:
+                            st.session_state.scan_error = f"❌ الصنف '{matched_pos_code}' ينتمي لمخزن ({item_store}) ولا يمكن بيعه من الفرع الحالي ({active_store})."
+                        else:
+                            st.session_state.pos_scanned_code = matched_pos_code
                         st.rerun()
                     else:
-                        st.session_state.scan_error = f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام. برجاء المحاولة مرة أخرى."
+                        st.session_state.scan_error = f"❌ الكود '{scan_pos.strip()}' غير مسجل في النظام."
                         st.rerun()
 
                 components.html(get_scanner_html(), height=360)
@@ -1180,6 +1186,7 @@ elif selected_main_tab == nav_options[2]:
                         l_sales["invoices"].append({
                             "invoice_id": new_id, "time": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
                             "salesperson": st.session_state.current_user, "customer": st.session_state.active_cust,
+                            "store": active_store,
                             "total": cart_tot, "items": st.session_state.cart
                         })
                         for it in st.session_state.cart:
@@ -1205,7 +1212,7 @@ elif selected_main_tab == nav_options[2]:
         st.markdown("---")
         if st.session_state.current_user == "abobakr":
             if st.button("🛑 إغلاق وردية البيع نهائياً (ترحيل للأرشيف)", key="close_sales_shift_btn"):
-                save_to_sales_history({"name": shared_sales.get("name"), "date": shared_sales.get("date"), "total_revenue": total_rev, "invoices": all_invs})
+                save_to_sales_history({"name": shared_sales.get("name"), "date": shared_sales.get("date"), "store": active_store, "total_revenue": total_rev, "invoices": all_invs})
                 save_shared_sales({"is_active": False, "invoices": [], "deductions": {}})
                 st.success("✅ تم ترحيل الوردية للأرشيف وإغلاقها.")
                 time.sleep(0.5)
@@ -1296,28 +1303,28 @@ elif selected_main_tab == nav_options[4]:
     for rec in load_sales_history():
         for inv in rec.get('invoices', []):
             for it in inv.get('items', []):
-                master_sales.append({"الوردية": rec.get('name', ''), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
-        for inv in load_shared_sales().get('invoices', []):
-            for it in inv.get('items', []):
-                master_sales.append({"الوردية": "نشطة حالياً", "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
-                
-        if master_sales:
-            df_all = pd.DataFrame(master_sales)
-            tot_cash = df_all['الإجمالي'].sum()
-            tot_pieces = df_all['الكمية'].sum()
+                master_sales.append({"الوردية": rec.get('name', ''), "الفرع": rec.get('store', 'غير محدد'), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
+    for inv in load_shared_sales().get('invoices', []):
+        for it in inv.get('items', []):
+            master_sales.append({"الوردية": "نشطة حالياً", "الفرع": inv.get('store', 'غير محدد'), "العميل": inv.get('customer', ''), "البائع": inv.get('salesperson', ''), "كود الصنف": it.get('code', ''), "الكمية": float(it.get('qty', 0)), "الإجمالي": float(it.get('total', 0.0))})
             
-            c_a1, c_a2 = st.columns(2)
-            with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات المحل</div><div class="metric-value" style="color:#10B981;">{tot_cash:.2f} ج.م</div></div>', unsafe_allow_html=True)
-            with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{int(tot_pieces)} قطعة</div></div>', unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("#### 👥 تقرير مشتريات العملاء:")
-            cust_summary = df_all.groupby('العميل').agg({'الكمية':'sum', 'الإجمالي':'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
-            st.dataframe(cust_summary, use_container_width=True, hide_index=True)
-            
-            buf_all = io.BytesIO()
-            with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all.to_excel(w, index=False)
-            st.download_button("📥 تحميل كل سجلات المبيعات (Excel)", buf_all.getvalue(), f"All_Sales_{datetime.date.today()}.xlsx")
-        else: st.info("لا توجد مبيعات مسجلة حتى الآن.")
+    if master_sales:
+        df_all = pd.DataFrame(master_sales)
+        tot_cash = df_all['الإجمالي'].sum()
+        tot_pieces = df_all['الكمية'].sum()
+        
+        c_a1, c_a2 = st.columns(2)
+        with c_a1: st.markdown(f'<div class="metric-card"><div class="metric-title">💰 إجمالي مبيعات كل الفروع</div><div class="metric-value" style="color:#10B981;">{tot_cash:.2f} ج.م</div></div>', unsafe_allow_html=True)
+        with c_a2: st.markdown(f'<div class="metric-card"><div class="metric-title">📦 إجمالي القطع المباعة</div><div class="metric-value" style="color:#1C65A6;">{int(tot_pieces)} قطعة</div></div>', unsafe_allow_html=True)
+        st.markdown("---")
+        
+        st.markdown("#### 👥 تقرير مشتريات العملاء:")
+        cust_summary = df_all.groupby('العميل').agg({'الكمية':'sum', 'الإجمالي':'sum'}).reset_index().sort_values(by='الإجمالي', ascending=False)
+        st.dataframe(cust_summary, use_container_width=True, hide_index=True)
+        
+        buf_all = io.BytesIO()
+        with pd.ExcelWriter(buf_all, engine='openpyxl') as w: df_all.to_excel(w, index=False)
+        st.download_button("📥 تحميل كل سجلات المبيعات (Excel)", buf_all.getvalue(), f"All_Sales_{datetime.date.today()}.xlsx")
+    else: st.info("لا توجد مبيعات مسجلة حتى الآن.")
 
 st.markdown('<div class="footer">تصميم وبرمجة: <span>أبوبكر عادل</span> © 2026</div>', unsafe_allow_html=True)
