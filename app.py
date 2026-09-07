@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # ==============================================================================
 # 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
 # ==============================================================================
-FIREBASE_DB_URL = "https://edstore-default-rtdb.firebaseio.com"
+FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(
