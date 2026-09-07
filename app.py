@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # ==============================================================================
 # 🌐 الرابط السحابي الدائم لقاعدة البيانات (Firebase Realtime Database)
 # ==============================================================================
-FIREBASE_DB_URL = "https://edstore-2be25-default-rtdb.firebaseio.com/"
+FIREBASE_DB_URL = "https://edstore-default-rtdb.firebaseio.com"
 
 # --- 1. إعدادات الصفحة وبوابة الدخول ---
 st.set_page_config(
@@ -47,6 +47,7 @@ USERS = {
     "shymaa": "123456",
     "abdallah": "123456",
 }
+
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'current_user' not in st.session_state:
@@ -671,7 +672,7 @@ if "pos_scanned_code" not in st.session_state: st.session_state.pos_scanned_code
 shared_inv = load_shared_inventory()
 shared_sales = load_shared_sales()
 
-# الدالة المساعدة لإنشاء إسكانر يبعث أي كود ليتفاعل مع Streamlit فوراً (عن طريق الحقن المباشر لضمان السرعة المطلقة)
+# الدالة المساعدة لإنشاء الإسكانر الذي يستخدم الحقن المباشر مع سرعة قراءة معززة
 def get_scanner_html():
     return """
     <!DOCTYPE html>
@@ -703,6 +704,7 @@ def get_scanner_html():
         </div>
         <script>
             var isLocked = false;
+            var activeStream = null;
 
             function playBeep() {
                 try {
@@ -725,6 +727,7 @@ def get_scanner_html():
                 document.getElementById("status-bar").innerHTML = "🎯 تم التقاط الصنف! جاري الفتح...";
 
                 try {
+                    // الحقن المباشر السريع جداً (DOM Injection)
                     var doc = window.parent.document;
                     var inputs = doc.querySelectorAll('input[type="text"]');
                     var targetInput = null;
@@ -734,9 +737,7 @@ def get_scanner_html():
                             break;
                         }
                     }
-                    if (!targetInput && inputs.length > 0) {
-                        targetInput = inputs[0];
-                    }
+                    if (!targetInput && inputs.length > 0) targetInput = inputs[0];
 
                     if (targetInput) {
                         var nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
@@ -755,25 +756,52 @@ def get_scanner_html():
                 btnEl.style.display = "none";
 
                 try {
-                    const codeReader = new ZXing.BrowserMultiFormatReader();
-                    const devices = await codeReader.listVideoInputDevices();
-                    let selectedDeviceId = undefined;
-                    if (devices.length > 0) {
-                        for (let i = 0; i < devices.length; i++) {
-                            let label = devices[i].label.toLowerCase();
-                            if (label.includes("back") || label.includes("rear") || label.includes("environment")) {
-                                selectedDeviceId = devices[i].deviceId;
-                                break;
-                            }
-                        }
-                        if (!selectedDeviceId) selectedDeviceId = devices[devices.length - 1].deviceId;
+                    // تخفيض جودة الكاميرا لتسريع الاستجابة
+                    const constraints = {
+                        audio: false,
+                        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }
+                    };
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    activeStream = stream;
+                    var v = document.getElementById("scanner-feed");
+                    v.srcObject = stream;
+                    v.setAttribute('playsinline', 'true');
+                    v.setAttribute('webkit-playsinline', 'true');
+                    v.muted = true;
+                    await v.play();
+                    statusEl.innerHTML = "🟢 الإسكانر يعمل بسرعة عالية - وجّه الباركود";
+
+                    // محاولة استخدام المحرك الداخلي السريع للهاتف
+                    let nativeDetector = null;
+                    if ('BarcodeDetector' in window) {
+                        try { nativeDetector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] }); } catch(e) {}
                     }
 
-                    codeReader.decodeFromVideoDevice(selectedDeviceId, 'scanner-feed', (result, err) => {
-                        if (result && result.text && !isLocked) sendCode(result.text);
-                    });
-
-                    statusEl.innerHTML = "🟢 الإسكانر يعمل - وجّه الباركود أمام الخط الأحمر";
+                    if (nativeDetector) {
+                        const scanNative = async () => {
+                            if (isLocked) return;
+                            if (v.readyState >= 2) {
+                                try {
+                                    const barcodes = await nativeDetector.detect(v);
+                                    if (barcodes.length > 0 && barcodes[0].rawValue) {
+                                        sendCode(barcodes[0].rawValue);
+                                        return;
+                                    }
+                                } catch(e) {}
+                            }
+                            if (!isLocked) requestAnimationFrame(scanNative);
+                        };
+                        scanNative();
+                    } else {
+                        // استخدام ZXing مع تقليل الفلاتر ليكون سريعاً جداً
+                        const hints = new Map();
+                        const formats = [1, 2, 3, 4, 5, 8, 11]; // ZXing BarcodeFormats
+                        hints.set(2, formats); // 2 is DecodeHintType.POSSIBLE_FORMATS
+                        const codeReader = new ZXing.BrowserMultiFormatReader(hints);
+                        codeReader.decodeFromVideoElement(v, (result, err) => {
+                            if (result && result.text && !isLocked) sendCode(result.text);
+                        });
+                    }
                 } catch(err) {
                     statusEl.innerHTML = "⚠️ تعذر تشغيل الكاميرا: تحقق من الأذونات.";
                     btnEl.style.display = "block";
